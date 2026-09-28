@@ -223,6 +223,27 @@
     background: var(--blue-bg); color: var(--blue-fg); border: 0; cursor: pointer;
   }
   .label:hover { filter: brightness(0.96); }
+  .mr-cell .title-row { display: flex; align-items: flex-start; gap: 0.8rem; }
+  .mr-cell .title-row .title { flex: 1; }
+  .ai-fix {
+    flex: none; white-space: nowrap; font-size: 0.9rem; font-weight: 600; border-radius: 0.5rem; padding: 0.35em 0.9em;
+    color: var(--accent-fg); border: 0; background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    box-shadow: 0 2px 8px -2px color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+  .ai-fix:hover { filter: brightness(1.08); }
+  dialog.ai-prompt {
+    width: min(760px, calc(100vw - 32px)); padding: 1.2rem; border: 1px solid var(--border);
+    border-radius: 0.8rem; background: var(--surface); color: var(--text); box-shadow: var(--shadow);
+  }
+  dialog.ai-prompt::backdrop { background: rgba(16, 24, 40, .45); }
+  dialog.ai-prompt h2 { margin: 0 0 0.3rem; font-size: 1.1rem; }
+  dialog.ai-prompt p { margin: 0 0 0.8rem; color: var(--muted); font-size: 0.9rem; }
+  dialog.ai-prompt textarea {
+    width: 100%; box-sizing: border-box; min-height: 16rem; resize: vertical; padding: 0.7rem;
+    font: 0.9rem/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 0.5rem;
+  }
+  dialog.ai-prompt .actions { display: flex; justify-content: flex-end; align-items: center; gap: 0.6rem; margin-top: 0.8rem; }
   .pill {
     display: inline-flex; align-items: center; gap: 0.45em;
     font-size: 1rem; font-weight: 700; border-radius: 999px; padding: 0.28em 0.8em;
@@ -283,6 +304,17 @@
   <label class="check"><input type="checkbox" id="alerts"> Avec alertes seulement</label>
   <div class="active-labels" id="activeLabels"></div>
 </div>
+
+<dialog class="ai-prompt" id="ai-dialog" aria-labelledby="ai-title">
+  <h2 id="ai-title"></h2>
+  <p>Prompt à coller dans Claude Code, lancé à la racine du dépôt.</p>
+  <textarea id="ai-text" readonly aria-label="Prompt pour Claude Code"></textarea>
+  <div class="actions">
+    <span class="muted" id="ai-copied" aria-live="polite"></span>
+    <button type="button" id="ai-close">Fermer</button>
+    <button type="button" id="ai-copy" class="primary">Copier</button>
+  </div>
+</dialog>
 
 <div id="errors"></div>
 <div class="summary" id="summary"></div>
@@ -909,9 +941,98 @@ function mrCell(mr) {
     .map(l => `<button type="button" class="label" data-add-label="${escapeHtml(l)}" title="Filtrer sur ce label">${escapeHtml(l)}</button>`)
     .join("");
   const conflicts = mr.has_conflicts ? " " + pill("red", "Conflits", "La MR est en conflit avec sa branche cible", mr.web_url) : "";
-  return `<div class="title">${mr.draft ? '<span class="draft">Draft</span>' : ""}<a href="${escapeHtml(mr.web_url)}" target="_blank" rel="noopener">${escapeHtml(mr.title.replace(/^Draft:\s*/i, ""))}</a>${conflicts}</div>
+  return `<div class="title-row"><div class="title">${mr.draft ? '<span class="draft">Draft</span>' : ""}<a href="${escapeHtml(mr.web_url)}" target="_blank" rel="noopener">${escapeHtml(mr.title.replace(/^Draft:\s*/i, ""))}</a>${conflicts}</div>${aiFixButton(mr)}</div>
     <div class="sub"><span class="iid">!${mr.iid}</span> · <code>${escapeHtml(mr.source_branch)}</code> → <code>${escapeHtml(mr.target_branch)}</code></div>
     ${labels ? `<div class="labels">${labels}</div>` : ""}`;
+}
+
+// ---------- Prompt de correction ----------
+
+// Le bouton n'apparaît que s'il y a quelque chose à corriger : une branche en retard ou en conflit, un
+// indicateur qualité imparfait ou un thread non résolu. Le prompt ne cite que ce qui l'est, avec les
+// valeurs affichées dans le tableau.
+function aiFixButton(mr) {
+  const s = signalsOf(mr);
+  if (s.loading) return "";
+  const outdated = mr.has_conflicts || s.behind?.count > 0;
+  if (!outdated && !qualityDefects(s).length && !(s.threads?.unresolved > 0)) return "";
+  return `<button type="button" class="ai-fix" data-ai-fix="${mr.iid}" title="Afficher un prompt Claude Code pour corriger cette MR">Correct with IA</button>`;
+}
+
+function qualityDefects(s) {
+  const defects = [];
+  if (s.pipeline?.status === "failed") defects.push(`le pipeline #${s.pipeline.id} est en échec`);
+  if (sonarUsable(s.sonar)) {
+    const sonar = s.sonar;
+    if (sonar.issues > 0) defects.push(`${sonar.issues} issue${plural(sonar.issues)} Sonar ouverte${plural(sonar.issues)}`);
+    if (sonar.gate && sonar.gate !== "OK") defects.push(`Quality Gate Sonar ${sonar.gate}`);
+    if (sonar.coverage != null && sonar.coverage < 100) defects.push(`couverture du nouveau code à ${formatPercent(sonar.coverage)} (objectif 100 %)`);
+  }
+  const pit = s.pit;
+  if (pit?.state === "ok") {
+    if (pit.survived > 0) defects.push(`${pit.survived} mutant${plural(pit.survived)} PIT survivant${plural(pit.survived)}`);
+    if (pit.noCoverage > 0) defects.push(`${pit.noCoverage} mutant${plural(pit.noCoverage)} PIT non couvert${plural(pit.noCoverage)}`);
+    if (pit.errors > 0) defects.push(`${pit.errors} mutant${plural(pit.errors)} PIT en erreur`);
+  }
+  return defects;
+}
+
+function aiFixPrompt(mr) {
+  const s = signalsOf(mr);
+  const defects = qualityDefects(s);
+  const unresolved = s.threads?.unresolved ?? 0;
+  const running = s.sonar?.refreshing || s.pit?.refreshing || PENDING_JOB_STATUSES.has(s.pipeline?.status);
+  const behind = s.behind?.count ?? 0;
+  const parts = [`Sur la MR !${mr.iid} (\`${mr.source_branch}\` → \`${mr.target_branch}\`) :`];
+  // La mise à jour passe avant tout le reste : les corrections se font sur la base à jour, et les
+  // indicateurs ne sont fiables qu'une fois la cible intégrée.
+  if (behind > 0 || mr.has_conflicts) {
+    const late = behind > 0 ? ` (${behind} commit${plural(behind)} de retard)` : "";
+    parts.push(
+      `${defects.length || unresolved > 0 ? "Avant toute chose, mets" : "Mets"} à jour la branche de la MR en y mergeant \`origin/${mr.target_branch}\`${late}` +
+      (mr.has_conflicts ? ", et résous les conflits que GitLab signale avec la cible." : ".")
+    );
+  }
+  if (defects.length) {
+    parts.push(
+      "Corrige les indicateurs qualité actuellement imparfaits :\n" + defects.map(d => `- ${d}`).join("\n") +
+      (running ? "\n(valeurs du dernier pipeline terminé : un pipeline est en cours, commence par vérifier leur état)" : "")
+    );
+  }
+  if (unresolved > 0) {
+    parts.push(
+      `La MR a ${unresolved} thread${plural(unresolved)} non résolu${plural(unresolved)} : traite chacun des points ` +
+      "dans la mesure du possible et du raisonnable."
+    );
+  }
+  // Toute modification de la MR — mise à jour, correction, réponse à un thread — relance la CI et peut
+  // dégrader un indicateur jusque-là parfait : la boucle de vérification vaut donc dans tous les cas.
+  parts.push(
+    "Une fois les modifications effectuées et poussées sur la branche de la MR, attends la fin du pipeline puis vérifie " +
+    `l'état des indicateurs avec \`python3 scripts/mr-ci-signals.py ${mr.iid}\`. Tant que les indicateurs ne sont pas ` +
+    "parfaits (pipeline vert, 0 issue Sonar, Quality Gate OK, 100 % de couverture du nouveau code, aucun mutant " +
+    "survivant, non couvert ou en erreur), effectue les corrections nécessaires."
+  );
+  return parts.join("\n\n");
+}
+
+function openAiFix(mr) {
+  $("ai-title").textContent = `Corriger la MR !${mr.iid} avec Claude Code`;
+  $("ai-text").value = aiFixPrompt(mr);
+  $("ai-copied").textContent = "";
+  $("ai-dialog").showModal();
+  $("ai-text").select();
+}
+
+async function copyAiPrompt() {
+  const text = $("ai-text").value;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (ignored) {
+    $("ai-text").select();
+    document.execCommand("copy");
+  }
+  $("ai-copied").textContent = "Copié";
 }
 
 function threadsCell(mr) {
@@ -998,6 +1119,11 @@ document.addEventListener("click", e => {
     updateFilters({ sort: column.key, dir });
     return;
   }
+  const aiFix = e.target.closest("[data-ai-fix]");
+  if (aiFix) {
+    openAiFix(state.mrs.find(mr => String(mr.iid) === aiFix.dataset.aiFix));
+    return;
+  }
   const add = e.target.closest("[data-add-label]");
   const remove = e.target.closest("[data-remove-label]");
   if (add && !state.filters.labels.includes(add.dataset.addLabel)) {
@@ -1007,6 +1133,8 @@ document.addEventListener("click", e => {
   }
 });
 $("refresh").addEventListener("click", refresh);
+$("ai-copy").addEventListener("click", copyAiPrompt);
+$("ai-close").addEventListener("click", () => $("ai-dialog").close());
 
 refresh();
 </script>
