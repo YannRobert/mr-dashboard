@@ -648,6 +648,8 @@ const I18N = {
     "approved.title": p => `Approuvée par ${p.names}`,
     "commits.title": "Commits de la MR",
     "behind.upToDate": p => `À jour avec ${p.target}`,
+    "behind.late": p => `${p.n} commit${plural(p.n)} de retard`,
+    "behind.none": "à jour",
     "behind.count": p => `${p.n} commit${plural(p.n)} de ${p.target} absent${plural(p.n)} de la MR`,
     "behind.since": p => `Retard depuis le ${p.date} (commit ${p.next}, après le dernier commit commun ${p.base})`,
     "unit.day": "j",
@@ -779,6 +781,8 @@ const I18N = {
     "approved.title": p => `Approved by ${p.names}`,
     "commits.title": "MR commits",
     "behind.upToDate": p => `Up to date with ${p.target}`,
+    "behind.late": p => `${p.n} commit${pluralEn(p.n)} late`,
+    "behind.none": "up to date",
     "behind.count": p => `${p.n} commit${pluralEn(p.n)} of ${p.target} missing from the MR`,
     "behind.since": p => `Behind since ${p.date} (commit ${p.next}, after the last common commit ${p.base})`,
     "unit.day": "d",
@@ -1728,8 +1732,8 @@ function behindCell(mr) {
   if (s.loading) return `<span class="muted">…</span>`;
   const behind = s.behind;
   if (!behind || behind.count == null) return `<span class="muted" title="${escapeHtml(behind?.error ?? s.error ?? "")}">?</span>`;
-  if (behind.count === 0) return `<span class="ok good" title="${escapeHtml(t("behind.upToDate", { target: mr.target_branch }))}">0</span>`;
-  const count = `<div title="${escapeHtml(t("behind.count", { n: behind.count, target: mr.target_branch }))}">${behind.count}</div>`;
+  if (behind.count === 0) return `<span class="ok good" title="${escapeHtml(t("behind.upToDate", { target: mr.target_branch }))}">${escapeHtml(t("behind.none"))}</span>`;
+  const count = `<div title="${escapeHtml(t("behind.count", { n: behind.count, target: mr.target_branch }))}">${escapeHtml(t("behind.late", { n: behind.count }))}</div>`;
   const hours = behind.since ? (Date.now() - new Date(behind.since)) / 3600000 : 0;
   const tone = hours > BEHIND_RED_HOURS ? "late-red" : hours > BEHIND_ORANGE_HOURS ? "late-orange" : "muted";
   const since = behind.since
