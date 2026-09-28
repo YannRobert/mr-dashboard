@@ -90,7 +90,26 @@
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
   header .spacer { flex: 1; }
-  header .meta { color: var(--muted); font-size: 0.9rem; }
+  /* Trois zones distinctes, séparées par un filet : état des données, commandes d'actualisation, langue. */
+  header .divider { width: 1px; align-self: stretch; background: var(--border); }
+  header .status { display: flex; align-items: center; gap: 0.8rem; }
+  header .meta { color: var(--muted); font-size: 0.9rem; text-align: right; line-height: 1.35; }
+  header .meta > span { display: block; }
+  header .meta .progress { color: var(--accent); }
+  header .meta .failed { color: var(--orange-fg); font-weight: 600; }
+  header .refresh-controls {
+    display: inline-flex; align-items: center; gap: 0.9rem;
+    padding: 0.3rem 0.3rem 0.3rem 0.8rem; border: 1px solid var(--border); border-radius: 0.7rem; background: var(--surface-2);
+  }
+  header label.auto {
+    display: inline-flex; gap: 0.4em; align-items: center; color: var(--text); font-size: 1rem; cursor: pointer;
+  }
+  header label.auto input { accent-color: var(--accent); width: 1.4rem; height: 1.4rem; margin: 0; cursor: pointer; }
+  button.pending-update {
+    color: var(--orange-fg); background: var(--orange-bg); font-weight: 600;
+    border-color: color-mix(in srgb, var(--orange-fg) 30%, transparent);
+  }
+  button.pending-update[hidden] { display: none; }
   .lang-switch { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 0.5rem; overflow: hidden; }
   .lang-switch button {
     border: 0; border-radius: 0; padding: 0.35em 0.65em; font-size: 0.85rem; font-weight: 600;
@@ -281,6 +300,8 @@
   .empty { padding: 3rem 1.5rem; color: var(--muted); text-align: center; }
   @media (max-width: 720px) {
     header h1 .tagline { display: none; }
+    header .divider { display: none; }
+    header .meta { text-align: left; }
     header, .summary { padding-left: 16px; padding-right: 16px; }
     .filters { margin-left: 16px; margin-right: 16px; }
     .table-wrap { padding: 0 16px 24px; }
@@ -293,8 +314,16 @@
   <h1><span class="name"><span>Mister</span> <span>Dashboard</span></span> <span class="tagline" data-i18n="tagline">: le dashboard des Merge Requests</span></h1>
   <span class="project" id="project"></span>
   <span class="spacer"></span>
-  <span class="meta" id="refreshed"></span>
-  <button id="refresh" type="button" class="primary" data-i18n="refresh">Rafraîchir</button>
+  <div class="status" role="status" aria-live="polite">
+    <span class="meta" id="refreshed"></span>
+    <button id="pending" type="button" class="pending-update" hidden data-i18n="pending">Nouvelles données disponibles — afficher</button>
+  </div>
+  <span class="divider" aria-hidden="true"></span>
+  <div class="refresh-controls" role="group" aria-label="Actualisation" data-i18n-aria-label="refresh.group">
+    <label class="auto" data-i18n-title="autoRefresh.title"><input type="checkbox" id="autoRefresh" checked autocomplete="off"> <span data-i18n="autoRefresh">Actualisation auto</span></label>
+    <button id="refresh" type="button" class="primary" data-i18n="refresh">Rafraîchir</button>
+  </div>
+  <span class="divider" aria-hidden="true"></span>
   <div class="lang-switch" role="group" aria-label="Langue" data-i18n-aria-label="lang.group">
     <button type="button" data-lang="fr" lang="fr" title="Français">FR</button>
     <button type="button" data-lang="en" lang="en" title="English">EN</button>
@@ -351,6 +380,10 @@ const PIPELINE_TONE = { success: "green", failed: "red" };
 // Retard sur la cible au-delà duquel la durée passe en orange, puis en rouge.
 const BEHIND_ORANGE_HOURS = 12;
 const BEHIND_RED_HOURS = 24;
+
+// Actualisation automatique : seulement page cachée, pour que rien ne bouge sous les yeux de l'utilisateur.
+const AUTO_REFRESH_MS = 5 * 60 * 1000;
+const AUTO_REFRESH_KEY = "mr-dashboard.autoRefresh";
 
 const LANGS = ["fr", "en"];
 const LOCALES = { fr: "fr-FR", en: "en-GB" };
@@ -412,6 +445,12 @@ const state = {
   filters: readFiltersFromUrl(),
   lang: readLangFromUrl(),
   refreshedAt: null,
+  refreshing: false,
+  progress: null,
+  pending: null,
+  lastFailure: null,
+  autoRefresh: readAutoRefresh(),
+  autoRefreshTimer: null,
 };
 
 const $ = id => document.getElementById(id);
@@ -427,8 +466,15 @@ const I18N = {
     "page.title": "Mister Dashboard : le dashboard des Merge Requests",
     "tagline": ": le dashboard des Merge Requests",
     "lang.group": "Langue",
+    "refresh.group": "Actualisation",
     "refresh": "Rafraîchir",
-    "refreshed": p => `mis à jour à ${p.time} le ${p.date}`,
+    "refreshed": p => `mis à jour à ${p.time} le ${p.date} (il y a ${p.age})`,
+    "progress": p => `mise à jour… ${p.done}/${p.total}`,
+    "failed": p => `échec de la mise à jour à ${p.time}`,
+    "pending": "Nouvelles données disponibles — afficher",
+    "autoRefresh": "Actualisation auto",
+    "autoRefresh.title": () => `Toutes les ${AUTO_REFRESH_MS / 60000} minutes, uniquement quand la page n'est pas affichée : ` +
+      "les données ne changent jamais sous vos yeux",
     "search.placeholder": "Rechercher : titre, !iid, branche, ticket…",
     "search.aria": "Recherche",
     "filter.target": "Branche cible",
@@ -551,8 +597,15 @@ const I18N = {
     "page.title": "Mister Dashboard: the Merge Requests dashboard",
     "tagline": ": the Merge Requests dashboard",
     "lang.group": "Language",
+    "refresh.group": "Refresh",
     "refresh": "Refresh",
-    "refreshed": p => `updated at ${p.time} on ${p.date}`,
+    "refreshed": p => `updated at ${p.time} on ${p.date} (${p.age} ago)`,
+    "progress": p => `updating… ${p.done}/${p.total}`,
+    "failed": p => `update failed at ${p.time}`,
+    "pending": "New data available — show",
+    "autoRefresh": "Auto-refresh",
+    "autoRefresh.title": () => `Every ${AUTO_REFRESH_MS / 60000} minutes, only while the page is not displayed: ` +
+      "data never changes while you are looking at it",
     "search.placeholder": "Search: title, !iid, branch, ticket…",
     "search.aria": "Search",
     "filter.target": "Target branch",
@@ -698,16 +751,25 @@ function applyStaticTexts() {
   for (const el of document.querySelectorAll("[data-i18n]")) el.textContent = t(el.dataset.i18n);
   for (const el of document.querySelectorAll("[data-i18n-placeholder]")) el.placeholder = t(el.dataset.i18nPlaceholder);
   for (const el of document.querySelectorAll("[data-i18n-aria-label]")) el.setAttribute("aria-label", t(el.dataset.i18nAriaLabel));
+  for (const el of document.querySelectorAll("[data-i18n-title]")) el.title = t(el.dataset.i18nTitle);
   for (const el of document.querySelectorAll("[data-lang]")) el.setAttribute("aria-pressed", String(el.dataset.lang === state.lang));
 }
 
-function renderRefreshed() {
+// Âge des données, progression d'une mise à jour en cours, dernier échec, et bouton d'affichage
+// d'une mise à jour terminée pendant que la page était affichée.
+function renderStatus() {
+  const time = date => date.toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
+  const parts = [];
   const at = state.refreshedAt;
-  if (!at) return;
-  $("refreshed").textContent = t("refreshed", {
-    time: at.toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" }),
-    date: at.toLocaleDateString(locale()),
-  });
+  if (at) {
+    parts.push(`<span>${escapeHtml(t("refreshed", { time: time(at), date: at.toLocaleDateString(locale()), age: compactDuration(Date.now() - at) }))}</span>`);
+  }
+  if (state.progress) parts.push(`<span class="progress">${escapeHtml(t("progress", state.progress))}</span>`);
+  if (state.lastFailure) {
+    parts.push(`<span class="failed" title="${escapeHtml(state.lastFailure.message)}">${escapeHtml(t("failed", { time: time(state.lastFailure.at) }))}</span>`);
+  }
+  $("refreshed").innerHTML = parts.join("");
+  $("pending").hidden = !state.pending;
 }
 
 // Les signaux gardent une raison et ses paramètres, pas un texte : changer de langue re-rend tout
@@ -717,7 +779,7 @@ function setLang(lang) {
   state.lang = lang;
   writeFiltersToUrl();
   applyStaticTexts();
-  renderRefreshed();
+  renderStatus();
   populateFilterOptions();
   render();
 }
@@ -789,34 +851,90 @@ const projectPath = () => `projects/${encodeURIComponent(state.config.gitlabProj
 
 // ---------- Chargement ----------
 
-async function refresh() {
-  $("errors").innerHTML = "";
+// Le premier chargement s'affiche au fil de l'eau : il n'y a rien d'autre à montrer. Les suivants
+// chargent un instantané complet à part, sans toucher au tableau, puis le substituent d'un bloc — ou,
+// si la mise à jour est automatique et que la page est affichée, le mettent en attente derrière le
+// bouton « Nouvelles données disponibles » plutôt que de changer les chiffres sous les yeux.
+async function refresh(source = "manual") {
+  if (state.refreshing) return;
+  const initial = !state.refreshedAt;
+  const snapshot = { at: new Date(), errors: [], initial };
+  const report = message => (initial ? showError(message) : snapshot.errors.push(message));
+  state.refreshing = true;
   $("refresh").disabled = true;
+  if (initial) $("errors").innerHTML = "";
   try {
     state.config ??= (await api("/config")).body;
     $("project").textContent = state.config.gitlabProject;
     const [mrs] = await Promise.all([
       gitlabAll(`${projectPath()}/merge_requests?state=opened`),
-      loadSonarPullRequests(),
+      loadSonarPullRequests(report),
     ]);
-    state.mrs = mrs;
-    state.signals = new Map(mrs.map(mr => [mr.iid, { loading: true }]));
-    populateFilterOptions();
-    render();
-    state.refreshedAt = new Date();
-    renderRefreshed();
-    await runLimited(mrs, MAX_PARALLEL_MRS, async mr => {
-      state.signals.set(mr.iid, await loadSignals(mr));
+    snapshot.mrs = mrs;
+    snapshot.signals = new Map(mrs.map(mr => [mr.iid, { loading: true }]));
+    if (initial) {
+      state.mrs = snapshot.mrs;
+      state.signals = snapshot.signals;
+      populateFilterOptions();
       render();
+    }
+    state.progress = { done: 0, total: mrs.length };
+    renderStatus();
+    await runLimited(mrs, MAX_PARALLEL_MRS, async mr => {
+      snapshot.signals.set(mr.iid, await loadSignals(mr));
+      state.progress.done++;
+      if (initial) render();
+      renderStatus();
     });
+    state.lastFailure = null;
+    if (initial || source === "manual" || document.visibilityState === "hidden") applySnapshot(snapshot);
+    else state.pending = snapshot;
   } catch (error) {
-    showError(t("error.load", { message: error.message }));
+    if (initial) showError(t("error.load", { message: error.message }));
+    else state.lastFailure = { at: new Date(), message: error.message };
   } finally {
+    state.refreshing = false;
+    state.progress = null;
     $("refresh").disabled = false;
+    renderStatus();
   }
 }
 
-async function loadSonarPullRequests() {
+function applySnapshot(snapshot) {
+  state.mrs = snapshot.mrs;
+  state.signals = snapshot.signals;
+  state.refreshedAt = snapshot.at;
+  state.pending = null;
+  if (!snapshot.initial) {
+    $("errors").innerHTML = "";
+    snapshot.errors.forEach(showError);
+  }
+  populateFilterOptions();
+  render();
+  renderStatus();
+}
+
+function readAutoRefresh() {
+  try {
+    return localStorage.getItem(AUTO_REFRESH_KEY) !== "false";
+  } catch (ignored) {
+    return true;
+  }
+}
+
+function saveAutoRefresh(enabled) {
+  try {
+    localStorage.setItem(AUTO_REFRESH_KEY, String(enabled));
+  } catch (ignored) { /* stockage indisponible : la préférence vaut pour la session */ }
+}
+
+function scheduleAutoRefresh() {
+  clearInterval(state.autoRefreshTimer);
+  const hidden = document.visibilityState === "hidden";
+  state.autoRefreshTimer = state.autoRefresh && hidden ? setInterval(() => refresh("auto"), AUTO_REFRESH_MS) : null;
+}
+
+async function loadSonarPullRequests(report) {
   state.sonarPullRequests = new Map();
   if (!state.config.sonarEnabled) return;
   try {
@@ -825,7 +943,7 @@ async function loadSonarPullRequests() {
     const retention = await api(`/sonar/settings/values?keys=${RETENTION_SETTING}&component=${encodeURIComponent(state.config.sonarProject)}`);
     state.sonarRetentionDays = Number(retention.body.settings[0]?.value) || DEFAULT_SONAR_RETENTION_DAYS;
   } catch (error) {
-    showError(t("error.sonar", { message: error.message }));
+    report(t("error.sonar", { message: error.message }));
   }
 }
 
@@ -1486,11 +1604,25 @@ document.addEventListener("click", e => {
     updateFilters({ labels: state.filters.labels.filter(l => l !== remove.dataset.removeLabel) });
   }
 });
-$("refresh").addEventListener("click", refresh);
+$("refresh").addEventListener("click", () => refresh("manual"));
+$("pending").addEventListener("click", () => applySnapshot(state.pending));
+$("autoRefresh").addEventListener("change", e => {
+  state.autoRefresh = e.target.checked;
+  saveAutoRefresh(state.autoRefresh);
+  scheduleAutoRefresh();
+});
+// Page cachée : une mise à jour en attente peut s'appliquer, personne ne la regarde.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden" && state.pending) applySnapshot(state.pending);
+  scheduleAutoRefresh();
+});
+setInterval(renderStatus, 30 * 1000);
 $("ai-copy").addEventListener("click", copyAiPrompt);
 $("ai-close").addEventListener("click", () => $("ai-dialog").close());
 
 applyStaticTexts();
+$("autoRefresh").checked = state.autoRefresh;
+scheduleAutoRefresh();
 refresh();
 </script>
 </body>
