@@ -91,6 +91,12 @@
   }
   header .spacer { flex: 1; }
   header .meta { color: var(--muted); font-size: 0.9rem; }
+  .lang-switch { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 0.5rem; overflow: hidden; }
+  .lang-switch button {
+    border: 0; border-radius: 0; padding: 0.35em 0.65em; font-size: 0.85rem; font-weight: 600;
+    color: var(--muted); background: var(--surface);
+  }
+  .lang-switch button[aria-pressed="true"] { color: var(--accent-fg); background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
   button {
     font: inherit; color: var(--text); background: var(--surface);
     border: 1px solid var(--border-strong); border-radius: 0.5rem; padding: 0.35em 0.9em; cursor: pointer;
@@ -284,37 +290,42 @@
 <body>
 <header>
   <span class="brand" aria-hidden="true" title="Mister = MR">MR</span>
-  <h1><span class="name"><span>Mister</span> <span>Dashboard</span></span> <span class="tagline">: le dashboard des Merge Requests</span></h1>
+  <h1><span class="name"><span>Mister</span> <span>Dashboard</span></span> <span class="tagline" data-i18n="tagline">: le dashboard des Merge Requests</span></h1>
   <span class="project" id="project"></span>
   <span class="spacer"></span>
   <span class="meta" id="refreshed"></span>
-  <button id="refresh" type="button" class="primary">Rafraîchir</button>
+  <button id="refresh" type="button" class="primary" data-i18n="refresh">Rafraîchir</button>
+  <div class="lang-switch" role="group" aria-label="Langue" data-i18n-aria-label="lang.group">
+    <button type="button" data-lang="fr" lang="fr" title="Français">FR</button>
+    <button type="button" data-lang="en" lang="en" title="English">EN</button>
+  </div>
 </header>
 
 <div class="filters">
-  <input type="search" id="q" placeholder="Rechercher : titre, !iid, branche, ticket…" aria-label="Recherche">
-  <select id="target" aria-label="Branche cible"></select>
-  <select id="author" aria-label="Auteur"></select>
-  <select id="reviewer" aria-label="Reviewer"></select>
-  <select id="assignee" aria-label="Assignee"></select>
-  <select id="label" aria-label="Ajouter un label au filtre"></select>
-  <select id="draft" aria-label="Draft">
-    <option value="">Draft : toutes</option>
-    <option value="no">Hors Draft</option>
-    <option value="yes">Draft seules</option>
+  <input type="search" id="q" placeholder="Rechercher : titre, !iid, branche, ticket…" aria-label="Recherche"
+         data-i18n-placeholder="search.placeholder" data-i18n-aria-label="search.aria">
+  <select id="target" aria-label="Branche cible" data-i18n-aria-label="filter.target"></select>
+  <select id="author" aria-label="Auteur" data-i18n-aria-label="filter.author"></select>
+  <select id="reviewer" aria-label="Reviewer" data-i18n-aria-label="filter.reviewer"></select>
+  <select id="assignee" aria-label="Assignee" data-i18n-aria-label="filter.assignee"></select>
+  <select id="label" aria-label="Ajouter un label au filtre" data-i18n-aria-label="filter.label"></select>
+  <select id="draft" aria-label="Draft" data-i18n-aria-label="filter.draft">
+    <option value="" data-i18n="filter.draftAll">Draft : toutes</option>
+    <option value="no" data-i18n="filter.draftNo">Hors Draft</option>
+    <option value="yes" data-i18n="filter.draftYes">Draft seules</option>
   </select>
-  <label class="check"><input type="checkbox" id="alerts"> Avec alertes seulement</label>
+  <label class="check"><input type="checkbox" id="alerts"> <span data-i18n="filter.alerts">Avec alertes seulement</span></label>
   <div class="active-labels" id="activeLabels"></div>
 </div>
 
 <dialog class="ai-prompt" id="ai-dialog" aria-labelledby="ai-title">
   <h2 id="ai-title"></h2>
-  <p>Prompt à coller dans Claude Code, lancé à la racine du dépôt.</p>
-  <textarea id="ai-text" readonly aria-label="Prompt pour Claude Code"></textarea>
+  <p data-i18n="dialog.hint">Prompt à coller dans Claude Code, lancé à la racine du dépôt.</p>
+  <textarea id="ai-text" readonly aria-label="Prompt pour Claude Code" data-i18n-aria-label="dialog.aria"></textarea>
   <div class="actions">
     <span class="muted" id="ai-copied" aria-live="polite"></span>
-    <button type="button" id="ai-close">Fermer</button>
-    <button type="button" id="ai-copy" class="primary">Copier</button>
+    <button type="button" id="ai-close" data-i18n="dialog.close">Fermer</button>
+    <button type="button" id="ai-copy" class="primary" data-i18n="dialog.copy">Copier</button>
   </div>
 </dialog>
 
@@ -335,68 +346,57 @@ const PENDING_JOB_STATUSES = new Set(["created", "pending", "running", "waiting_
 const MAX_PARALLEL_MRS = 4;
 const RETENTION_SETTING = "sonar.dbcleaner.daysBeforeDeletingInactiveBranchesAndPRs";
 const DEFAULT_SONAR_RETENTION_DAYS = 5;
-const PIPELINE_LOOK = {
-  success: ["green", "Pipeline réussi"],
-  failed: ["red", "Pipeline KO"],
-  canceled: ["grey", "Pipeline annulé"],
-  running: ["grey", "Pipeline en cours"],
-  pending: ["grey", "Pipeline en attente"],
-  created: ["grey", "Pipeline créé"],
-  skipped: ["grey", "Pipeline ignoré"],
-  manual: ["grey", "Pipeline manuel"],
-};
+const PIPELINE_TONE = { success: "green", failed: "red" };
 
 // Retard sur la cible au-delà duquel la durée passe en orange, puis en rouge.
 const BEHIND_ORANGE_HOURS = 12;
 const BEHIND_RED_HOURS = 24;
 
+const LANGS = ["fr", "en"];
+const LOCALES = { fr: "fr-FR", en: "en-GB" };
+
 const PIPELINE_RANK = { failed: 5, canceled: 4, running: 3, pending: 3, created: 3, manual: 2, skipped: 1, success: 0 };
 
 // Ordre des colonnes, et pour chacune : valeur de tri (null = inconnue) et sens du premier clic.
 // Les signaux trient par gravité décroissante au premier clic, pour faire remonter les alertes.
+// Libellé et aide de chaque colonne viennent des traductions : col.<clé> et help.<clé>.
 const COLUMNS = [
-  { key: "title", label: "MR", firstDir: "asc", cellClass: "mr-cell", value: mr => mr.title.replace(/^Draft:\s*/i, ""), render: mrCell },
-  { key: "author", label: "Auteur", firstDir: "asc", cellClass: "nowrap", value: mr => mr.author?.name ?? null, render: authorCell },
-  { key: "commits", label: "Commits", firstDir: "desc", num: true, cellClass: "num", value: commitsCount, render: commitsCell },
-  { key: "comments", label: "Commentaires", firstDir: "desc", num: true, cellClass: "num", value: mr => mr.user_notes_count, render: mr => String(mr.user_notes_count) },
-  { key: "threads", label: "Threads non résolus", firstDir: "desc", num: true, cellClass: "num",
-    help: "Threads non résolus / threads résolubles au total",
+  { key: "title", firstDir: "asc", cellClass: "mr-cell", value: mr => mr.title.replace(/^Draft:\s*/i, ""), render: mrCell },
+  { key: "author", firstDir: "asc", cellClass: "nowrap", value: mr => mr.author?.name ?? null, render: authorCell },
+  { key: "commits", firstDir: "desc", num: true, cellClass: "num", value: commitsCount, render: commitsCell },
+  { key: "comments", firstDir: "desc", num: true, cellClass: "num", value: mr => mr.user_notes_count, render: mr => String(mr.user_notes_count) },
+  { key: "threads", firstDir: "desc", num: true, cellClass: "num",
     value: mr => { const t = signalsOf(mr).threads; return t && !t.error ? t.unresolved + t.total / 10000 : null; },
     render: threadsCell },
-  { key: "pipeline", label: "Pipeline", firstDir: "desc", cellClass: "signal",
+  { key: "pipeline", firstDir: "desc", cellClass: "signal",
     value: mr => { const s = signalsOf(mr); return s.pipeline ? PIPELINE_RANK[s.pipeline.status] ?? 3 : null; },
     render: pipelineCell },
-  { key: "issues", label: "Issues Sonar", firstDir: "desc", cellClass: "signal",
+  { key: "issues", firstDir: "desc", cellClass: "signal",
     value: mr => { const x = signalsOf(mr).sonar; return sonarUsable(x) ? x.issues + (x.gate && x.gate !== "OK" ? 0.5 : 0) : null; },
     render: issuesCell },
-  { key: "coverage", label: "Couverture", firstDir: "asc", cellClass: "signal",
-    help: "Couverture Sonar du nouveau code de la MR",
+  { key: "coverage", firstDir: "asc", cellClass: "signal",
     value: mr => { const x = signalsOf(mr).sonar; return sonarUsable(x) ? x.coverage : null; },
     render: coverageCell },
-  { key: "pit", label: "Mutants restants", firstDir: "desc", cellClass: "signal",
-    help: "Mutants PIT survivants, non couverts ou en erreur, sur les classes modifiées par la MR",
+  { key: "pit", firstDir: "desc", cellClass: "signal",
     value: mr => { const p = signalsOf(mr).pit; return p?.state === "ok" ? 1000 * p.survived + p.noCoverage + p.errors : null; },
     render: pitCell },
-  { key: "behind", label: "Commits", firstDir: "desc", num: true, cellClass: "num nowrap",
-    help: "Commits de la branche cible absents de la MR ; entre parenthèses, depuis quand : date du commit de la cible qui suit le dernier commit commun avec la MR",
+  { key: "behind", firstDir: "desc", num: true, cellClass: "num nowrap",
     value: mr => signalsOf(mr).behind?.count ?? null, render: behindCell },
-  { key: "last_commit", label: "Dernier commit", firstDir: "desc", cellClass: "nowrap",
-    help: "Date du commit le plus récent — un commentaire ne la fait pas bouger",
-    value: lastCommitDate, render: mr => dateCell(lastCommitDate(mr), "Dernier commit") },
-  { key: "activity", label: "Activité", firstDir: "desc", cellClass: "nowrap",
-    help: "Dernière activité GitLab : commit, commentaire, label, approbation…",
-    value: mr => mr.updated_at, render: mr => dateCell(mr.updated_at, "Dernière activité") },
-  { key: "created", label: "Créée", firstDir: "desc", cellClass: "nowrap", value: mr => mr.created_at, render: mr => dateCell(mr.created_at, "Créée le") },
+  { key: "last_commit", firstDir: "desc", cellClass: "nowrap",
+    value: lastCommitDate, render: mr => dateCell(lastCommitDate(mr), "date.lastCommit") },
+  { key: "activity", firstDir: "desc", cellClass: "nowrap",
+    value: mr => mr.updated_at, render: mr => dateCell(mr.updated_at, "date.activity") },
+  { key: "created", firstDir: "desc", cellClass: "nowrap", value: mr => mr.created_at, render: mr => dateCell(mr.created_at, "date.created") },
 ];
 const DEFAULT_SORT = { key: "activity", dir: "desc" };
 // Regroupement visuel des colonnes : l'identité de la MR à gauche, les indicateurs qualité au centre,
 // le retard sur la branche cible, puis les durées à droite.
 const COLUMN_GROUPS = [
-  { key: "mr", label: "", columns: ["title", "author"] },
-  { key: "review", label: "Revue", columns: ["commits", "comments", "threads"] },
-  { key: "quality", label: "Qualité", columns: ["pipeline", "issues", "coverage", "pit"] },
-  { key: "target", label: "Retard sur la cible", columns: ["behind"] },
-  { key: "time", label: "Durées", columns: ["last_commit", "activity", "created"] },
+  { key: "mr", columns: ["title", "author"] },
+  { key: "review", columns: ["commits", "comments", "threads"] },
+  { key: "quality", columns: ["pipeline", "issues", "coverage", "pit"] },
+  { key: "target", columns: ["behind"] },
+  { key: "time", columns: ["last_commit", "activity", "created"] },
 ];
 const groupClass = key => {
   const group = COLUMN_GROUPS.find(g => g.columns.includes(key));
@@ -410,9 +410,317 @@ const state = {
   sonarPullRequests: new Map(),
   sonarRetentionDays: DEFAULT_SONAR_RETENTION_DAYS,
   filters: readFiltersFromUrl(),
+  lang: readLangFromUrl(),
+  refreshedAt: null,
 };
 
 const $ = id => document.getElementById(id);
+
+// ---------- Langues ----------
+
+// L'interface suit la langue du navigateur, sauf choix explicite (?lang=, bouton FR / EN). Le prompt
+// « Correct with IA » reste en français quelle que soit la langue : il ne passe pas par t().
+const pluralEn = n => (n === 1 ? "" : "s");
+
+const I18N = {
+  fr: {
+    "page.title": "Mister Dashboard : le dashboard des Merge Requests",
+    "tagline": ": le dashboard des Merge Requests",
+    "lang.group": "Langue",
+    "refresh": "Rafraîchir",
+    "refreshed": p => `mis à jour à ${p.time} le ${p.date}`,
+    "search.placeholder": "Rechercher : titre, !iid, branche, ticket…",
+    "search.aria": "Recherche",
+    "filter.target": "Branche cible",
+    "filter.author": "Auteur",
+    "filter.reviewer": "Reviewer",
+    "filter.assignee": "Assignee",
+    "filter.label": "Ajouter un label au filtre",
+    "filter.draft": "Draft",
+    "filter.draftAll": "Draft : toutes",
+    "filter.draftNo": "Hors Draft",
+    "filter.draftYes": "Draft seules",
+    "filter.alerts": "Avec alertes seulement",
+    "filter.anyTarget": "Cible : toutes",
+    "filter.anyAuthor": "Auteur : tous",
+    "filter.anyReviewer": "Reviewer : tous",
+    "filter.anyAssignee": "Assignee : tous",
+    "filter.addLabel": "Label : ajouter…",
+    "label.add": "Filtrer sur ce label",
+    "label.remove": "Retirer ce label du filtre",
+    "dialog.title": p => `Corriger la MR !${p.iid} avec Claude Code`,
+    "dialog.hint": "Prompt à coller dans Claude Code, lancé à la racine du dépôt.",
+    "dialog.aria": "Prompt pour Claude Code",
+    "dialog.close": "Fermer",
+    "dialog.copy": "Copier",
+    "dialog.copied": "Copié",
+    "error.load": p => `Chargement des MR impossible : ${p.message}`,
+    "error.sonar": p => `Sonar injoignable : ${p.message}`,
+    "error.behindCount": "nombre de commits de retard non fourni par GitLab",
+    "group.review": "Revue",
+    "group.quality": "Qualité",
+    "group.target": "Retard sur la cible",
+    "group.time": "Durées",
+    "col.title": "MR",
+    "col.author": "Auteur",
+    "col.commits": "Commits",
+    "col.comments": "Commentaires",
+    "col.threads": "Threads non résolus",
+    "col.pipeline": "Pipeline",
+    "col.issues": "Issues Sonar",
+    "col.coverage": "Couverture",
+    "col.pit": "Mutants restants",
+    "col.behind": "Commits",
+    "col.last_commit": "Dernier commit",
+    "col.activity": "Activité",
+    "col.created": "Créée",
+    "help.threads": "Threads non résolus / threads résolubles au total",
+    "help.coverage": "Couverture Sonar du nouveau code de la MR",
+    "help.pit": "Mutants PIT survivants, non couverts ou en erreur, sur les classes modifiées par la MR",
+    "help.behind": "Commits de la branche cible absents de la MR ; entre parenthèses, depuis quand : date du commit de la cible qui suit le dernier commit commun avec la MR",
+    "help.last_commit": "Date du commit le plus récent — un commentaire ne la fait pas bouger",
+    "help.activity": "Dernière activité GitLab : commit, commentaire, label, approbation…",
+    "date.lastCommit": p => `Dernier commit : ${p.date}`,
+    "date.activity": p => `Dernière activité : ${p.date}`,
+    "date.created": p => `Créée le : ${p.date}`,
+    "summary.shown": p => `<b>${p.n}</b> affichée${plural(p.n)} sur ${p.total} ouvertes`,
+    "summary.alerts": p => `<b>${p.n}</b> avec alertes`,
+    "summary.loading": p => `<b>${p.n}</b> en chargement…`,
+    "empty": "Aucune MR ne correspond aux filtres.",
+    "unavailable": "Indisponible",
+    "pipeline.none": "Aucun",
+    "pipeline.title": p => `Pipeline #${p.id}`,
+    "pipeline.succeeded": p => `Pipeline #${p.id} réussi`,
+    "pipeline.failed": "KO",
+    "pipeline.canceled": "Annulé",
+    "pipeline.running": "En cours",
+    "pipeline.pending": "En attente",
+    "pipeline.created": "Créé",
+    "pipeline.skipped": "Ignoré",
+    "pipeline.manual": "Manuel",
+    "reason.notApplicable": "Non applicable",
+    "reason.pending": "En cours",
+    "reason.noNote": "Sans note",
+    "reason.failed": "En échec",
+    "reason.unreadable": "Illisible",
+    "reason.expired": "Analyse expirée",
+    "reason.notFound": "Introuvable",
+    "reason.disabled": "Non configuré",
+    "pit.notApplicable": "Le dernier pipeline ne contient pas de job mutation_test",
+    "pit.pending": p => `Job mutation_test : ${p.status}`,
+    "pit.noNote": p => `Job ${p.status}, aucune note ${p.marker} publiée`,
+    "pit.failed": "Le dernier job mutation_test a échoué ; la note date d'un run précédent",
+    "pit.unreadable": "Tableau de la note PIT non reconnu",
+    "pit.detail": p => `${p.total} mutants — ${p.killed} tués, ${p.survived} survivants, ${p.noCoverage} non couverts, ${p.errors} en erreur` +
+      (p.strength != null ? ` — test strength ${p.strength} %` : ""),
+    "pit.survived": p => `${p.n} survivant${plural(p.n)}`,
+    "pit.noCoverage": p => `${p.n} non couvert${plural(p.n)}`,
+    "pit.errors": p => `${p.n} en erreur`,
+    "pit.jobFailed": "Le job mutation_test a échoué ; la note peut être partielle",
+    "sonar.notApplicable": "Le dernier pipeline ne contient pas de job sonar",
+    "sonar.pending": p => `Job sonar : ${p.status} — première analyse de la MR`,
+    "sonar.expired": p => `Sonar supprime l'analyse d'une MR sans push depuis ${p.days} jours ; relancer le pipeline pour la recalculer`,
+    "sonar.notFound": p => `Job sonar ${p.status}, mais aucune analyse Sonar pour cette MR`,
+    "sonar.disabled": "SONAR_TOKEN absent côté serveur",
+    "sonar.stale": "Périmé",
+    "sonar.staleTitle": p => `Dernière analyse ${p.date}, antérieure au dernier job sonar`,
+    "sonar.issues": p => `${p.n} issue${plural(p.n)}`,
+    "sonar.issuesTitle": "Issues Sonar ouvertes sur la MR",
+    "sonar.gate": p => `Quality Gate ${p.gate}`,
+    "sonar.gateTitle": "Quality Gate Sonar non passé",
+    "sonar.jobFailed": "Le job sonar a échoué",
+    "job.failed": "Job en échec",
+    "coverage.none": "Aucune ligne nouvelle à couvrir",
+    "coverage.detail": p => `Couverture du nouveau code : ${p.lines} lignes à couvrir, ${p.uncovered} non couvertes, ${p.conditions} conditions non couvertes`,
+    "refreshing": "En cours",
+    "refreshing.title": p => `Job ${p.job} : ${p.status} — valeurs du run précédent (${p.date}), susceptibles de changer à la fin du job`,
+    "conflicts": "Conflits",
+    "conflicts.title": "La MR est en conflit avec sa branche cible",
+    "aiFix": "Correct with IA",
+    "aiFix.title": "Afficher un prompt Claude Code pour corriger cette MR",
+    "threads.title": p => `${p.n} thread${plural(p.n)} non résolu${plural(p.n)} sur ${p.total}`,
+    "approved": p => (p.n > 1 ? `Approuvée ×${p.n}` : "Approuvée"),
+    "approved.title": p => `Approuvée par ${p.names}`,
+    "commits.title": "Commits de la MR",
+    "behind.upToDate": p => `À jour avec ${p.target}`,
+    "behind.count": p => `${p.n} commit${plural(p.n)} de ${p.target} absent${plural(p.n)} de la MR`,
+    "behind.since": p => `Retard depuis le ${p.date} (commit ${p.next}, après le dernier commit commun ${p.base})`,
+    "unit.day": "j",
+  },
+  en: {
+    "page.title": "Mister Dashboard: the Merge Requests dashboard",
+    "tagline": ": the Merge Requests dashboard",
+    "lang.group": "Language",
+    "refresh": "Refresh",
+    "refreshed": p => `updated at ${p.time} on ${p.date}`,
+    "search.placeholder": "Search: title, !iid, branch, ticket…",
+    "search.aria": "Search",
+    "filter.target": "Target branch",
+    "filter.author": "Author",
+    "filter.reviewer": "Reviewer",
+    "filter.assignee": "Assignee",
+    "filter.label": "Add a label to the filter",
+    "filter.draft": "Draft",
+    "filter.draftAll": "Draft: all",
+    "filter.draftNo": "Non-draft",
+    "filter.draftYes": "Draft only",
+    "filter.alerts": "With alerts only",
+    "filter.anyTarget": "Target: all",
+    "filter.anyAuthor": "Author: all",
+    "filter.anyReviewer": "Reviewer: all",
+    "filter.anyAssignee": "Assignee: all",
+    "filter.addLabel": "Label: add…",
+    "label.add": "Filter on this label",
+    "label.remove": "Remove this label from the filter",
+    "dialog.title": p => `Fix MR !${p.iid} with Claude Code`,
+    "dialog.hint": "Prompt to paste into Claude Code, started at the repository root.",
+    "dialog.aria": "Prompt for Claude Code",
+    "dialog.close": "Close",
+    "dialog.copy": "Copy",
+    "dialog.copied": "Copied",
+    "error.load": p => `Could not load the MRs: ${p.message}`,
+    "error.sonar": p => `Sonar unreachable: ${p.message}`,
+    "error.behindCount": "number of commits behind not provided by GitLab",
+    "group.review": "Review",
+    "group.quality": "Quality",
+    "group.target": "Behind target",
+    "group.time": "Times",
+    "col.title": "MR",
+    "col.author": "Author",
+    "col.commits": "Commits",
+    "col.comments": "Comments",
+    "col.threads": "Unresolved threads",
+    "col.pipeline": "Pipeline",
+    "col.issues": "Sonar issues",
+    "col.coverage": "Coverage",
+    "col.pit": "Remaining mutants",
+    "col.behind": "Commits",
+    "col.last_commit": "Last commit",
+    "col.activity": "Activity",
+    "col.created": "Created",
+    "help.threads": "Unresolved threads / resolvable threads in total",
+    "help.coverage": "Sonar coverage of the MR's new code",
+    "help.pit": "PIT mutants surviving, not covered or in error, on the classes changed by the MR",
+    "help.behind": "Target branch commits missing from the MR; in parentheses, since when: date of the target commit that follows the last commit shared with the MR",
+    "help.last_commit": "Date of the most recent commit — a comment does not move it",
+    "help.activity": "Last GitLab activity: commit, comment, label, approval…",
+    "date.lastCommit": p => `Last commit: ${p.date}`,
+    "date.activity": p => `Last activity: ${p.date}`,
+    "date.created": p => `Created on: ${p.date}`,
+    "summary.shown": p => `<b>${p.n}</b> shown out of ${p.total} open`,
+    "summary.alerts": p => `<b>${p.n}</b> with alerts`,
+    "summary.loading": p => `<b>${p.n}</b> loading…`,
+    "empty": "No MR matches the filters.",
+    "unavailable": "Unavailable",
+    "pipeline.none": "None",
+    "pipeline.title": p => `Pipeline #${p.id}`,
+    "pipeline.succeeded": p => `Pipeline #${p.id} succeeded`,
+    "pipeline.failed": "Failed",
+    "pipeline.canceled": "Canceled",
+    "pipeline.running": "Running",
+    "pipeline.pending": "Pending",
+    "pipeline.created": "Created",
+    "pipeline.skipped": "Skipped",
+    "pipeline.manual": "Manual",
+    "reason.notApplicable": "Not applicable",
+    "reason.pending": "Running",
+    "reason.noNote": "No note",
+    "reason.failed": "Failed",
+    "reason.unreadable": "Unreadable",
+    "reason.expired": "Analysis expired",
+    "reason.notFound": "Not found",
+    "reason.disabled": "Not configured",
+    "pit.notApplicable": "The latest pipeline has no mutation_test job",
+    "pit.pending": p => `mutation_test job: ${p.status}`,
+    "pit.noNote": p => `Job ${p.status}, no ${p.marker} note published`,
+    "pit.failed": "The latest mutation_test job failed; the note comes from a previous run",
+    "pit.unreadable": "PIT note table not recognised",
+    "pit.detail": p => `${p.total} mutants — ${p.killed} killed, ${p.survived} survived, ${p.noCoverage} not covered, ${p.errors} in error` +
+      (p.strength != null ? ` — test strength ${p.strength}%` : ""),
+    "pit.survived": p => `${p.n} survivor${pluralEn(p.n)}`,
+    "pit.noCoverage": p => `${p.n} not covered`,
+    "pit.errors": p => `${p.n} in error`,
+    "pit.jobFailed": "The mutation_test job failed; the note may be partial",
+    "sonar.notApplicable": "The latest pipeline has no sonar job",
+    "sonar.pending": p => `sonar job: ${p.status} — first analysis of the MR`,
+    "sonar.expired": p => `Sonar deletes the analysis of an MR with no push for ${p.days} days; rerun the pipeline to compute it again`,
+    "sonar.notFound": p => `sonar job ${p.status}, but no Sonar analysis for this MR`,
+    "sonar.disabled": "SONAR_TOKEN missing on the server side",
+    "sonar.stale": "Stale",
+    "sonar.staleTitle": p => `Last analysis ${p.date}, older than the latest sonar job`,
+    "sonar.issues": p => `${p.n} issue${pluralEn(p.n)}`,
+    "sonar.issuesTitle": "Open Sonar issues on the MR",
+    "sonar.gate": p => `Quality Gate ${p.gate}`,
+    "sonar.gateTitle": "Sonar Quality Gate not passed",
+    "sonar.jobFailed": "The sonar job failed",
+    "job.failed": "Job failed",
+    "coverage.none": "No new line to cover",
+    "coverage.detail": p => `New code coverage: ${p.lines} lines to cover, ${p.uncovered} not covered, ${p.conditions} conditions not covered`,
+    "refreshing": "Running",
+    "refreshing.title": p => `${p.job} job: ${p.status} — values from the previous run (${p.date}), may change when the job ends`,
+    "conflicts": "Conflicts",
+    "conflicts.title": "The MR conflicts with its target branch",
+    "aiFix": "Fix with AI",
+    "aiFix.title": "Show a Claude Code prompt to fix this MR",
+    "threads.title": p => `${p.n} unresolved thread${pluralEn(p.n)} out of ${p.total}`,
+    "approved": p => (p.n > 1 ? `Approved ×${p.n}` : "Approved"),
+    "approved.title": p => `Approved by ${p.names}`,
+    "commits.title": "MR commits",
+    "behind.upToDate": p => `Up to date with ${p.target}`,
+    "behind.count": p => `${p.n} commit${pluralEn(p.n)} of ${p.target} missing from the MR`,
+    "behind.since": p => `Behind since ${p.date} (commit ${p.next}, after the last common commit ${p.base})`,
+    "unit.day": "d",
+  },
+};
+
+const has = key => key in I18N[state.lang] || key in I18N.fr;
+
+function t(key, params = {}) {
+  const entry = I18N[state.lang][key] ?? I18N.fr[key];
+  if (entry === undefined) return key;
+  return typeof entry === "function" ? entry(params) : entry;
+}
+
+const locale = () => LOCALES[state.lang];
+
+function browserLang() {
+  return (navigator.language || "").toLowerCase().startsWith("fr") ? "fr" : "en";
+}
+
+function readLangFromUrl() {
+  const lang = new URLSearchParams(location.search).get("lang");
+  return LANGS.includes(lang) ? lang : browserLang();
+}
+
+function applyStaticTexts() {
+  document.documentElement.lang = state.lang;
+  document.title = t("page.title");
+  for (const el of document.querySelectorAll("[data-i18n]")) el.textContent = t(el.dataset.i18n);
+  for (const el of document.querySelectorAll("[data-i18n-placeholder]")) el.placeholder = t(el.dataset.i18nPlaceholder);
+  for (const el of document.querySelectorAll("[data-i18n-aria-label]")) el.setAttribute("aria-label", t(el.dataset.i18nAriaLabel));
+  for (const el of document.querySelectorAll("[data-lang]")) el.setAttribute("aria-pressed", String(el.dataset.lang === state.lang));
+}
+
+function renderRefreshed() {
+  const at = state.refreshedAt;
+  if (!at) return;
+  $("refreshed").textContent = t("refreshed", {
+    time: at.toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" }),
+    date: at.toLocaleDateString(locale()),
+  });
+}
+
+// Les signaux gardent une raison et ses paramètres, pas un texte : changer de langue re-rend tout
+// sans recharger.
+function setLang(lang) {
+  if (lang === state.lang) return;
+  state.lang = lang;
+  writeFiltersToUrl();
+  applyStaticTexts();
+  renderRefreshed();
+  populateFilterOptions();
+  render();
+}
 
 function readFiltersFromUrl() {
   const p = new URLSearchParams(location.search);
@@ -445,6 +753,7 @@ function writeFiltersToUrl() {
     p.set("dir", f.dir);
   }
   if (f.alerts) p.set("alerts", "1");
+  if (state.lang !== browserLang()) p.set("lang", state.lang);
   const query = p.toString();
   history.replaceState(null, "", query ? "?" + query : location.pathname);
 }
@@ -494,15 +803,14 @@ async function refresh() {
     state.signals = new Map(mrs.map(mr => [mr.iid, { loading: true }]));
     populateFilterOptions();
     render();
-    const now = new Date();
-    $("refreshed").textContent = "mis à jour à " + now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) +
-      " le " + now.toLocaleDateString("fr-FR");
+    state.refreshedAt = new Date();
+    renderRefreshed();
     await runLimited(mrs, MAX_PARALLEL_MRS, async mr => {
       state.signals.set(mr.iid, await loadSignals(mr));
       render();
     });
   } catch (error) {
-    showError("Chargement des MR impossible : " + error.message);
+    showError(t("error.load", { message: error.message }));
   } finally {
     $("refresh").disabled = false;
   }
@@ -517,7 +825,7 @@ async function loadSonarPullRequests() {
     const retention = await api(`/sonar/settings/values?keys=${RETENTION_SETTING}&component=${encodeURIComponent(state.config.sonarProject)}`);
     state.sonarRetentionDays = Number(retention.body.settings[0]?.value) || DEFAULT_SONAR_RETENTION_DAYS;
   } catch (error) {
-    showError("Sonar injoignable : " + error.message);
+    showError(t("error.sonar", { message: error.message }));
   }
 }
 
@@ -571,7 +879,7 @@ async function loadThreads(mr) {
 // successeur sur l'historique first-parent de la cible (le commit de merge, pour une MR mergée), et non
 // celle du plus ancien commit manquant — un commit de feature mergé plus tard garde sa date d'origine.
 async function loadBehind(mr, count) {
-  if (count == null) return { error: "nombre de commits de retard non fourni par GitLab" };
+  if (count == null) return { error: t("error.behindCount") };
   if (count === 0) return { count, since: null };
   try {
     const refs = [mr.sha, mr.target_branch].map(ref => `refs%5B%5D=${encodeURIComponent(ref)}`).join("&");
@@ -610,20 +918,20 @@ async function loadCommits(mr) {
 
 function pitSignal(job, note, mr) {
   const noteLink = note ? `${mr.web_url}#note_${note.id}` : mr.web_url;
-  if (!job) return { state: "absent", label: "PIT non applicable", title: "Le dernier pipeline ne contient pas de job mutation_test", link: mr.web_url };
+  if (!job) return { state: "absent", reason: "notApplicable", link: mr.web_url };
   const running = PENDING_JOB_STATUSES.has(job.status);
   // Job en cours : la note du run précédent reste la dernière valeur connue — l'afficher, marquée
   // « en cours », plutôt que de la masquer. Sans note, il n'y a rien à montrer.
-  if (running && !note) return { state: "pending", label: "PIT en cours", title: `Job mutation_test : ${job.status}`, link: job.web_url };
-  if (!note) return { state: "absent", label: "PIT sans note", title: `Job ${job.status}, aucune note ${PIT_MARKER} publiée`, link: job.web_url };
+  if (running && !note) return { state: "pending", reason: "pending", info: { status: job.status }, link: job.web_url };
+  if (!note) return { state: "absent", reason: "noNote", info: { status: job.status, marker: PIT_MARKER }, link: job.web_url };
   // Seul un job en échec rend la note suspecte. Un job réussi republie la note, mais GitLab ne
   // bouge pas son updated_at si le contenu est identique : comparer les dates donnerait un faux
   // « périmé » à chaque résultat inchangé.
   if (job.status === "failed" && job.started_at && new Date(note.updated_at) < new Date(job.started_at)) {
-    return { state: "stale", label: "PIT en échec", title: "Le dernier job mutation_test a échoué ; la note date d'un run précédent", link: job.web_url };
+    return { state: "stale", reason: "failed", link: job.web_url };
   }
   const counts = parsePitNote(note.body);
-  if (!counts) return { state: "absent", label: "PIT illisible", title: "Tableau de la note PIT non reconnu", link: noteLink };
+  if (!counts) return { state: "absent", reason: "unreadable", link: noteLink };
   return {
     state: "ok",
     ...counts,
@@ -648,24 +956,19 @@ function parsePitNote(body) {
 // applicable), l'analyse a été purgée par le serveur faute de push récent (expirée — relancer le
 // pipeline), ou le job n'a rien produit (introuvable — à investiguer).
 function missingSonarAnalysis(job, mr) {
-  if (!job) return { state: "absent", label: "Sonar non applicable", title: "Le dernier pipeline ne contient pas de job sonar", link: mr.web_url };
+  if (!job) return { state: "absent", reason: "notApplicable", link: mr.web_url };
   if (PENDING_JOB_STATUSES.has(job.status)) {
-    return { state: "pending", label: "Sonar en cours", title: `Job sonar : ${job.status} — première analyse de la MR`, link: job.web_url };
+    return { state: "pending", reason: "pending", info: { status: job.status }, link: job.web_url };
   }
   const retentionMs = state.sonarRetentionDays * 24 * 3600 * 1000;
   if (job.status === "success" && job.finished_at && Date.now() - new Date(job.finished_at) > retentionMs) {
-    return {
-      state: "absent",
-      label: "Sonar analyse expirée",
-      title: `Sonar supprime l'analyse d'une MR sans push depuis ${state.sonarRetentionDays} jours ; relancer le pipeline pour la recalculer`,
-      link: job.web_url,
-    };
+    return { state: "absent", reason: "expired", info: { days: state.sonarRetentionDays }, link: job.web_url };
   }
-  return { state: "absent", label: "Sonar introuvable", title: `Job sonar ${job.status}, mais aucune analyse Sonar pour cette MR`, link: job.web_url };
+  return { state: "absent", reason: "notFound", info: { status: job.status }, link: job.web_url };
 }
 
 async function sonarSignal(job, mr) {
-  if (!state.config.sonarEnabled) return { state: "disabled", label: "Sonar non configuré", title: "SONAR_TOKEN absent côté serveur" };
+  if (!state.config.sonarEnabled) return { state: "disabled", reason: "disabled" };
   const base = state.config.sonarWeb;
   const id = encodeURIComponent(state.config.sonarProject);
   const links = {
@@ -719,7 +1022,7 @@ function signalsOf(mr) {
 
 function loadingOrError(s) {
   if (s.loading) return pill("loading", "…");
-  if (s.error) return pill("grey", "Indisponible", s.error);
+  if (s.error) return pill("grey", t("unavailable"), s.error);
   return null;
 }
 
@@ -727,10 +1030,11 @@ function pipelineCell(mr) {
   const s = signalsOf(mr);
   const pending = loadingOrError(s);
   if (pending) return pending;
-  if (!s.pipeline) return pill("grey", "Aucun");
-  if (s.pipeline.status === "success") return `<a class="ok good" href="${escapeHtml(s.pipeline.web_url)}" target="_blank" rel="noopener" title="Pipeline #${s.pipeline.id} réussi">OK</a>`;
-  const [tone, text] = PIPELINE_LOOK[s.pipeline.status] ?? ["grey", s.pipeline.status];
-  return pill(tone, text.replace(/^Pipeline /, "").replace(/^./, c => c.toUpperCase()), `Pipeline #${s.pipeline.id}`, s.pipeline.web_url);
+  if (!s.pipeline) return pill("grey", t("pipeline.none"));
+  const { id, status, web_url: link } = s.pipeline;
+  if (status === "success") return `<a class="ok good" href="${escapeHtml(link)}" target="_blank" rel="noopener" title="${escapeHtml(t("pipeline.succeeded", { id }))}">OK</a>`;
+  const text = has(`pipeline.${status}`) ? t(`pipeline.${status}`) : status;
+  return pill(PIPELINE_TONE[status] ?? "grey", text, t("pipeline.title", { id }), link);
 }
 
 function pitCell(mr) {
@@ -739,15 +1043,19 @@ function pitCell(mr) {
   if (pending) return pending;
   const pit = s.pit;
   if (!pit) return "";
-  if (pit.state !== "ok") return pill("grey", pit.label.replace(/^PIT /, "").replace(/^./, c => c.toUpperCase()), pit.title, pit.link);
-  const detail = `${pit.total} mutants — ${pit.killed} tués, ${pit.survived} survivants, ${pit.noCoverage} non couverts, ${pit.errors} en erreur` +
-    (pit.strength != null ? ` — test strength ${pit.strength} %` : "");
+  if (pit.state !== "ok") return reasonPill("pit", pit);
+  const detail = t("pit.detail", pit);
   const out = [];
-  if (pit.survived > 0) out.push(pill("red", `${pit.survived} survivant${plural(pit.survived)}`, detail, pit.link));
-  if (pit.noCoverage > 0) out.push(pill("orange", `${pit.noCoverage} non couvert${plural(pit.noCoverage)}`, detail, pit.link));
-  if (pit.errors > 0) out.push(pill("orange", `${pit.errors} en erreur`, detail, pit.link));
-  if (pit.jobFailed) out.push(pill("orange", "Job en échec", "Le job mutation_test a échoué ; la note peut être partielle", pit.link));
+  if (pit.survived > 0) out.push(pill("red", t("pit.survived", { n: pit.survived }), detail, pit.link));
+  if (pit.noCoverage > 0) out.push(pill("orange", t("pit.noCoverage", { n: pit.noCoverage }), detail, pit.link));
+  if (pit.errors > 0) out.push(pill("orange", t("pit.errors", { n: pit.errors }), detail, pit.link));
+  if (pit.jobFailed) out.push(pill("orange", t("job.failed"), t("pit.jobFailed"), pit.link));
   return signalStack(pit, out, `<a class="ok good" href="${escapeHtml(pit.link)}" target="_blank" rel="noopener" title="${escapeHtml(detail)}">0</a>`);
+}
+
+// Signal inexploitable (absent, en cours, non configuré…) : sa raison, en pastille grise.
+function reasonPill(kind, signal) {
+  return pill("grey", t(`reason.${signal.reason}`), t(`${kind}.${signal.reason}`, signal.info), signal.link);
 }
 
 function sonarUsable(sonar) {
@@ -759,7 +1067,7 @@ function sonarUnusable(mr) {
   const pending = loadingOrError(s);
   if (pending) return pending;
   if (!s.sonar) return "";
-  if (!sonarUsable(s.sonar)) return pill("grey", s.sonar.label.replace(/^Sonar /, "").replace(/^./, c => c.toUpperCase()), s.sonar.title, s.sonar.link);
+  if (!sonarUsable(s.sonar)) return reasonPill("sonar", s.sonar);
   return null;
 }
 
@@ -768,10 +1076,10 @@ function issuesCell(mr) {
   if (unusable !== null) return unusable;
   const sonar = signalsOf(mr).sonar;
   const out = [];
-  if (sonar.state === "stale") out.push(pill("grey", "Périmé", `Dernière analyse ${formatDate(sonar.analysisDate)}, antérieure au dernier job sonar`, sonar.links.dashboard));
-  if (sonar.issues > 0) out.push(pill("red", `${sonar.issues} issue${plural(sonar.issues)}`, "Issues Sonar ouvertes sur la MR", sonar.links.issues));
-  if (sonar.gate && sonar.gate !== "OK") out.push(pill("red", `Quality Gate ${sonar.gate}`, "Quality Gate Sonar non passé", sonar.links.dashboard));
-  if (sonar.jobFailed) out.push(pill("orange", "Job en échec", "Le job sonar a échoué", sonar.links.dashboard));
+  if (sonar.state === "stale") out.push(pill("grey", t("sonar.stale"), t("sonar.staleTitle", { date: formatDate(sonar.analysisDate) }), sonar.links.dashboard));
+  if (sonar.issues > 0) out.push(pill("red", t("sonar.issues", { n: sonar.issues }), t("sonar.issuesTitle"), sonar.links.issues));
+  if (sonar.gate && sonar.gate !== "OK") out.push(pill("red", t("sonar.gate", { gate: sonar.gate }), t("sonar.gateTitle"), sonar.links.dashboard));
+  if (sonar.jobFailed) out.push(pill("orange", t("job.failed"), t("sonar.jobFailed"), sonar.links.dashboard));
   return signalStack(sonar, out, `<a class="ok good" href="${escapeHtml(sonar.links.issues)}" target="_blank" rel="noopener">0</a>`);
 }
 
@@ -779,9 +1087,13 @@ function coverageCell(mr) {
   const unusable = sonarUnusable(mr);
   if (unusable !== null) return unusable;
   const sonar = signalsOf(mr).sonar;
-  if (sonar.coverage == null) return signalStack(sonar, [], `<span class="ok" title="Aucune ligne nouvelle à couvrir">—</span>`);
-  const detail = `Couverture du nouveau code : ${sonar.linesToCover ?? "?"} lignes à couvrir, ${sonar.uncoveredLines ?? "?"} non couvertes, ${sonar.uncoveredConditions ?? "?"} conditions non couvertes`;
-  if (sonar.coverage >= 100) return signalStack(sonar, [], `<a class="ok good" href="${escapeHtml(sonar.links.coverage)}" target="_blank" rel="noopener" title="${escapeHtml(detail)}">100 %</a>`);
+  if (sonar.coverage == null) return signalStack(sonar, [], `<span class="ok" title="${escapeHtml(t("coverage.none"))}">—</span>`);
+  const detail = t("coverage.detail", {
+    lines: sonar.linesToCover ?? "?",
+    uncovered: sonar.uncoveredLines ?? "?",
+    conditions: sonar.uncoveredConditions ?? "?",
+  });
+  if (sonar.coverage >= 100) return signalStack(sonar, [], `<a class="ok good" href="${escapeHtml(sonar.links.coverage)}" target="_blank" rel="noopener" title="${escapeHtml(detail)}">${formatPercent(100)}</a>`);
   return signalStack(sonar, [pill("orange", formatPercent(sonar.coverage), detail, sonar.links.coverage)], "");
 }
 
@@ -794,9 +1106,9 @@ function lastCommitDate(mr) {
   return signalsOf(mr).commits?.lastDate ?? null;
 }
 
-function dateCell(iso, label) {
+function dateCell(iso, key) {
   if (!iso) return `<span class="muted">—</span>`;
-  return `<span title="${escapeHtml(label + " : " + formatDate(iso))}">${relative(iso)}</span>`;
+  return `<span title="${escapeHtml(t(key, { date: formatDate(iso) }))}">${relative(iso)}</span>`;
 }
 
 // Valeurs d'un run précédent pendant qu'un nouveau job tourne : préfixées d'une pastille « En cours »,
@@ -804,7 +1116,7 @@ function dateCell(iso, label) {
 function refreshingPill(signal) {
   const r = signal.refreshing;
   if (!r) return "";
-  return pill("grey", "En cours", `Job ${r.job} : ${r.status} — valeurs du run précédent (${formatDate(r.valuesDate)}), susceptibles de changer à la fin du job`, r.link);
+  return pill("grey", t("refreshing"), t("refreshing.title", { job: r.job, status: r.status, date: formatDate(r.valuesDate) }), r.link);
 }
 
 function signalStack(signal, alerts, clean) {
@@ -842,15 +1154,15 @@ function populateFilterOptions() {
     for (const mr of state.mrs) {
       for (const u of [].concat(mr[key] || [])) if (u) map.set(u.username, u.name);
     }
-    return [...map].sort((a, b) => a[1].localeCompare(b[1], "fr"));
+    return [...map].sort((a, b) => a[1].localeCompare(b[1], locale()));
   };
-  fillSelect("author", "Auteur : tous", people("author"));
-  fillSelect("reviewer", "Reviewer : tous", people("reviewers"));
-  fillSelect("assignee", "Assignee : tous", people("assignees"));
+  fillSelect("author", t("filter.anyAuthor"), people("author"));
+  fillSelect("reviewer", t("filter.anyReviewer"), people("reviewers"));
+  fillSelect("assignee", t("filter.anyAssignee"), people("assignees"));
   const targets = [...new Set(state.mrs.map(mr => mr.target_branch).concat(state.filters.target ? [state.filters.target] : []))].sort();
-  fillSelect("target", "Cible : toutes", targets.map(t => [t, "→ " + t]));
-  const labels = [...new Set(state.mrs.flatMap(mr => mr.labels))].sort((a, b) => a.localeCompare(b, "fr"));
-  fillSelect("label", "Label : ajouter…", labels.filter(l => !state.filters.labels.includes(l)).map(l => [l, l]));
+  fillSelect("target", t("filter.anyTarget"), targets.map(target => [target, "→ " + target]));
+  const labels = [...new Set(state.mrs.flatMap(mr => mr.labels))].sort((a, b) => a.localeCompare(b, locale()));
+  fillSelect("label", t("filter.addLabel"), labels.filter(l => !state.filters.labels.includes(l)).map(l => [l, l]));
   $("label").value = "";
 }
 
@@ -871,7 +1183,7 @@ function syncControlsFromState() {
   $("draft").value = f.draft;
   $("alerts").checked = f.alerts;
   $("activeLabels").innerHTML = f.labels
-    .map(l => `<button type="button" class="label" data-remove-label="${escapeHtml(l)}" title="Retirer ce label du filtre">${escapeHtml(l)}</button>`)
+    .map(l => `<button type="button" class="label" data-remove-label="${escapeHtml(l)}" title="${escapeHtml(t("label.remove"))}">${escapeHtml(l)}</button>`)
     .join("");
 }
 
@@ -902,12 +1214,12 @@ function render() {
   const withAlerts = state.mrs.filter(mr => alertScore(mr) > 0).length;
   const loading = [...state.signals.values()].filter(s => s.loading).length;
   $("summary").innerHTML =
-    `<span class="stat"><b>${visible.length}</b> affichée${plural(visible.length)} sur ${state.mrs.length} ouvertes</span>` +
-    `<span class="stat${withAlerts ? " alert" : ""}"><b>${withAlerts}</b> avec alertes</span>` +
-    (loading ? `<span class="stat loading"><b>${loading}</b> en chargement…</span>` : "");
+    `<span class="stat">${t("summary.shown", { n: visible.length, total: state.mrs.length })}</span>` +
+    `<span class="stat${withAlerts ? " alert" : ""}">${t("summary.alerts", { n: withAlerts })}</span>` +
+    (loading ? `<span class="stat loading">${t("summary.loading", { n: loading })}</span>` : "");
   $("list").innerHTML = visible.length
     ? visible.map(renderRow).join("")
-    : `<tr><td class="empty" colspan="${COLUMNS.length}">Aucune MR ne correspond aux filtres.</td></tr>`;
+    : `<tr><td class="empty" colspan="${COLUMNS.length}">${escapeHtml(t("empty"))}</td></tr>`;
 }
 
 // Une valeur inconnue (signal en chargement, absent, en erreur) est toujours rangée en fin de liste,
@@ -920,21 +1232,22 @@ function comparator(column, dir) {
     if (va == null && vb == null) return b.updated_at.localeCompare(a.updated_at);
     if (va == null) return 1;
     if (vb == null) return -1;
-    const order = typeof va === "string" ? va.localeCompare(vb, "fr") : va - vb;
+    const order = typeof va === "string" ? va.localeCompare(vb, locale()) : va - vb;
     return sign * order || b.updated_at.localeCompare(a.updated_at);
   };
 }
 
 function renderHeaders() {
   const groups = COLUMN_GROUPS
-    .map(g => `<th colspan="${g.columns.length}" class="g-${g.key}${g.key !== "mr" ? " g-first" : ""}"><span>${escapeHtml(g.label) || "&nbsp;"}</span></th>`)
+    .map(g => `<th colspan="${g.columns.length}" class="g-${g.key}${g.key !== "mr" ? " g-first" : ""}"><span>${g.key === "mr" ? "&nbsp;" : escapeHtml(t(`group.${g.key}`))}</span></th>`)
     .join("");
   $("headers").innerHTML = `<tr class="groups">${groups}</tr><tr class="columns">` + COLUMNS.map(column => {
     const active = state.filters.sort === column.key;
     const arrow = active ? (state.filters.dir === "asc" ? "▲" : "▼") : "";
     const ariaSort = active ? ` aria-sort="${state.filters.dir === "asc" ? "ascending" : "descending"}"` : "";
-    return `<th class="${column.num ? "num" : ""} ${groupClass(column.key)}"${ariaSort} title="${escapeHtml(column.help ?? "")}">` +
-      `<button type="button" data-sort="${column.key}">${escapeHtml(column.label)}<span class="arrow">${arrow}</span></button></th>`;
+    const help = has(`help.${column.key}`) ? t(`help.${column.key}`) : "";
+    return `<th class="${column.num ? "num" : ""} ${groupClass(column.key)}"${ariaSort} title="${escapeHtml(help)}">` +
+      `<button type="button" data-sort="${column.key}">${escapeHtml(t(`col.${column.key}`))}<span class="arrow">${arrow}</span></button></th>`;
   }).join("") + "</tr>";
 }
 
@@ -951,9 +1264,9 @@ function authorCell(mr) {
 
 function mrCell(mr) {
   const labels = mr.labels
-    .map(l => `<button type="button" class="label" data-add-label="${escapeHtml(l)}" title="Filtrer sur ce label">${escapeHtml(l)}</button>`)
+    .map(l => `<button type="button" class="label" data-add-label="${escapeHtml(l)}" title="${escapeHtml(t("label.add"))}">${escapeHtml(l)}</button>`)
     .join("");
-  const conflicts = mr.has_conflicts ? " " + pill("red", "Conflits", "La MR est en conflit avec sa branche cible", mr.web_url) : "";
+  const conflicts = mr.has_conflicts ? " " + pill("red", t("conflicts"), t("conflicts.title"), mr.web_url) : "";
   return `<div class="title-row"><div class="title">${mr.draft ? '<span class="draft">Draft</span>' : ""}<a href="${escapeHtml(mr.web_url)}" target="_blank" rel="noopener">${escapeHtml(mr.title.replace(/^Draft:\s*/i, ""))}</a>${conflicts}</div><div class="title-actions">${approvalPill(mr)}${aiFixButton(mr)}</div></div>
     <div class="sub"><span class="iid">!${mr.iid}</span> · <code>${escapeHtml(mr.source_branch)}</code> → <code>${escapeHtml(mr.target_branch)}</code></div>
     ${labels ? `<div class="labels">${labels}</div>` : ""}`;
@@ -969,9 +1282,10 @@ function aiFixButton(mr) {
   if (s.loading) return "";
   const outdated = mr.has_conflicts || s.behind?.count > 0;
   if (!outdated && !qualityDefects(s).length && !(s.threads?.unresolved > 0)) return "";
-  return `<button type="button" class="ai-fix" data-ai-fix="${mr.iid}" title="Afficher un prompt Claude Code pour corriger cette MR">Correct with IA</button>`;
+  return `<button type="button" class="ai-fix" data-ai-fix="${mr.iid}" title="${escapeHtml(t("aiFix.title"))}">${escapeHtml(t("aiFix"))}</button>`;
 }
 
+// Alimente le prompt seul : en français quelle que soit la langue de l'interface, comme aiFixPrompt.
 function qualityDefects(s) {
   const defects = [];
   if (s.pipeline?.status === "failed") defects.push(`le pipeline #${s.pipeline.id} est en échec`);
@@ -979,7 +1293,7 @@ function qualityDefects(s) {
     const sonar = s.sonar;
     if (sonar.issues > 0) defects.push(`${sonar.issues} issue${plural(sonar.issues)} Sonar ouverte${plural(sonar.issues)}`);
     if (sonar.gate && sonar.gate !== "OK") defects.push(`Quality Gate Sonar ${sonar.gate}`);
-    if (sonar.coverage != null && sonar.coverage < 100) defects.push(`couverture du nouveau code à ${formatPercent(sonar.coverage)} (objectif 100 %)`);
+    if (sonar.coverage != null && sonar.coverage < 100) defects.push(`couverture du nouveau code à ${formatPercentFr(sonar.coverage)} (objectif 100 %)`);
   }
   const pit = s.pit;
   if (pit?.state === "ok") {
@@ -1030,7 +1344,7 @@ function aiFixPrompt(mr) {
 }
 
 function openAiFix(mr) {
-  $("ai-title").textContent = `Corriger la MR !${mr.iid} avec Claude Code`;
+  $("ai-title").textContent = t("dialog.title", { iid: mr.iid });
   $("ai-text").value = aiFixPrompt(mr);
   $("ai-copied").textContent = "";
   $("ai-dialog").showModal();
@@ -1045,7 +1359,7 @@ async function copyAiPrompt() {
     $("ai-text").select();
     document.execCommand("copy");
   }
-  $("ai-copied").textContent = "Copié";
+  $("ai-copied").textContent = t("dialog.copied");
 }
 
 function threadsCell(mr) {
@@ -1053,7 +1367,7 @@ function threadsCell(mr) {
   if (!threads) return `<span class="muted">…</span>`;
   if (threads.error) return `<span class="muted" title="${escapeHtml(threads.error)}">?</span>`;
   const text = `${threads.unresolved} / ${threads.total}`;
-  const title = `${threads.unresolved} thread${plural(threads.unresolved)} non résolu${plural(threads.unresolved)} sur ${threads.total}`;
+  const title = t("threads.title", { n: threads.unresolved, total: threads.total });
   if (threads.unresolved > 0) return pill("orange", text, title, mr.web_url);
   return `<span class="ok${threads.total ? " good" : ""}" title="${escapeHtml(title)}">${text}</span>`;
 }
@@ -1064,14 +1378,14 @@ function approvalPill(mr) {
   const names = signalsOf(mr).approvals?.names;
   if (!names?.length) return "";
   const count = names.length;
-  return pill("green", count > 1 ? `Approuvée ×${count}` : "Approuvée", `Approuvée par ${names.join(", ")}`, mr.web_url);
+  return pill("green", t("approved", { n: count }), t("approved.title", { names: names.join(", ") }), mr.web_url);
 }
 
 function commitsCell(mr) {
   const commits = signalsOf(mr).commits;
   if (!commits) return `<span class="muted">…</span>`;
   if (commits.error) return `<span class="muted" title="${escapeHtml(commits.error)}">?</span>`;
-  return `<a href="${escapeHtml(mr.web_url)}/commits" target="_blank" rel="noopener" title="Commits de la MR">${commits.count}</a>`;
+  return `<a href="${escapeHtml(mr.web_url)}/commits" target="_blank" rel="noopener" title="${escapeHtml(t("commits.title"))}">${commits.count}</a>`;
 }
 
 function behindCell(mr) {
@@ -1079,12 +1393,12 @@ function behindCell(mr) {
   if (s.loading) return `<span class="muted">…</span>`;
   const behind = s.behind;
   if (!behind || behind.count == null) return `<span class="muted" title="${escapeHtml(behind?.error ?? s.error ?? "")}">?</span>`;
-  if (behind.count === 0) return `<span class="ok good" title="À jour avec ${escapeHtml(mr.target_branch)}">0</span>`;
-  const count = `<div title="${behind.count} commit${plural(behind.count)} de ${escapeHtml(mr.target_branch)} absent${plural(behind.count)} de la MR">${behind.count}</div>`;
+  if (behind.count === 0) return `<span class="ok good" title="${escapeHtml(t("behind.upToDate", { target: mr.target_branch }))}">0</span>`;
+  const count = `<div title="${escapeHtml(t("behind.count", { n: behind.count, target: mr.target_branch }))}">${behind.count}</div>`;
   const hours = behind.since ? (Date.now() - new Date(behind.since)) / 3600000 : 0;
   const tone = hours > BEHIND_RED_HOURS ? "late-red" : hours > BEHIND_ORANGE_HOURS ? "late-orange" : "muted";
   const since = behind.since
-    ? `<div class="${tone}" title="${escapeHtml(`Retard depuis le ${formatDate(behind.since)} (commit ${behind.next}, après le dernier commit commun ${behind.base})`)}">(${compactDuration(Date.now() - new Date(behind.since))})</div>`
+    ? `<div class="${tone}" title="${escapeHtml(t("behind.since", { date: formatDate(behind.since), next: behind.next, base: behind.base }))}">(${compactDuration(Date.now() - new Date(behind.since))})</div>`
     : `<div class="muted" title="${escapeHtml(behind.error ?? "")}">(?)</div>`;
   return count + since;
 }
@@ -1092,7 +1406,7 @@ function behindCell(mr) {
 // ---------- Utilitaires ----------
 
 // « - 4 heures » plutôt que « il y a 4 heures » : la colonne se lit plus vite sans le préfixe répété.
-const durationFormat = unit => new Intl.NumberFormat("fr", { style: "unit", unit, unitDisplay: "long" });
+const durationFormat = unit => new Intl.NumberFormat(locale(), { style: "unit", unit, unitDisplay: "long" });
 
 function relative(iso) {
   const seconds = (new Date(iso) - Date.now()) / 1000;
@@ -1104,7 +1418,7 @@ function relative(iso) {
   }
 }
 
-// « < 1 min », « 20 min », « 1h20 », « 2 j 3h » : plus précis que relative() à l'échelle d'une journée de retard.
+// « < 1 min », « 20 min », « 1h20 », « 2 j 3h » (« 2 d 3h » en anglais) : plus précis que relative() à l'échelle d'une journée de retard.
 function compactDuration(ms) {
   const minutes = Math.max(0, Math.floor(ms / 60000));
   if (minutes < 1) return "< 1 min";
@@ -1112,11 +1426,13 @@ function compactDuration(ms) {
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h${minutes % 60 ? String(minutes % 60).padStart(2, "0") : ""}`;
   const rest = hours % 24;
-  return `${Math.floor(hours / 24)} j${rest ? ` ${rest}h` : ""}`;
+  return `${Math.floor(hours / 24)} ${t("unit.day")}${rest ? ` ${rest}h` : ""}`;
 }
 
-const formatDate = iso => new Date(iso).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
-const formatPercent = value => value.toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " %";
+const formatDate = iso => new Date(iso).toLocaleString(locale(), { dateStyle: "short", timeStyle: "short" });
+const formatPercent = value => (value / 100).toLocaleString(locale(), { style: "percent", maximumFractionDigits: 1 });
+// Formes françaises fixes, pour le prompt et les traductions françaises.
+const formatPercentFr = value => value.toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " %";
 const plural = n => (n > 1 ? "s" : "");
 
 function escapeHtml(value) {
@@ -1152,6 +1468,11 @@ document.addEventListener("click", e => {
     updateFilters({ sort: column.key, dir });
     return;
   }
+  const lang = e.target.closest("[data-lang]");
+  if (lang) {
+    setLang(lang.dataset.lang);
+    return;
+  }
   const aiFix = e.target.closest("[data-ai-fix]");
   if (aiFix) {
     openAiFix(state.mrs.find(mr => String(mr.iid) === aiFix.dataset.aiFix));
@@ -1169,6 +1490,7 @@ $("refresh").addEventListener("click", refresh);
 $("ai-copy").addEventListener("click", copyAiPrompt);
 $("ai-close").addEventListener("click", () => $("ai-dialog").close());
 
+applyStaticTexts();
 refresh();
 </script>
 </body>
