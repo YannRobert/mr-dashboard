@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mister Dashboard : le dashboard des Merge Requests.
+"""MisteR Dashboard : le dashboard des Merge Requests.
 
 Tableau de bord local des MR ouvertes, avec les signaux CI (pipeline, PIT, Sonar) en pastilles.
 
@@ -164,7 +164,7 @@ def main():
         },
     }
     server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(settings))
-    print(f"Mister Dashboard, le dashboard des Merge Requests : http://localhost:{args.port}")
+    print(f"MisteR Dashboard, le dashboard des Merge Requests : http://localhost:{args.port}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

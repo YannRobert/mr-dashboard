@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mister Dashboard : le dashboard des Merge Requests</title>
+<title>MisteR Dashboard : le dashboard des Merge Requests</title>
 <style>
   :root {
     --bg: #f3f4f7;
@@ -81,8 +81,14 @@
     color: #fff; background: linear-gradient(135deg, var(--accent), var(--accent-2));
   }
   header h1 { margin: 0; display: flex; align-items: center; gap: 0.6rem; font-size: 1.4rem; font-weight: 700; letter-spacing: -0.01em; }
-  /* « Mister » au-dessus de « Dashboard », à hauteur de la pastille « MR » : le clin d'œil MR = Mister se lit d'un coup. */
+  /* « MisteR » au-dessus de « Dashboard », à hauteur de la pastille « MR » : le clin d'œil MR = MisteR se lit d'un coup. */
   header h1 .name { display: flex; flex-direction: column; font-size: 1.15rem; line-height: 1.05; }
+  /* Le M et le R de « MisteR » reprennent le dégradé des boutons principaux. */
+  header h1 .initial {
+    font-weight: inherit; color: var(--accent);
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
   header h1 .tagline { font-size: 1rem; font-weight: 500; color: var(--muted); letter-spacing: 0; }
   header .project {
     font-size: 0.85rem; color: var(--muted); background: var(--surface-2);
@@ -105,11 +111,22 @@
     display: inline-flex; gap: 0.4em; align-items: center; color: var(--text); font-size: 1rem; cursor: pointer;
   }
   header label.auto input { accent-color: var(--accent); width: 1.4rem; height: 1.4rem; margin: 0; cursor: pointer; }
-  button.pending-update {
-    color: var(--orange-fg); background: var(--orange-bg); font-weight: 600;
-    border-color: color-mix(in srgb, var(--orange-fg) 30%, transparent);
+  /* Fraîcheur des données : 5 segments, un par minute, qui s'éteignent jusqu'à la prochaine actualisation
+     auto ; vert jusqu'à 2 min, rouge à 4 min. Animation CSS pure, relancée à chaque actualisation : aucun
+     calcul pendant l'attente. */
+  header .refresh-controls { position: relative; }
+  .freshness { position: absolute; left: 0.8rem; right: 0.8rem; bottom: 3px; height: 4px; display: flex; gap: 3px; pointer-events: none; }
+  .freshness[hidden] { display: none; }
+  .freshness i {
+    flex: 1; border-radius: 999px; background: var(--green-dot);
+    animation: freshness-color var(--cycle) linear var(--delay) forwards, freshness-off var(--off) steps(1, end) var(--delay) forwards;
   }
-  button.pending-update[hidden] { display: none; }
+  @keyframes freshness-color {
+    0%, 40% { background: var(--green-dot); }
+    60% { background: var(--orange-dot); }
+    80%, 100% { background: var(--red-dot); }
+  }
+  @keyframes freshness-off { to { opacity: 0.15; } }
   .lang-switch { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 0.5rem; overflow: hidden; }
   .lang-switch button {
     border: 0; border-radius: 0; padding: 0.35em 0.65em; font-size: 0.85rem; font-weight: 600;
@@ -181,6 +198,10 @@
   table.mrs tbody tr:hover td { background: var(--surface-2); }
   table.mrs tbody tr:hover td.g-quality { background: color-mix(in srgb, var(--quality-bg) 60%, var(--surface-2)); }
   table.mrs tbody tr:hover td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+  /* Alerte laissée en plan : toute la ligne en rouge, qualité comprise. */
+  table.mrs tbody tr.stalled td, table.mrs tbody tr.stalled td.g-quality { background: var(--red-bg); }
+  table.mrs tbody tr.stalled td:first-child { box-shadow: inset 3px 0 0 var(--red-dot); }
+  .commit-mood { margin-left: 0.3em; cursor: help; }
   table.mrs thead th {
     position: sticky; z-index: 1; background: var(--surface);
     font-size: 0.8rem; font-weight: 600; color: var(--muted); white-space: nowrap;
@@ -310,18 +331,18 @@
 </head>
 <body>
 <header>
-  <span class="brand" aria-hidden="true" title="Mister = MR">MR</span>
-  <h1><span class="name"><span>Mister</span> <span>Dashboard</span></span> <span class="tagline" data-i18n="tagline">: le dashboard des Merge Requests</span></h1>
+  <span class="brand" aria-hidden="true" title="MisteR = MR">MR</span>
+  <h1><span class="name"><span><b class="initial">M</b>iste<b class="initial">R</b></span> <span>Dashboard</span></span> <span class="tagline" data-i18n="tagline">: le dashboard des Merge Requests</span></h1>
   <span class="project" id="project"></span>
   <span class="spacer"></span>
   <div class="status" role="status" aria-live="polite">
     <span class="meta" id="refreshed"></span>
-    <button id="pending" type="button" class="pending-update" hidden data-i18n="pending">Nouvelles données disponibles — afficher</button>
   </div>
   <span class="divider" aria-hidden="true"></span>
   <div class="refresh-controls" role="group" aria-label="Actualisation" data-i18n-aria-label="refresh.group">
     <label class="auto" data-i18n-title="autoRefresh.title"><input type="checkbox" id="autoRefresh" checked autocomplete="off"> <span data-i18n="autoRefresh">Actualisation auto</span></label>
     <button id="refresh" type="button" class="primary" data-i18n="refresh">Rafraîchir</button>
+    <div class="freshness" id="freshness" hidden aria-hidden="true"></div>
   </div>
   <span class="divider" aria-hidden="true"></span>
   <div class="lang-switch" role="group" aria-label="Langue" data-i18n-aria-label="lang.group">
@@ -375,20 +396,39 @@ const PENDING_JOB_STATUSES = new Set(["created", "pending", "running", "waiting_
 const MAX_PARALLEL_MRS = 4;
 const RETENTION_SETTING = "sonar.dbcleaner.daysBeforeDeletingInactiveBranchesAndPRs";
 const DEFAULT_SONAR_RETENTION_DAYS = 5;
-const PIPELINE_TONE = { success: "green", failed: "red" };
+// Clés = detailed_status.group de GitLab ; un groupe absent reste gris.
+const PIPELINE_TONE = { success: "green", "success-with-warnings": "orange", failed: "red" };
 
 // Retard sur la cible au-delà duquel la durée passe en orange, puis en rouge.
 const BEHIND_ORANGE_HOURS = 12;
 const BEHIND_RED_HOURS = 24;
 
-// Actualisation automatique : seulement page cachée, pour que rien ne bouge sous les yeux de l'utilisateur.
+// Âge du dernier commit : actif en deçà, endormi au-delà ; une alerte laissée sans commit au-delà de
+// STALLED_ALERT_HOURS met la ligne en rouge.
+const ACTIVE_COMMIT_HOURS = 2;
+const IDLE_COMMIT_HOURS = 24;
+const STALLED_ALERT_HOURS = 8;
+
+// Actualisation automatique, tant que la case est cochée.
 const AUTO_REFRESH_MS = 5 * 60 * 1000;
 const AUTO_REFRESH_KEY = "mr-dashboard.autoRefresh";
+const FRESHNESS_SEGMENTS = 5;
 
 const LANGS = ["fr", "en"];
 const LOCALES = { fr: "fr-FR", en: "en-GB" };
 
-const PIPELINE_RANK = { failed: 5, canceled: 4, running: 3, pending: 3, created: 3, manual: 2, skipped: 1, success: 0 };
+// Gravité par detailed_status.group, pour le tri ; un groupe absent compte comme « en cours ».
+const PIPELINE_RANK = {
+  failed: 5,
+  canceled: 4,
+  running: 3,
+  pending: 3,
+  created: 3,
+  manual: 2,
+  skipped: 1,
+  "success-with-warnings": 0.5,
+  success: 0,
+};
 
 // Ordre des colonnes, et pour chacune : valeur de tri (null = inconnue) et sens du premier clic.
 // Les signaux trient par gravité décroissante au premier clic, pour faire remonter les alertes.
@@ -402,7 +442,7 @@ const COLUMNS = [
     value: mr => { const t = signalsOf(mr).threads; return t && !t.error ? t.unresolved + t.total / 10000 : null; },
     render: threadsCell },
   { key: "pipeline", firstDir: "desc", cellClass: "signal",
-    value: mr => { const s = signalsOf(mr); return s.pipeline ? PIPELINE_RANK[s.pipeline.status] ?? 3 : null; },
+    value: mr => { const s = signalsOf(mr); return s.pipeline ? PIPELINE_RANK[pipelineStatus(s.pipeline).group] ?? 3 : null; },
     render: pipelineCell },
   { key: "issues", firstDir: "desc", cellClass: "signal",
     value: mr => { const x = signalsOf(mr).sonar; return sonarUsable(x) ? x.issues + (x.gate && x.gate !== "OK" ? 0.5 : 0) : null; },
@@ -416,7 +456,7 @@ const COLUMNS = [
   { key: "behind", firstDir: "desc", num: true, cellClass: "num nowrap",
     value: mr => signalsOf(mr).behind?.count ?? null, render: behindCell },
   { key: "last_commit", firstDir: "desc", cellClass: "nowrap",
-    value: lastCommitDate, render: mr => dateCell(lastCommitDate(mr), "date.lastCommit") },
+    value: lastCommitDate, render: lastCommitCell },
   { key: "activity", firstDir: "desc", cellClass: "nowrap",
     value: mr => mr.updated_at, render: mr => dateCell(mr.updated_at, "date.activity") },
   { key: "created", firstDir: "desc", cellClass: "nowrap", value: mr => mr.created_at, render: mr => dateCell(mr.created_at, "date.created") },
@@ -447,10 +487,10 @@ const state = {
   refreshedAt: null,
   refreshing: false,
   progress: null,
-  pending: null,
   lastFailure: null,
   autoRefresh: readAutoRefresh(),
   autoRefreshTimer: null,
+  cycleStart: null,
 };
 
 const $ = id => document.getElementById(id);
@@ -463,7 +503,7 @@ const pluralEn = n => (n === 1 ? "" : "s");
 
 const I18N = {
   fr: {
-    "page.title": "Mister Dashboard : le dashboard des Merge Requests",
+    "page.title": "MisteR Dashboard : le dashboard des Merge Requests",
     "tagline": ": le dashboard des Merge Requests",
     "lang.group": "Langue",
     "refresh.group": "Actualisation",
@@ -471,10 +511,8 @@ const I18N = {
     "refreshed": p => `mis à jour à ${p.time} le ${p.date} (il y a ${p.age})`,
     "progress": p => `mise à jour… ${p.done}/${p.total}`,
     "failed": p => `échec de la mise à jour à ${p.time}`,
-    "pending": "Nouvelles données disponibles — afficher",
     "autoRefresh": "Actualisation auto",
-    "autoRefresh.title": () => `Toutes les ${AUTO_REFRESH_MS / 60000} minutes, uniquement quand la page n'est pas affichée : ` +
-      "les données ne changent jamais sous vos yeux",
+    "autoRefresh.title": () => `Recharge les données toutes les ${AUTO_REFRESH_MS / 60000} minutes`,
     "search.placeholder": "Rechercher : titre, !iid, branche, ticket…",
     "search.aria": "Recherche",
     "filter.target": "Branche cible",
@@ -527,6 +565,10 @@ const I18N = {
     "help.last_commit": "Date du commit le plus récent — un commentaire ne la fait pas bouger",
     "help.activity": "Dernière activité GitLab : commit, commentaire, label, approbation…",
     "date.lastCommit": p => `Dernier commit : ${p.date}`,
+    "commit.active": `Active : dernier commit il y a moins de ${ACTIVE_COMMIT_HOURS} h`,
+    "commit.idle": `Endormie : aucun commit depuis plus de ${IDLE_COMMIT_HOURS} h`,
+    "stalled": "🚨 À traiter",
+    "stalled.title": `Alerte (pipeline, Sonar, PIT ou conflit) sans nouveau commit depuis plus de ${STALLED_ALERT_HOURS} h`,
     "date.activity": p => `Dernière activité : ${p.date}`,
     "date.created": p => `Créée le : ${p.date}`,
     "summary.shown": p => `<b>${p.n}</b> affichée${plural(p.n)} sur ${p.total} ouvertes`,
@@ -535,15 +577,7 @@ const I18N = {
     "empty": "Aucune MR ne correspond aux filtres.",
     "unavailable": "Indisponible",
     "pipeline.none": "Aucun",
-    "pipeline.title": p => `Pipeline #${p.id}`,
-    "pipeline.succeeded": p => `Pipeline #${p.id} réussi`,
-    "pipeline.failed": "KO",
-    "pipeline.canceled": "Annulé",
-    "pipeline.running": "En cours",
-    "pipeline.pending": "En attente",
-    "pipeline.created": "Créé",
-    "pipeline.skipped": "Ignoré",
-    "pipeline.manual": "Manuel",
+    "pipeline.title": p => `Pipeline #${p.id} : ${p.label}`,
     "reason.notApplicable": "Non applicable",
     "reason.pending": "En cours",
     "reason.noNote": "Sans note",
@@ -594,7 +628,7 @@ const I18N = {
     "unit.day": "j",
   },
   en: {
-    "page.title": "Mister Dashboard: the Merge Requests dashboard",
+    "page.title": "MisteR Dashboard: the Merge Requests dashboard",
     "tagline": ": the Merge Requests dashboard",
     "lang.group": "Language",
     "refresh.group": "Refresh",
@@ -602,10 +636,8 @@ const I18N = {
     "refreshed": p => `updated at ${p.time} on ${p.date} (${p.age} ago)`,
     "progress": p => `updating… ${p.done}/${p.total}`,
     "failed": p => `update failed at ${p.time}`,
-    "pending": "New data available — show",
     "autoRefresh": "Auto-refresh",
-    "autoRefresh.title": () => `Every ${AUTO_REFRESH_MS / 60000} minutes, only while the page is not displayed: ` +
-      "data never changes while you are looking at it",
+    "autoRefresh.title": () => `Reloads the data every ${AUTO_REFRESH_MS / 60000} minutes`,
     "search.placeholder": "Search: title, !iid, branch, ticket…",
     "search.aria": "Search",
     "filter.target": "Target branch",
@@ -658,6 +690,10 @@ const I18N = {
     "help.last_commit": "Date of the most recent commit — a comment does not move it",
     "help.activity": "Last GitLab activity: commit, comment, label, approval…",
     "date.lastCommit": p => `Last commit: ${p.date}`,
+    "commit.active": `Active: last commit less than ${ACTIVE_COMMIT_HOURS} h ago`,
+    "commit.idle": `Idle: no commit for more than ${IDLE_COMMIT_HOURS} h`,
+    "stalled": "🚨 Needs action",
+    "stalled.title": `Alert (pipeline, Sonar, PIT or conflict) with no new commit for more than ${STALLED_ALERT_HOURS} h`,
     "date.activity": p => `Last activity: ${p.date}`,
     "date.created": p => `Created on: ${p.date}`,
     "summary.shown": p => `<b>${p.n}</b> shown out of ${p.total} open`,
@@ -666,15 +702,7 @@ const I18N = {
     "empty": "No MR matches the filters.",
     "unavailable": "Unavailable",
     "pipeline.none": "None",
-    "pipeline.title": p => `Pipeline #${p.id}`,
-    "pipeline.succeeded": p => `Pipeline #${p.id} succeeded`,
-    "pipeline.failed": "Failed",
-    "pipeline.canceled": "Canceled",
-    "pipeline.running": "Running",
-    "pipeline.pending": "Pending",
-    "pipeline.created": "Created",
-    "pipeline.skipped": "Skipped",
-    "pipeline.manual": "Manual",
+    "pipeline.title": p => `Pipeline #${p.id}: ${p.label}`,
     "reason.notApplicable": "Not applicable",
     "reason.pending": "Running",
     "reason.noNote": "No note",
@@ -769,7 +797,6 @@ function renderStatus() {
     parts.push(`<span class="failed" title="${escapeHtml(state.lastFailure.message)}">${escapeHtml(t("failed", { time: time(state.lastFailure.at) }))}</span>`);
   }
   $("refreshed").innerHTML = parts.join("");
-  $("pending").hidden = !state.pending;
 }
 
 // Les signaux gardent une raison et ses paramètres, pas un texte : changer de langue re-rend tout
@@ -852,10 +879,8 @@ const projectPath = () => `projects/${encodeURIComponent(state.config.gitlabProj
 // ---------- Chargement ----------
 
 // Le premier chargement s'affiche au fil de l'eau : il n'y a rien d'autre à montrer. Les suivants
-// chargent un instantané complet à part, sans toucher au tableau, puis le substituent d'un bloc — ou,
-// si la mise à jour est automatique et que la page est affichée, le mettent en attente derrière le
-// bouton « Nouvelles données disponibles » plutôt que de changer les chiffres sous les yeux.
-async function refresh(source = "manual") {
+// chargent un instantané complet à part, sans toucher au tableau, puis le substituent d'un bloc.
+async function refresh() {
   if (state.refreshing) return;
   const initial = !state.refreshedAt;
   const snapshot = { at: new Date(), errors: [], initial };
@@ -887,16 +912,17 @@ async function refresh(source = "manual") {
       renderStatus();
     });
     state.lastFailure = null;
-    if (initial || source === "manual" || document.visibilityState === "hidden") applySnapshot(snapshot);
-    else state.pending = snapshot;
+    applySnapshot(snapshot);
   } catch (error) {
     if (initial) showError(t("error.load", { message: error.message }));
     else state.lastFailure = { at: new Date(), message: error.message };
   } finally {
     state.refreshing = false;
     state.progress = null;
+    state.cycleStart = snapshot.at;
     $("refresh").disabled = false;
     renderStatus();
+    scheduleAutoRefresh();
   }
 }
 
@@ -904,7 +930,6 @@ function applySnapshot(snapshot) {
   state.mrs = snapshot.mrs;
   state.signals = snapshot.signals;
   state.refreshedAt = snapshot.at;
-  state.pending = null;
   if (!snapshot.initial) {
     $("errors").innerHTML = "";
     snapshot.errors.forEach(showError);
@@ -928,10 +953,28 @@ function saveAutoRefresh(enabled) {
   } catch (ignored) { /* stockage indisponible : la préférence vaut pour la session */ }
 }
 
+// Prochaine actualisation auto = début de la dernière + AUTO_REFRESH_MS : un « Rafraîchir » manuel relance le cycle.
 function scheduleAutoRefresh() {
-  clearInterval(state.autoRefreshTimer);
-  const hidden = document.visibilityState === "hidden";
-  state.autoRefreshTimer = state.autoRefresh && hidden ? setInterval(() => refresh("auto"), AUTO_REFRESH_MS) : null;
+  clearTimeout(state.autoRefreshTimer);
+  state.autoRefreshTimer = state.autoRefresh && state.cycleStart
+    ? setTimeout(refresh, Math.max(0, state.cycleStart.getTime() + AUTO_REFRESH_MS - Date.now()))
+    : null;
+  renderFreshness();
+}
+
+// Recréer les segments relance leurs animations ; le délai négatif les place au temps déjà écoulé.
+// Le segment le plus à droite s'éteint au bout d'une minute, le plus à gauche à l'actualisation.
+function renderFreshness() {
+  const bar = $("freshness");
+  bar.hidden = !state.autoRefresh || !state.cycleStart;
+  if (bar.hidden) return;
+  const elapsed = Math.min(Date.now() - state.cycleStart, AUTO_REFRESH_MS);
+  bar.style.setProperty("--cycle", `${AUTO_REFRESH_MS}ms`);
+  bar.style.setProperty("--delay", `${-elapsed}ms`);
+  bar.innerHTML = Array.from(
+    { length: FRESHNESS_SEGMENTS },
+    (_, i) => `<i style="--off:${AUTO_REFRESH_MS * (FRESHNESS_SEGMENTS - i) / FRESHNESS_SEGMENTS}ms"></i>`
+  ).join("");
 }
 
 async function loadSonarPullRequests(report) {
@@ -1144,15 +1187,26 @@ function loadingOrError(s) {
   return null;
 }
 
+// Libellé du badge GitLab tel quel (« Passed », « Warning », « Failed », « Blocked »…) plutôt qu'un
+// vocabulaire propre au tableau de bord : c'est ce que l'on retrouve en ouvrant le pipeline.
 function pipelineCell(mr) {
   const s = signalsOf(mr);
   const pending = loadingOrError(s);
   if (pending) return pending;
   if (!s.pipeline) return pill("grey", t("pipeline.none"));
-  const { id, status, web_url: link } = s.pipeline;
-  if (status === "success") return `<a class="ok good" href="${escapeHtml(link)}" target="_blank" rel="noopener" title="${escapeHtml(t("pipeline.succeeded", { id }))}">OK</a>`;
-  const text = has(`pipeline.${status}`) ? t(`pipeline.${status}`) : status;
-  return pill(PIPELINE_TONE[status] ?? "grey", text, t("pipeline.title", { id }), link);
+  const { id, web_url: link } = s.pipeline;
+  const { text, label, group } = pipelineStatus(s.pipeline);
+  const title = t("pipeline.title", { id, label });
+  if (group === "success") return `<a class="ok good" href="${escapeHtml(link)}" target="_blank" rel="noopener" title="${escapeHtml(title)}">${escapeHtml(text)}</a>`;
+  return pill(PIPELINE_TONE[group] ?? "grey", text, title, link);
+}
+
+// head_pipeline porte detailed_status ; repli sur le statut brut s'il manquait.
+function pipelineStatus(pipeline) {
+  const detailed = pipeline.detailed_status;
+  return detailed
+    ? { text: detailed.text, label: detailed.label, group: detailed.group }
+    : { text: pipeline.status, label: pipeline.status, group: pipeline.status };
 }
 
 function pitCell(mr) {
@@ -1222,6 +1276,31 @@ function commitsCount(mr) {
 
 function lastCommitDate(mr) {
   return signalsOf(mr).commits?.lastDate ?? null;
+}
+
+function commitAgeHours(mr) {
+  const iso = lastCommitDate(mr);
+  return iso ? (Date.now() - new Date(iso)) / 3600000 : null;
+}
+
+function lastCommitCell(mr) {
+  const hours = commitAgeHours(mr);
+  const mood = hours == null ? null
+    : hours < ACTIVE_COMMIT_HOURS ? ["⚡", "commit.active"]
+    : hours > IDLE_COMMIT_HOURS ? ["😴", "commit.idle"]
+    : null;
+  const badge = mood ? `<span class="commit-mood" title="${escapeHtml(t(mood[1]))}">${mood[0]}</span>` : "";
+  return dateCell(lastCommitDate(mr), "date.lastCommit") + badge;
+}
+
+// Une action simple est attendue (correction, rebase) et personne n'a poussé depuis STALLED_ALERT_HOURS.
+function isStalled(mr) {
+  const hours = commitAgeHours(mr);
+  return hours != null && hours > STALLED_ALERT_HOURS && alertScore(mr) > 0;
+}
+
+function stalledPill(mr) {
+  return isStalled(mr) ? pill("red", t("stalled"), t("stalled.title"), mr.web_url) : "";
 }
 
 function dateCell(iso, key) {
@@ -1370,7 +1449,7 @@ function renderHeaders() {
 }
 
 function renderRow(mr) {
-  return `<tr>${COLUMNS.map(c => `<td class="${c.cellClass ?? ""} ${groupClass(c.key)}">${c.render(mr)}</td>`).join("")}</tr>`;
+  return `<tr${isStalled(mr) ? ' class="stalled"' : ""}>${COLUMNS.map(c => `<td class="${c.cellClass ?? ""} ${groupClass(c.key)}">${c.render(mr)}</td>`).join("")}</tr>`;
 }
 
 function authorCell(mr) {
@@ -1385,7 +1464,7 @@ function mrCell(mr) {
     .map(l => `<button type="button" class="label" data-add-label="${escapeHtml(l)}" title="${escapeHtml(t("label.add"))}">${escapeHtml(l)}</button>`)
     .join("");
   const conflicts = mr.has_conflicts ? " " + pill("red", t("conflicts"), t("conflicts.title"), mr.web_url) : "";
-  return `<div class="title-row"><div class="title">${mr.draft ? '<span class="draft">Draft</span>' : ""}<a href="${escapeHtml(mr.web_url)}" target="_blank" rel="noopener">${escapeHtml(mr.title.replace(/^Draft:\s*/i, ""))}</a>${conflicts}</div><div class="title-actions">${approvalPill(mr)}${aiFixButton(mr)}</div></div>
+  return `<div class="title-row"><div class="title">${mr.draft ? '<span class="draft">Draft</span>' : ""}<a href="${escapeHtml(mr.web_url)}" target="_blank" rel="noopener">${escapeHtml(mr.title.replace(/^Draft:\s*/i, ""))}</a>${conflicts}</div><div class="title-actions">${stalledPill(mr)}${approvalPill(mr)}${aiFixButton(mr)}</div></div>
     <div class="sub"><span class="iid">!${mr.iid}</span> · <code>${escapeHtml(mr.source_branch)}</code> → <code>${escapeHtml(mr.target_branch)}</code></div>
     ${labels ? `<div class="labels">${labels}</div>` : ""}`;
 }
@@ -1604,16 +1683,10 @@ document.addEventListener("click", e => {
     updateFilters({ labels: state.filters.labels.filter(l => l !== remove.dataset.removeLabel) });
   }
 });
-$("refresh").addEventListener("click", () => refresh("manual"));
-$("pending").addEventListener("click", () => applySnapshot(state.pending));
+$("refresh").addEventListener("click", () => refresh());
 $("autoRefresh").addEventListener("change", e => {
   state.autoRefresh = e.target.checked;
   saveAutoRefresh(state.autoRefresh);
-  scheduleAutoRefresh();
-});
-// Page cachée : une mise à jour en attente peut s'appliquer, personne ne la regarde.
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "hidden" && state.pending) applySnapshot(state.pending);
   scheduleAutoRefresh();
 });
 setInterval(renderStatus, 30 * 1000);
