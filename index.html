@@ -225,6 +225,8 @@
   .label:hover { filter: brightness(0.96); }
   .mr-cell .title-row { display: flex; align-items: flex-start; gap: 0.8rem; }
   .mr-cell .title-row .title { flex: 1; }
+  .mr-cell .title-actions { flex: none; display: flex; align-items: center; gap: 0.5rem; }
+  .mr-cell .title-actions .pill { font-size: 0.85rem; }
   .ai-fix {
     flex: none; white-space: nowrap; font-size: 0.9rem; font-weight: 600; border-radius: 0.5rem; padding: 0.35em 0.9em;
     color: var(--accent-fg); border: 0; background: linear-gradient(135deg, var(--accent), var(--accent-2));
@@ -529,7 +531,7 @@ async function runLimited(items, limit, task) {
 
 async function loadSignals(mr) {
   const signals = {};
-  [signals.commits, signals.threads] = await Promise.all([loadCommits(mr), loadThreads(mr)]);
+  [signals.commits, signals.threads, signals.approvals] = await Promise.all([loadCommits(mr), loadThreads(mr), loadApprovals(mr)]);
   try {
     const detail = (await api(`/gitlab/${projectPath()}/merge_requests/${mr.iid}?include_diverged_commits_count=true`)).body;
     signals.pipeline = detail.head_pipeline;
@@ -582,6 +584,17 @@ async function loadBehind(mr, count) {
     return { count, since: next?.committed_date ?? null, base: base.short_id, next: next?.short_id ?? null };
   } catch (error) {
     return { count, error: error.message };
+  }
+}
+
+// Aucune approbation n'est exigée sur le projet : GitLab répond alors « approved: true » pour toute MR,
+// même sans approbateur. Seule la liste des approbateurs dit si quelqu'un a réellement approuvé.
+async function loadApprovals(mr) {
+  try {
+    const approvals = (await api(`/gitlab/${projectPath()}/merge_requests/${mr.iid}/approvals`)).body;
+    return { names: approvals.approved_by.map(a => a.user.name) };
+  } catch (error) {
+    return { error: error.message };
   }
 }
 
@@ -941,7 +954,7 @@ function mrCell(mr) {
     .map(l => `<button type="button" class="label" data-add-label="${escapeHtml(l)}" title="Filtrer sur ce label">${escapeHtml(l)}</button>`)
     .join("");
   const conflicts = mr.has_conflicts ? " " + pill("red", "Conflits", "La MR est en conflit avec sa branche cible", mr.web_url) : "";
-  return `<div class="title-row"><div class="title">${mr.draft ? '<span class="draft">Draft</span>' : ""}<a href="${escapeHtml(mr.web_url)}" target="_blank" rel="noopener">${escapeHtml(mr.title.replace(/^Draft:\s*/i, ""))}</a>${conflicts}</div>${aiFixButton(mr)}</div>
+  return `<div class="title-row"><div class="title">${mr.draft ? '<span class="draft">Draft</span>' : ""}<a href="${escapeHtml(mr.web_url)}" target="_blank" rel="noopener">${escapeHtml(mr.title.replace(/^Draft:\s*/i, ""))}</a>${conflicts}</div><div class="title-actions">${approvalPill(mr)}${aiFixButton(mr)}</div></div>
     <div class="sub"><span class="iid">!${mr.iid}</span> · <code>${escapeHtml(mr.source_branch)}</code> → <code>${escapeHtml(mr.target_branch)}</code></div>
     ${labels ? `<div class="labels">${labels}</div>` : ""}`;
 }
@@ -1043,6 +1056,15 @@ function threadsCell(mr) {
   const title = `${threads.unresolved} thread${plural(threads.unresolved)} non résolu${plural(threads.unresolved)} sur ${threads.total}`;
   if (threads.unresolved > 0) return pill("orange", text, title, mr.web_url);
   return `<span class="ok${threads.total ? " good" : ""}" title="${escapeHtml(title)}">${text}</span>`;
+}
+
+// Pastille à côté du titre, seulement si quelqu'un a approuvé : l'absence d'approbation est l'état
+// ordinaire d'une MR en revue, elle n'a pas à occuper de place.
+function approvalPill(mr) {
+  const names = signalsOf(mr).approvals?.names;
+  if (!names?.length) return "";
+  const count = names.length;
+  return pill("green", count > 1 ? `Approuvée ×${count}` : "Approuvée", `Approuvée par ${names.join(", ")}`, mr.web_url);
 }
 
 function commitsCell(mr) {
