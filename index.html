@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MR ouvertes — signaux CI</title>
+<title>Mister Dashboard : le dashboard des Merge Requests</title>
 <style>
   :root {
     --bg: #f3f4f7;
@@ -76,11 +76,14 @@
     background: linear-gradient(90deg, var(--accent), var(--accent-2));
   }
   header .brand {
-    width: 2rem; height: 2rem; border-radius: 0.55rem; flex: none;
-    display: grid; place-items: center; font-weight: 800; font-size: 0.95rem;
+    width: 2.5rem; height: 2.5rem; border-radius: 0.6rem; flex: none;
+    display: grid; place-items: center; font-weight: 800; font-size: 1.1rem;
     color: #fff; background: linear-gradient(135deg, var(--accent), var(--accent-2));
   }
-  header h1 { margin: 0; font-size: 1.4rem; font-weight: 700; letter-spacing: -0.01em; }
+  header h1 { margin: 0; display: flex; align-items: center; gap: 0.6rem; font-size: 1.4rem; font-weight: 700; letter-spacing: -0.01em; }
+  /* « Mister » au-dessus de « Dashboard », à hauteur de la pastille « MR » : le clin d'œil MR = Mister se lit d'un coup. */
+  header h1 .name { display: flex; flex-direction: column; font-size: 1.15rem; line-height: 1.05; }
+  header h1 .tagline { font-size: 1rem; font-weight: 500; color: var(--muted); letter-spacing: 0; }
   header .project {
     font-size: 0.85rem; color: var(--muted); background: var(--surface-2);
     border: 1px solid var(--border); border-radius: 999px; padding: 0.15em 0.7em;
@@ -246,6 +249,7 @@
   }
   .empty { padding: 3rem 1.5rem; color: var(--muted); text-align: center; }
   @media (max-width: 720px) {
+    header h1 .tagline { display: none; }
     header, .summary { padding-left: 16px; padding-right: 16px; }
     .filters { margin-left: 16px; margin-right: 16px; }
     .table-wrap { padding: 0 16px 24px; }
@@ -254,8 +258,8 @@
 </head>
 <body>
 <header>
-  <span class="brand" aria-hidden="true">MR</span>
-  <h1>MR ouvertes</h1>
+  <span class="brand" aria-hidden="true" title="Mister = MR">MR</span>
+  <h1><span class="name"><span>Mister</span> <span>Dashboard</span></span> <span class="tagline">: le dashboard des Merge Requests</span></h1>
   <span class="project" id="project"></span>
   <span class="spacer"></span>
   <span class="meta" id="refreshed"></span>

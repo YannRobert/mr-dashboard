@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Tableau de bord local des MR ouvertes, avec les signaux CI (pipeline, PIT, Sonar) en pastilles.
+"""Mister Dashboard : le dashboard des Merge Requests.
+
+Tableau de bord local des MR ouvertes, avec les signaux CI (pipeline, PIT, Sonar) en pastilles.
 
 La page (index.html) ne parle qu'à ce serveur, qui relaie deux préfixes :
     /gitlab/<chemin>  →  <gitlab>/api/v4/<chemin>   (token glab, en-tête PRIVATE-TOKEN)
@@ -162,7 +164,7 @@ def main():
         },
     }
     server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(settings))
-    print(f"Tableau de bord des MR : http://localhost:{args.port}")
+    print(f"Mister Dashboard, le dashboard des Merge Requests : http://localhost:{args.port}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
