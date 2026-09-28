@@ -282,17 +282,22 @@
   }
   .ai-fix:hover { filter: brightness(1.08); }
   dialog.ai-prompt {
-    width: min(760px, calc(100vw - 32px)); padding: 1.2rem; border: 1px solid var(--border);
+    width: min(1200px, calc(100vw - 32px)); padding: 1.2rem; border: 1px solid var(--border);
     border-radius: 0.8rem; background: var(--surface); color: var(--text); box-shadow: var(--shadow);
   }
   dialog.ai-prompt::backdrop { background: rgba(16, 24, 40, .45); }
   dialog.ai-prompt h2 { margin: 0 0 0.3rem; font-size: 1.1rem; }
   dialog.ai-prompt p { margin: 0 0 0.8rem; color: var(--muted); font-size: 0.9rem; }
   dialog.ai-prompt textarea {
-    width: 100%; box-sizing: border-box; min-height: 16rem; resize: vertical; padding: 0.7rem;
+    width: 100%; box-sizing: border-box; height: min(60vh, 34rem); min-height: 16rem; resize: vertical; padding: 0.7rem;
     font: 0.9rem/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 0.5rem;
   }
+  dialog.ai-prompt .actions button[hidden] { display: none; }
+  /* Fermer à gauche, à l'écart des actions sur le prompt, regroupées à droite. */
+  dialog.ai-prompt .actions .dismiss { margin-right: auto; }
+  button.with-icon { display: inline-flex; align-items: center; gap: 0.45em; }
+  button.with-icon .orca-logo { height: 0.95em; width: auto; flex: none; }
   dialog.ai-prompt .actions { display: flex; justify-content: flex-end; align-items: center; gap: 0.6rem; margin-top: 0.8rem; }
   .pill {
     display: inline-flex; align-items: center; gap: 0.45em;
@@ -375,8 +380,12 @@
   <p data-i18n="dialog.hint">Prompt à coller dans Claude Code, lancé à la racine du dépôt.</p>
   <textarea id="ai-text" readonly aria-label="Prompt pour Claude Code" data-i18n-aria-label="dialog.aria"></textarea>
   <div class="actions">
+    <button type="button" id="ai-close" class="dismiss" data-i18n="dialog.close">Fermer</button>
     <span class="muted" id="ai-copied" aria-live="polite"></span>
-    <button type="button" id="ai-close" data-i18n="dialog.close">Fermer</button>
+    <button type="button" id="ai-orca" class="with-icon" hidden data-i18n-title="dialog.orca.title">
+      <svg class="orca-logo" viewBox="6.67 70.67 318.6 202.67" aria-hidden="true"><path fill="currentColor" d="m 177.81311,248.33334 c 23.82304,-41.29793 40.54045,-66.84626 49.51207,-75.66667 6.81685,-6.70196 10.07373,-8.7374 20.07265,-12.54475 34.57822,-13.16655 61.04674,-26.78733 72.37222,-37.24295 9.62924,-8.88966 9.34286,-9.01142 -23.43671,-9.964 -35.71756,-1.03796 -43.72989,0.42119 -62.17546,11.323 -16.72118,9.88265 -34.20103,30.11225 -42.74704,49.47157 -2.57353,5.82985 -14.81294,44.3056 -27.96399,87.90747 -2.86036,9.48343 -3.02466,11.71633 -0.86213,11.71633 0.44382,0 7.29659,-11.25 15.22839,-25 z m -65.14644,-8.32267 C 120,239.3326 130.5,237.50979 136,235.95998 c 5.5,-1.5498 12.25,-3.13783 15,-3.52895 2.75,-0.39111 5,-0.95485 5,-1.25275 0,-0.29789 2.15135,-7.58487 4.78078,-16.19328 8.49209,-27.80201 12.21334,-40.41629 21.13747,-71.65166 4.81891,-16.86667 11.23502,-39.185 14.25802,-49.596301 5.12803,-17.66103 5.74763,-23.07037 2.64253,-23.07037 -1.84887,0 -4.07048,6.908293 -16.72243,52.000001 -21.78975,77.65896 -20.80806,74.74393 -26.84794,79.72251 -7.5925,6.25838 -25.03916,14.82524 -36.10856,17.73044 -17.0947,4.48656 -33.410599,3.86724 -53.116765,-2.01622 -18.569242,-5.54403 -23.142662,-5.80284 -33.639754,-1.9037 -5.875424,2.18242 -9.864152,5.04363 -16.716684,11.99127 -4.95,5.0187 -9.0000001,10.02884 -9.0000001,11.13364 0,1.75174 5.9276921,2.00299 46.3333351,1.96383 25.483334,-0.0247 52.333338,-0.59969 59.666668,-1.27777 z M 252.69513,104.63708 c 12.18267,-3.48651 15.77304,-7.895503 9.63821,-11.835773 -10.19296,-6.546726 -36.19849,-1.77301 -41.19436,7.561863 -1.2556,2.3461 -0.98698,3.2037 1.68353,5.375 2.69471,2.19098 4.59991,2.47691 12.53928,1.88189 5.14899,-0.3859 12.94899,-1.72824 17.33334,-2.98298 z"/></svg>
+      <span data-i18n="dialog.orca">Ouvrir dans Orca</span>
+    </button>
     <button type="button" id="ai-copy" class="primary" data-i18n="dialog.copy">Copier</button>
   </div>
 </dialog>
@@ -543,11 +552,17 @@ const I18N = {
     "label.add": "Filtrer sur ce label",
     "label.remove": "Retirer ce label du filtre",
     "dialog.title": p => `Corriger la MR !${p.iid} avec Claude Code`,
-    "dialog.hint": "Prompt à coller dans Claude Code, lancé à la racine du dépôt.",
+    "dialog.hint": "Prompt à coller dans Claude Code, lancé à la racine du dépôt — ou à lancer directement dans Orca.",
     "dialog.aria": "Prompt pour Claude Code",
     "dialog.close": "Fermer",
     "dialog.copy": "Copier",
     "dialog.copied": "Copié",
+    "dialog.orca": "Ouvrir dans Orca",
+    "dialog.orca.title": "Lance Claude Code avec ce prompt dans un nouvel onglet Orca, sur le worktree principal",
+    "dialog.orca.opening": "Ouverture dans Orca…",
+    "dialog.orca.opened": "Session lancée dans Orca",
+    "dialog.orca.unconfirmed": "Orca n'a pas confirmé à temps : bascule sur Orca, l'onglet s'y ouvre dès que sa fenêtre est au premier plan",
+    "dialog.orca.failed": p => `Échec : ${p.message}`,
     "error.load": p => `Chargement des MR impossible : ${p.message}`,
     "error.sonar": p => `Sonar injoignable : ${p.message}`,
     "error.behindCount": "nombre de commits de retard non fourni par GitLab",
@@ -668,11 +683,17 @@ const I18N = {
     "label.add": "Filter on this label",
     "label.remove": "Remove this label from the filter",
     "dialog.title": p => `Fix MR !${p.iid} with Claude Code`,
-    "dialog.hint": "Prompt to paste into Claude Code, started at the repository root.",
+    "dialog.hint": "Prompt to paste into Claude Code, started at the repository root — or to start directly in Orca.",
     "dialog.aria": "Prompt for Claude Code",
     "dialog.close": "Close",
     "dialog.copy": "Copy",
     "dialog.copied": "Copied",
+    "dialog.orca": "Open in Orca",
+    "dialog.orca.title": "Start Claude Code with this prompt in a new Orca tab, on the main worktree",
+    "dialog.orca.opening": "Opening in Orca…",
+    "dialog.orca.opened": "Session started in Orca",
+    "dialog.orca.unconfirmed": "Orca did not confirm in time: switch to Orca, the tab opens as soon as its window is in front",
+    "dialog.orca.failed": p => `Failed: ${p.message}`,
     "error.load": p => `Could not load the MRs: ${p.message}`,
     "error.sonar": p => `Sonar unreachable: ${p.message}`,
     "error.behindCount": "number of commits behind not provided by GitLab",
@@ -857,8 +878,14 @@ function writeFiltersToUrl() {
   history.replaceState(null, "", query ? "?" + query : location.pathname);
 }
 
-async function api(path) {
-  const response = await fetch(path);
+async function api(
+  path,
+  init
+) {
+  const response = await fetch(
+    path,
+    init
+  );
   if (!response.ok) {
     let message = response.statusText;
     try {
@@ -1627,9 +1654,12 @@ function aiFixPrompt(mr) {
 }
 
 function openAiFix(mr) {
+  $("ai-dialog").dataset.iid = mr.iid;
   $("ai-title").textContent = t("dialog.title", { iid: mr.iid });
   $("ai-text").value = aiFixPrompt(mr);
   $("ai-copied").textContent = "";
+  $("ai-orca").hidden = !state.config?.orcaEnabled;
+  $("ai-orca").disabled = false;
   $("ai-dialog").showModal();
   $("ai-text").select();
 }
@@ -1643,6 +1673,28 @@ async function copyAiPrompt() {
     document.execCommand("copy");
   }
   $("ai-copied").textContent = t("dialog.copied");
+}
+
+// Le serveur ouvre un onglet Orca sur le worktree principal, qui lance Claude Code avec le prompt affiché.
+async function openInOrca() {
+  const status = $("ai-copied");
+  $("ai-orca").disabled = true;
+  status.textContent = t("dialog.orca.opening");
+  try {
+    const { body } = await api(
+      "/orca/fix",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-MR-Dashboard": "1" },
+        body: JSON.stringify({ iid: Number($("ai-dialog").dataset.iid), prompt: $("ai-text").value }),
+      }
+    );
+    status.textContent = t(body.confirmed ? "dialog.orca.opened" : "dialog.orca.unconfirmed", body);
+  } catch (error) {
+    status.textContent = t("dialog.orca.failed", { message: error.message });
+  } finally {
+    $("ai-orca").disabled = false;
+  }
 }
 
 function threadsCell(mr) {
@@ -1781,6 +1833,7 @@ window.addEventListener("storage", e => {
 });
 setInterval(renderStatus, 30 * 1000);
 $("ai-copy").addEventListener("click", copyAiPrompt);
+$("ai-orca").addEventListener("click", openInOrca);
 $("ai-close").addEventListener("click", () => $("ai-dialog").close());
 
 applyStaticTexts();

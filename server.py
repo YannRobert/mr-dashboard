@@ -11,6 +11,9 @@ Le relais est nécessaire pour Sonar, qui ne renvoie aucun en-tête CORS : un na
 l'interroger directement. Il sert aussi à garder les deux tokens hors du navigateur. Seul GET est
 relayé, et le serveur n'écoute que sur 127.0.0.1.
 
+Seule écriture : POST /orca/fix ouvre dans Orca une session Claude Code avec le prompt de correction
+d'une MR (cf. orca_launcher.py), quand le serveur tourne dans WSL et qu'Orca est installé.
+
 Usage :
     python3 scripts/mr-dashboard/server.py            # puis http://localhost:8765
     python3 scripts/mr-dashboard/server.py --port 9100
@@ -32,6 +35,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
+from orca_launcher import OrcaError, OrcaLauncher
+
 DEFAULT_PORT = 8765
 DEFAULT_SONAR_HOST = "https://sonarqube.example.com"
 DEFAULT_SONAR_PROJECT = "group-project"
@@ -48,6 +53,10 @@ UPSTREAM_IDLE_S = 30
 # La page charge 4 MR en parallèle, jusqu'à 3 requêtes chacune.
 UPSTREAM_MAX_IDLE_PER_HOST = 12
 STATIC_DIR = Path(__file__).resolve().parent
+# Exigé sur le POST : un en-tête non standard impose au navigateur un preflight CORS, que ce serveur
+# ne satisfait jamais — une page tierce ne peut donc pas déclencher l'action.
+ACTION_HEADER = "X-MR-Dashboard"
+MAX_POST_BYTES = 64 * 1024
 
 
 def gitlab_token(config_path, target_host):
@@ -181,7 +190,10 @@ class UpstreamPool:
         return connection
 
 
-def make_handler(settings):
+def make_handler(
+        settings,
+        orca
+):
     upstream = UpstreamPool()
 
     class Handler(BaseHTTPRequestHandler):
@@ -190,10 +202,7 @@ def make_handler(settings):
         protocol_version = "HTTP/1.1"
 
         def do_GET(self):
-            # Refuse tout autre nom d'hôte : une page tierce qui ferait pointer son domaine sur
-            # 127.0.0.1 (DNS rebinding) lirait sinon GitLab et Sonar avec les tokens du poste.
-            if self.headers.get("Host", "").split(":")[0] not in ("localhost", "127.0.0.1"):
-                self.send_json(403, {"message": "hôte refusé"})
+            if not self.host_allowed():
                 return
             if self.path in ("/", "/index.html") or self.path.startswith("/?"):
                 self.send_file(STATIC_DIR / "index.html", "text/html; charset=utf-8")
@@ -214,6 +223,52 @@ def make_handler(settings):
                 )
             else:
                 self.send_json(404, {"message": "introuvable"})
+
+        def do_POST(self):
+            if not self.host_allowed():
+                return
+            if self.path != "/orca/fix":
+                self.close_connection = True
+                self.send_json(404, {"message": "introuvable"})
+                return
+            origins = {f"http://{host}:{self.server.server_port}" for host in ("localhost", "127.0.0.1")}
+            if self.headers.get(ACTION_HEADER) != "1" or self.headers.get("Origin") not in origins:
+                self.close_connection = True
+                self.send_json(403, {"message": "origine refusée"})
+                return
+            length = int(self.headers.get("Content-Length") or 0)
+            if length > MAX_POST_BYTES:
+                self.close_connection = True
+                self.send_json(413, {"message": "requête trop volumineuse"})
+                return
+            try:
+                payload = json.loads(self.rfile.read(length))
+                iid = int(payload["iid"])
+                prompt = str(payload["prompt"])
+            except (ValueError, KeyError, TypeError):
+                self.send_json(400, {"message": "requête invalide"})
+                return
+            if not orca:
+                self.send_json(503, {"message": "Orca introuvable, ou serveur lancé hors WSL"})
+                return
+            try:
+                result = orca.launch(
+                    iid,
+                    prompt
+                )
+            except OrcaError as error:
+                self.send_json(502, {"message": str(error)})
+                return
+            self.send_json(200, result)
+
+        def host_allowed(self):
+            # Refuse tout autre nom d'hôte : une page tierce qui ferait pointer son domaine sur
+            # 127.0.0.1 (DNS rebinding) lirait sinon GitLab et Sonar avec les tokens du poste.
+            if self.headers.get("Host", "").split(":")[0] in ("localhost", "127.0.0.1"):
+                return True
+            self.close_connection = True
+            self.send_json(403, {"message": "hôte refusé"})
+            return False
 
         def relay(
                 self,
@@ -290,6 +345,7 @@ def main():
     args = parser.parse_args()
 
     sonar_token = os.environ.get("SONAR_TOKEN")
+    orca = OrcaLauncher.detect(STATIC_DIR)
     if not sonar_token:
         print("⚠️  SONAR_TOKEN absent : les pastilles Sonar resteront grises.")
     settings = {
@@ -304,9 +360,16 @@ def main():
             "sonarWeb": args.sonar_host,
             "sonarProject": args.sonar_project,
             "sonarEnabled": bool(sonar_token),
+            "orcaEnabled": orca is not None,
         },
     }
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(settings))
+    server = ThreadingHTTPServer(
+        ("127.0.0.1", args.port),
+        make_handler(
+            settings,
+            orca
+        )
+    )
     print(f"MisteR Dashboard, le dashboard des Merge Requests : http://localhost:{args.port}")
     try:
         server.serve_forever()
