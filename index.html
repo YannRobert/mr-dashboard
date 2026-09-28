@@ -530,7 +530,10 @@ async function loadCommits(mr) {
 function pitSignal(job, note, mr) {
   const noteLink = note ? `${mr.web_url}#note_${note.id}` : mr.web_url;
   if (!job) return { state: "absent", label: "PIT non applicable", title: "Le dernier pipeline ne contient pas de job mutation_test", link: mr.web_url };
-  if (PENDING_JOB_STATUSES.has(job.status)) return { state: "pending", label: "PIT en cours", title: `Job mutation_test : ${job.status}`, link: job.web_url };
+  const running = PENDING_JOB_STATUSES.has(job.status);
+  // Job en cours : la note du run précédent reste la dernière valeur connue — l'afficher, marquée
+  // « en cours », plutôt que de la masquer. Sans note, il n'y a rien à montrer.
+  if (running && !note) return { state: "pending", label: "PIT en cours", title: `Job mutation_test : ${job.status}`, link: job.web_url };
   if (!note) return { state: "absent", label: "PIT sans note", title: `Job ${job.status}, aucune note ${PIT_MARKER} publiée`, link: job.web_url };
   // Seul un job en échec rend la note suspecte. Un job réussi republie la note, mais GitLab ne
   // bouge pas son updated_at si le contenu est identique : comparer les dates donnerait un faux
@@ -540,7 +543,13 @@ function pitSignal(job, note, mr) {
   }
   const counts = parsePitNote(note.body);
   if (!counts) return { state: "absent", label: "PIT illisible", title: "Tableau de la note PIT non reconnu", link: noteLink };
-  return { state: "ok", ...counts, link: noteLink, jobFailed: job.status === "failed" };
+  return {
+    state: "ok",
+    ...counts,
+    link: noteLink,
+    jobFailed: job.status === "failed",
+    refreshing: running ? refreshingOf(job, note.updated_at) : null,
+  };
 }
 
 function parsePitNote(body) {
@@ -559,6 +568,9 @@ function parsePitNote(body) {
 // pipeline), ou le job n'a rien produit (introuvable — à investiguer).
 function missingSonarAnalysis(job, mr) {
   if (!job) return { state: "absent", label: "Sonar non applicable", title: "Le dernier pipeline ne contient pas de job sonar", link: mr.web_url };
+  if (PENDING_JOB_STATUSES.has(job.status)) {
+    return { state: "pending", label: "Sonar en cours", title: `Job sonar : ${job.status} — première analyse de la MR`, link: job.web_url };
+  }
   const retentionMs = state.sonarRetentionDays * 24 * 3600 * 1000;
   if (job.status === "success" && job.finished_at && Date.now() - new Date(job.finished_at) > retentionMs) {
     return {
@@ -582,10 +594,10 @@ async function sonarSignal(job, mr) {
   };
   const pr = state.sonarPullRequests.get(String(mr.iid));
   if (!pr) return missingSonarAnalysis(job, mr);
-  if (job && PENDING_JOB_STATUSES.has(job.status)) {
-    return { state: "pending", label: "Sonar en cours", title: `Job sonar : ${job.status} — valeurs de l'analyse précédente masquées`, link: job.web_url };
-  }
-  const stale = job?.started_at && new Date(pr.analysisDate) < new Date(job.started_at);
+  // Job en cours : l'analyse précédente reste la dernière valeur connue, affichée et marquée
+  // « en cours ». Elle est forcément antérieure au job : ce n'est pas un « périmé ».
+  const running = job && PENDING_JOB_STATUSES.has(job.status);
+  const stale = !running && job?.started_at && new Date(pr.analysisDate) < new Date(job.started_at);
   const project = encodeURIComponent(state.config.sonarProject);
   const [issues, measures] = await Promise.all([
     api(`/sonar/issues/search?componentKeys=${project}&pullRequest=${mr.iid}&resolved=false&ps=1`).then(r => r.body),
@@ -607,7 +619,12 @@ async function sonarSignal(job, mr) {
     analysisDate: pr.analysisDate,
     links,
     jobFailed: job?.status === "failed",
+    refreshing: running ? refreshingOf(job, pr.analysisDate) : null,
   };
+}
+
+function refreshingOf(job, valuesDate) {
+  return { job: job.name, status: job.status, link: job.web_url, valuesDate };
 }
 
 // ---------- Cellules de signaux ----------
@@ -649,8 +666,7 @@ function pitCell(mr) {
   if (pit.noCoverage > 0) out.push(pill("orange", `${pit.noCoverage} non couvert${plural(pit.noCoverage)}`, detail, pit.link));
   if (pit.errors > 0) out.push(pill("orange", `${pit.errors} en erreur`, detail, pit.link));
   if (pit.jobFailed) out.push(pill("orange", "Job en échec", "Le job mutation_test a échoué ; la note peut être partielle", pit.link));
-  if (!out.length) return `<a class="ok good" href="${escapeHtml(pit.link)}" target="_blank" rel="noopener" title="${escapeHtml(detail)}">0</a>`;
-  return `<div class="stack">${out.join("")}</div>`;
+  return signalStack(pit, out, `<a class="ok good" href="${escapeHtml(pit.link)}" target="_blank" rel="noopener" title="${escapeHtml(detail)}">0</a>`);
 }
 
 function sonarUsable(sonar) {
@@ -675,18 +691,17 @@ function issuesCell(mr) {
   if (sonar.issues > 0) out.push(pill("red", `${sonar.issues} issue${plural(sonar.issues)}`, "Issues Sonar ouvertes sur la MR", sonar.links.issues));
   if (sonar.gate && sonar.gate !== "OK") out.push(pill("red", `Quality Gate ${sonar.gate}`, "Quality Gate Sonar non passé", sonar.links.dashboard));
   if (sonar.jobFailed) out.push(pill("orange", "Job en échec", "Le job sonar a échoué", sonar.links.dashboard));
-  if (!out.length) return `<a class="ok good" href="${escapeHtml(sonar.links.issues)}" target="_blank" rel="noopener">0</a>`;
-  return `<div class="stack">${out.join("")}</div>`;
+  return signalStack(sonar, out, `<a class="ok good" href="${escapeHtml(sonar.links.issues)}" target="_blank" rel="noopener">0</a>`);
 }
 
 function coverageCell(mr) {
   const unusable = sonarUnusable(mr);
   if (unusable !== null) return unusable;
   const sonar = signalsOf(mr).sonar;
-  if (sonar.coverage == null) return `<span class="ok" title="Aucune ligne nouvelle à couvrir">—</span>`;
+  if (sonar.coverage == null) return signalStack(sonar, [], `<span class="ok" title="Aucune ligne nouvelle à couvrir">—</span>`);
   const detail = `Couverture du nouveau code : ${sonar.linesToCover ?? "?"} lignes à couvrir, ${sonar.uncoveredLines ?? "?"} non couvertes, ${sonar.uncoveredConditions ?? "?"} conditions non couvertes`;
-  if (sonar.coverage >= 100) return `<a class="ok good" href="${escapeHtml(sonar.links.coverage)}" target="_blank" rel="noopener" title="${escapeHtml(detail)}">100 %</a>`;
-  return pill("orange", formatPercent(sonar.coverage), detail, sonar.links.coverage);
+  if (sonar.coverage >= 100) return signalStack(sonar, [], `<a class="ok good" href="${escapeHtml(sonar.links.coverage)}" target="_blank" rel="noopener" title="${escapeHtml(detail)}">100 %</a>`);
+  return signalStack(sonar, [pill("orange", formatPercent(sonar.coverage), detail, sonar.links.coverage)], "");
 }
 
 function commitsCount(mr) {
@@ -701,6 +716,21 @@ function lastCommitDate(mr) {
 function dateCell(iso, label) {
   if (!iso) return `<span class="muted">—</span>`;
   return `<span title="${escapeHtml(label + " : " + formatDate(iso))}">${relative(iso)}</span>`;
+}
+
+// Valeurs d'un run précédent pendant qu'un nouveau job tourne : préfixées d'une pastille « En cours »,
+// et jamais affichées en vert — un signal propre peut encore se dégrader à la fin du job.
+function refreshingPill(signal) {
+  const r = signal.refreshing;
+  if (!r) return "";
+  return pill("grey", "En cours", `Job ${r.job} : ${r.status} — valeurs du run précédent (${formatDate(r.valuesDate)}), susceptibles de changer à la fin du job`, r.link);
+}
+
+function signalStack(signal, alerts, clean) {
+  const head = refreshingPill(signal);
+  if (!head && !alerts.length) return clean;
+  const body = alerts.length ? alerts : [head ? clean.replace(' class="ok good"', ' class="ok"') : clean];
+  return `<div class="stack">${[head, ...body].join("")}</div>`;
 }
 
 function pill(tone, text, title = "", link = null) {
