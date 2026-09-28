@@ -215,6 +215,8 @@
   .ok { color: var(--muted); }
   .ok.good { color: var(--green-fg); font-weight: 600; }
   .muted { color: var(--muted); }
+  .late-orange { color: var(--orange-fg); font-weight: 600; }
+  .late-red { color: var(--red-fg); font-weight: 600; }
   .labels { display: flex; flex-wrap: wrap; gap: 4px; }
   .label {
     font-size: 0.8rem; font-weight: 500; border-radius: 999px; padding: 0.1em 0.65em;
@@ -310,6 +312,10 @@ const PIPELINE_LOOK = {
   manual: ["grey", "Pipeline manuel"],
 };
 
+// Retard sur la cible au-delà duquel la durée passe en orange, puis en rouge.
+const BEHIND_ORANGE_HOURS = 12;
+const BEHIND_RED_HOURS = 24;
+
 const PIPELINE_RANK = { failed: 5, canceled: 4, running: 3, pending: 3, created: 3, manual: 2, skipped: 1, success: 0 };
 
 // Ordre des colonnes, et pour chacune : valeur de tri (null = inconnue) et sens du premier clic.
@@ -337,6 +343,9 @@ const COLUMNS = [
     help: "Mutants PIT survivants, non couverts ou en erreur, sur les classes modifiées par la MR",
     value: mr => { const p = signalsOf(mr).pit; return p?.state === "ok" ? 1000 * p.survived + p.noCoverage + p.errors : null; },
     render: pitCell },
+  { key: "behind", label: "Commits", firstDir: "desc", num: true, cellClass: "num nowrap",
+    help: "Commits de la branche cible absents de la MR ; entre parenthèses, depuis quand : date du commit de la cible qui suit le dernier commit commun avec la MR",
+    value: mr => signalsOf(mr).behind?.count ?? null, render: behindCell },
   { key: "last_commit", label: "Dernier commit", firstDir: "desc", cellClass: "nowrap",
     help: "Date du commit le plus récent — un commentaire ne la fait pas bouger",
     value: lastCommitDate, render: mr => dateCell(lastCommitDate(mr), "Dernier commit") },
@@ -347,11 +356,12 @@ const COLUMNS = [
 ];
 const DEFAULT_SORT = { key: "activity", dir: "desc" };
 // Regroupement visuel des colonnes : l'identité de la MR à gauche, les indicateurs qualité au centre,
-// les durées à droite.
+// le retard sur la branche cible, puis les durées à droite.
 const COLUMN_GROUPS = [
   { key: "mr", label: "", columns: ["title", "author"] },
   { key: "review", label: "Revue", columns: ["commits", "comments", "threads"] },
   { key: "quality", label: "Qualité", columns: ["pipeline", "issues", "coverage", "pit"] },
+  { key: "target", label: "Retard sur la cible", columns: ["behind"] },
   { key: "time", label: "Durées", columns: ["last_commit", "activity", "created"] },
 ];
 const groupClass = key => {
@@ -489,14 +499,16 @@ async function loadSignals(mr) {
   const signals = {};
   [signals.commits, signals.threads] = await Promise.all([loadCommits(mr), loadThreads(mr)]);
   try {
-    const detail = (await api(`/gitlab/${projectPath()}/merge_requests/${mr.iid}`)).body;
+    const detail = (await api(`/gitlab/${projectPath()}/merge_requests/${mr.iid}?include_diverged_commits_count=true`)).body;
     signals.pipeline = detail.head_pipeline;
-    const [jobs, notes] = await Promise.all([
+    const [behind, jobs, notes] = await Promise.all([
+      loadBehind(mr, detail.diverged_commits_count),
       signals.pipeline
         ? gitlabAll(`${projectPath()}/pipelines/${signals.pipeline.id}/jobs?include_retried=false`)
         : Promise.resolve([]),
       api(`/gitlab/${projectPath()}/merge_requests/${mr.iid}/notes?per_page=100&order_by=updated_at&sort=desc`).then(r => r.body),
     ]);
+    signals.behind = behind;
     const job = name => jobs.filter(j => j.name === name).sort((a, b) => b.id - a.id)[0];
     signals.pit = pitSignal(job("mutation_test"), notes.find(n => n.body.startsWith(PIT_MARKER)), mr);
     signals.sonar = await sonarSignal(job("sonar"), mr);
@@ -518,6 +530,26 @@ async function loadThreads(mr) {
     return { total: resolvable.length, unresolved: unresolved.length };
   } catch (error) {
     return { error: error.message };
+  }
+}
+
+// Le retard court depuis que la cible a bougé après le dernier commit commun : c'est la date de son
+// successeur sur l'historique first-parent de la cible (le commit de merge, pour une MR mergée), et non
+// celle du plus ancien commit manquant — un commit de feature mergé plus tard garde sa date d'origine.
+async function loadBehind(mr, count) {
+  if (count == null) return { error: "nombre de commits de retard non fourni par GitLab" };
+  if (count === 0) return { count, since: null };
+  try {
+    const refs = [mr.sha, mr.target_branch].map(ref => `refs%5B%5D=${encodeURIComponent(ref)}`).join("&");
+    const base = (await api(`/gitlab/${projectPath()}/repository/merge_base?${refs}`)).body;
+    const commits = await gitlabAll(
+      `${projectPath()}/repository/commits?ref_name=${encodeURIComponent(mr.target_branch)}` +
+      `&first_parent=true&since=${encodeURIComponent(base.committed_date)}`
+    );
+    const next = commits.find(c => c.parent_ids[0] === base.id) ?? commits.filter(c => c.id !== base.id).at(-1);
+    return { count, since: next?.committed_date ?? null, base: base.short_id, next: next?.short_id ?? null };
+  } catch (error) {
+    return { count, error: error.message };
   }
 }
 
@@ -897,6 +929,21 @@ function commitsCell(mr) {
   if (!commits) return `<span class="muted">…</span>`;
   if (commits.error) return `<span class="muted" title="${escapeHtml(commits.error)}">?</span>`;
   return String(commits.count);
+}
+
+function behindCell(mr) {
+  const s = signalsOf(mr);
+  if (s.loading) return `<span class="muted">…</span>`;
+  const behind = s.behind;
+  if (!behind || behind.count == null) return `<span class="muted" title="${escapeHtml(behind?.error ?? s.error ?? "")}">?</span>`;
+  if (behind.count === 0) return `<span class="ok good" title="À jour avec ${escapeHtml(mr.target_branch)}">0</span>`;
+  const count = `<div title="${behind.count} commit${plural(behind.count)} de ${escapeHtml(mr.target_branch)} absent${plural(behind.count)} de la MR">${behind.count}</div>`;
+  const hours = behind.since ? (Date.now() - new Date(behind.since)) / 3600000 : 0;
+  const tone = hours > BEHIND_RED_HOURS ? "late-red" : hours > BEHIND_ORANGE_HOURS ? "late-orange" : "muted";
+  const since = behind.since
+    ? `<div class="${tone}" title="${escapeHtml(`Retard depuis le ${formatDate(behind.since)} (commit ${behind.next}, après le dernier commit commun ${behind.base})`)}">(${relative(behind.since).replace(/^- /, "")})</div>`
+    : `<div class="muted" title="${escapeHtml(behind.error ?? "")}">(?)</div>`;
+  return count + since;
 }
 
 // ---------- Utilitaires ----------
