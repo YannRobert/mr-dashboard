@@ -1062,7 +1062,7 @@ function behindCell(mr) {
   const hours = behind.since ? (Date.now() - new Date(behind.since)) / 3600000 : 0;
   const tone = hours > BEHIND_RED_HOURS ? "late-red" : hours > BEHIND_ORANGE_HOURS ? "late-orange" : "muted";
   const since = behind.since
-    ? `<div class="${tone}" title="${escapeHtml(`Retard depuis le ${formatDate(behind.since)} (commit ${behind.next}, après le dernier commit commun ${behind.base})`)}">(${relative(behind.since).replace(/^- /, "")})</div>`
+    ? `<div class="${tone}" title="${escapeHtml(`Retard depuis le ${formatDate(behind.since)} (commit ${behind.next}, après le dernier commit commun ${behind.base})`)}">(${compactDuration(Date.now() - new Date(behind.since))})</div>`
     : `<div class="muted" title="${escapeHtml(behind.error ?? "")}">(?)</div>`;
   return count + since;
 }
@@ -1080,6 +1080,17 @@ function relative(iso) {
     if (Math.abs(value) < size) return `${value < 0 ? "- " : ""}${durationFormat(unit).format(Math.abs(Math.round(value)))}`;
     value /= size;
   }
+}
+
+// « < 1 min », « 20 min », « 1h20 », « 2 j 3h » : plus précis que relative() à l'échelle d'une journée de retard.
+function compactDuration(ms) {
+  const minutes = Math.max(0, Math.floor(ms / 60000));
+  if (minutes < 1) return "< 1 min";
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h${minutes % 60 ? String(minutes % 60).padStart(2, "0") : ""}`;
+  const rest = hours % 24;
+  return `${Math.floor(hours / 24)} j${rest ? ` ${rest}h` : ""}`;
 }
 
 const formatDate = iso => new Date(iso).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
