@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Icône d'onglet : la pastille « MR » de l'en-tête, en SVG embarqué (aucune route à servir). -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%234f46e5'/%3E%3Cstop offset='1' stop-color='%237c3aed'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='15' fill='url(%23g)'/%3E%3Ctext x='32' y='43' text-anchor='middle' font-family='system-ui,Segoe UI,Arial,sans-serif' font-size='30' font-weight='800' fill='%23fff'%3EMR%3C/text%3E%3C/svg%3E">
 <title>MisteR Dashboard : le dashboard des Merge Requests</title>
 <style>
   :root {
@@ -413,6 +415,14 @@ const STALLED_ALERT_HOURS = 8;
 const AUTO_REFRESH_MS = 5 * 60 * 1000;
 const AUTO_REFRESH_KEY = "mr-dashboard.autoRefresh";
 const FRESHNESS_SEGMENTS = 5;
+
+// Dernière mise à jour affichée, rejouée au chargement suivant avant de se rafraîchir en tâche de fond.
+// Changer SNAPSHOT_VERSION dès que la forme de mrs / signals change : une sauvegarde d'une autre version
+// est ignorée.
+const SNAPSHOT_KEY = "mr-dashboard.snapshot";
+const SNAPSHOT_VERSION = 1;
+// Verrou partagé entre onglets : une seule mise à jour automatique à la fois pour tout le navigateur.
+const REFRESH_LOCK = "mr-dashboard.refresh";
 
 const LANGS = ["fr", "en"];
 const LOCALES = { fr: "fr-FR", en: "en-GB" };
@@ -913,6 +923,7 @@ async function refresh() {
     });
     state.lastFailure = null;
     applySnapshot(snapshot);
+    saveSnapshot(snapshot);
   } catch (error) {
     if (initial) showError(t("error.load", { message: error.message }));
     else state.lastFailure = { at: new Date(), message: error.message };
@@ -939,6 +950,71 @@ function applySnapshot(snapshot) {
   renderStatus();
 }
 
+// Sauvegarde best effort : stockage plein ou bloqué ⇒ on retire l'ancienne plutôt que de rejouer plus tard
+// des données plus vieilles que nécessaire.
+function saveSnapshot(snapshot) {
+  try {
+    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({
+      version: SNAPSHOT_VERSION,
+      at: snapshot.at.toISOString(),
+      mrs: snapshot.mrs,
+      signals: [...snapshot.signals],
+    }));
+  } catch (ignored) {
+    forgetSnapshot();
+  }
+}
+
+function readSnapshot() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SNAPSHOT_KEY));
+    if (saved?.version !== SNAPSHOT_VERSION) return null;
+    return { at: new Date(saved.at), mrs: saved.mrs, signals: new Map(saved.signals), errors: [] };
+  } catch (ignored) {
+    forgetSnapshot();
+    return null;
+  }
+}
+
+function forgetSnapshot() {
+  try {
+    localStorage.removeItem(SNAPSHOT_KEY);
+  } catch (ignored) { /* stockage indisponible : rien à retirer */ }
+}
+
+// Mise à jour mutualisée entre onglets : sous le verrou, un onglet qui trouve une sauvegarde plus récente
+// que ce qu'il affiche (faite par un autre onglet pendant qu'il attendait) la reprend au lieu d'interroger
+// GitLab ; une échéance automatique que la mise à jour d'un autre onglet a repoussée est replanifiée.
+// Le bouton « Rafraîchir » n'y passe pas : il interroge toujours.
+async function sharedRefresh({ onlyIfDue = false } = {}) {
+  const run = async () => {
+    if (adoptNewerSnapshot()) return;
+    if (onlyIfDue && !refreshDue()) {
+      scheduleAutoRefresh();
+      return;
+    }
+    await refresh();
+  };
+  if (navigator.locks) await navigator.locks.request(REFRESH_LOCK, run);
+  else await run();
+}
+
+// Marge d'une seconde : un minuteur peut se déclencher un rien avant l'échéance calculée.
+function refreshDue() {
+  return !state.cycleStart || Date.now() >= state.cycleStart.getTime() + AUTO_REFRESH_MS - 1000;
+}
+
+// Reprend la sauvegarde si elle est plus récente que les données affichées, et recale le cycle
+// d'actualisation dessus : tous les onglets suivent ainsi la dernière mise à jour, d'où qu'elle vienne.
+function adoptNewerSnapshot() {
+  const saved = readSnapshot();
+  if (!saved || (state.refreshedAt && saved.at <= state.refreshedAt)) return false;
+  applySnapshot(saved);
+  state.cycleStart = saved.at;
+  scheduleAutoRefresh();
+  return true;
+}
+
 function readAutoRefresh() {
   try {
     return localStorage.getItem(AUTO_REFRESH_KEY) !== "false";
@@ -957,7 +1033,7 @@ function saveAutoRefresh(enabled) {
 function scheduleAutoRefresh() {
   clearTimeout(state.autoRefreshTimer);
   state.autoRefreshTimer = state.autoRefresh && state.cycleStart
-    ? setTimeout(refresh, Math.max(0, state.cycleStart.getTime() + AUTO_REFRESH_MS - Date.now()))
+    ? setTimeout(() => sharedRefresh({ onlyIfDue: true }), Math.max(0, state.cycleStart.getTime() + AUTO_REFRESH_MS - Date.now()))
     : null;
   renderFreshness();
 }
@@ -1000,20 +1076,22 @@ async function runLimited(items, limit, task) {
 
 async function loadSignals(mr) {
   const signals = {};
-  [signals.commits, signals.threads, signals.approvals] = await Promise.all([loadCommits(mr), loadThreads(mr), loadApprovals(mr)]);
+  // Les discussions portent toutes les notes : elles servent aux threads et à la note PIT.
+  const discussions = gitlabAll(`${projectPath()}/merge_requests/${mr.iid}/discussions`);
+  [signals.commits, signals.threads, signals.approvals] = await Promise.all([loadCommits(mr), loadThreads(discussions), loadApprovals(mr)]);
   try {
     const detail = (await api(`/gitlab/${projectPath()}/merge_requests/${mr.iid}?include_diverged_commits_count=true`)).body;
     signals.pipeline = detail.head_pipeline;
-    const [behind, jobs, notes] = await Promise.all([
+    const [behind, jobs, pitNote] = await Promise.all([
       loadBehind(mr, detail.diverged_commits_count),
       signals.pipeline
         ? gitlabAll(`${projectPath()}/pipelines/${signals.pipeline.id}/jobs?include_retried=false`)
         : Promise.resolve([]),
-      api(`/gitlab/${projectPath()}/merge_requests/${mr.iid}/notes?per_page=100&order_by=updated_at&sort=desc`).then(r => r.body),
+      discussions.then(latestPitNote),
     ]);
     signals.behind = behind;
     const job = name => jobs.filter(j => j.name === name).sort((a, b) => b.id - a.id)[0];
-    signals.pit = pitSignal(job("mutation_test"), notes.find(n => n.body.startsWith(PIT_MARKER)), mr);
+    signals.pit = pitSignal(job("mutation_test"), pitNote, mr);
     signals.sonar = await sonarSignal(job("sonar"), mr);
   } catch (error) {
     signals.error = error.message;
@@ -1025,15 +1103,23 @@ async function loadSignals(mr) {
 // bouge aussi sur un commentaire, un label ou une approbation.
 // Un thread = une discussion résoluble (commentaire de revue, diff note) ; les notes système et
 // les commentaires simples non résolubles ne comptent pas, comme dans le compteur de GitLab.
-async function loadThreads(mr) {
+async function loadThreads(discussionsLoading) {
   try {
-    const discussions = await gitlabAll(`${projectPath()}/merge_requests/${mr.iid}/discussions`);
+    const discussions = await discussionsLoading;
     const resolvable = discussions.filter(d => d.notes.some(n => n.resolvable));
     const unresolved = resolvable.filter(d => d.notes.some(n => n.resolvable && !n.resolved));
     return { total: resolvable.length, unresolved: unresolved.length };
   } catch (error) {
     return { error: error.message };
   }
+}
+
+// Note PIT la plus récemment mise à jour, comme le faisait la lecture des notes triées par updated_at.
+function latestPitNote(discussions) {
+  return discussions
+    .flatMap(d => d.notes)
+    .filter(n => n.body.startsWith(PIT_MARKER))
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0];
 }
 
 // Le retard court depuis que la cible a bougé après le dernier commit commun : c'est la date de son
@@ -1689,6 +1775,10 @@ $("autoRefresh").addEventListener("change", e => {
   saveAutoRefresh(state.autoRefresh);
   scheduleAutoRefresh();
 });
+// N'est émis que dans les autres onglets : celui qui a sauvegardé affiche déjà ces données.
+window.addEventListener("storage", e => {
+  if (e.key === SNAPSHOT_KEY) adoptNewerSnapshot();
+});
 setInterval(renderStatus, 30 * 1000);
 $("ai-copy").addEventListener("click", copyAiPrompt);
 $("ai-close").addEventListener("click", () => $("ai-dialog").close());
@@ -1696,7 +1786,11 @@ $("ai-close").addEventListener("click", () => $("ai-dialog").close());
 applyStaticTexts();
 $("autoRefresh").checked = state.autoRefresh;
 scheduleAutoRefresh();
-refresh();
+// Données sauvegardées : affichées tout de suite avec leur âge, puis remplacées d'un bloc par la mise à
+// jour lancée derrière. Sans elles, premier chargement au fil de l'eau.
+const saved = readSnapshot();
+if (saved) applySnapshot(saved);
+sharedRefresh();
 </script>
 </body>
 </html>
