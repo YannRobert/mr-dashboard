@@ -6,32 +6,48 @@
 <title>MR ouvertes — signaux CI</title>
 <style>
   :root {
-    --bg: #f7f7f8;
+    --bg: #f3f4f7;
     --surface: #ffffff;
-    --border: #e3e3e8;
-    --text: #1f1f24;
-    --muted: #6b6b76;
-    --link: #1f63c7;
-    --red-bg: #fde8e8; --red-fg: #b3261e;
-    --orange-bg: #fff1dc; --orange-fg: #9a5200;
-    --green-bg: #e3f5e8; --green-fg: #1d6b35;
-    --grey-bg: #ececf0; --grey-fg: #5b5b66;
-    --blue-bg: #e6effc; --blue-fg: #1f4f99;
-    --focus: #1f63c7;
+    --surface-2: #f8f9fb;
+    --border: #e4e6ec;
+    --border-strong: #d2d5de;
+    --text: #1b1d24;
+    --muted: #6a6f7d;
+    --faint: #9aa0ad;
+    --link: #2356c7;
+    --accent: #4f46e5;
+    --accent-2: #7c3aed;
+    --accent-fg: #ffffff;
+    --red-bg: #fdecec; --red-fg: #b42318; --red-dot: #f04438;
+    --orange-bg: #fff4e0; --orange-fg: #93510a; --orange-dot: #f79009;
+    --green-bg: #e7f6ec; --green-fg: #146c3a; --green-dot: #12b76a;
+    --grey-bg: #eef0f4; --grey-fg: #555b69; --grey-dot: #98a2b3;
+    --blue-bg: #e9f0fd; --blue-fg: #1e4ea8;
+    --quality-bg: #f6f5ff;
+    --shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 6px 24px -8px rgba(16, 24, 40, .12);
+    --focus: #4f46e5;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #16161a;
-      --surface: #1f1f25;
-      --border: #33333c;
-      --text: #ececf1;
-      --muted: #9a9aa6;
-      --link: #7aa7f0;
-      --red-bg: #4a1f1d; --red-fg: #ffb4ab;
-      --orange-bg: #47300f; --orange-fg: #ffc77a;
-      --green-bg: #173a24; --green-fg: #8fd8a4;
-      --grey-bg: #2c2c34; --grey-fg: #b4b4bf;
-      --blue-bg: #1c2d4a; --blue-fg: #a9c6f5;
+      --bg: #111217;
+      --surface: #1a1c23;
+      --surface-2: #20222b;
+      --border: #2c2f3a;
+      --border-strong: #3a3e4b;
+      --text: #eceef3;
+      --muted: #9ba1b0;
+      --faint: #6f7584;
+      --link: #86a9f7;
+      --accent: #818cf8;
+      --accent-2: #a78bfa;
+      --accent-fg: #0f1020;
+      --red-bg: #3d1a1a; --red-fg: #ffb4ab; --red-dot: #f97066;
+      --orange-bg: #3d2a10; --orange-fg: #ffc77a; --orange-dot: #fdb022;
+      --green-bg: #12321f; --green-fg: #8fd8a4; --green-dot: #32d583;
+      --grey-bg: #282b35; --grey-fg: #b4b9c6; --grey-dot: #6f7584;
+      --blue-bg: #1b2b4a; --blue-fg: #a9c6f5;
+      --quality-bg: #1e1d2c;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 28px -10px rgba(0, 0, 0, .6);
     }
   }
   * { box-sizing: border-box; }
@@ -42,109 +58,208 @@
     margin: 0;
     background: var(--bg);
     color: var(--text);
-    font: 1rem/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font: 1rem/1.45 "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
   }
   a { color: var(--link); text-decoration: none; }
   a:hover { text-decoration: underline; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
   header {
-    display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px;
-    padding: 16px 24px 8px;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.8rem;
+    padding: 1.1rem 1.5rem 0.9rem;
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    position: relative;
   }
-  header h1 { margin: 0; font-size: 1.45rem; font-weight: 600; }
-  header .meta { color: var(--muted); font-size: 0.93rem; }
+  header::before {
+    content: ""; position: absolute; inset: 0 0 auto 0; height: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  }
+  header .brand {
+    width: 2rem; height: 2rem; border-radius: 0.55rem; flex: none;
+    display: grid; place-items: center; font-weight: 800; font-size: 0.95rem;
+    color: #fff; background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  }
+  header h1 { margin: 0; font-size: 1.4rem; font-weight: 700; letter-spacing: -0.01em; }
+  header .project {
+    font-size: 0.85rem; color: var(--muted); background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 999px; padding: 0.15em 0.7em;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
   header .spacer { flex: 1; }
+  header .meta { color: var(--muted); font-size: 0.9rem; }
   button {
     font: inherit; color: var(--text); background: var(--surface);
-    border: 1px solid var(--border); border-radius: 6px; padding: 0.35em 0.85em; cursor: pointer;
+    border: 1px solid var(--border-strong); border-radius: 0.5rem; padding: 0.35em 0.9em; cursor: pointer;
   }
-  button:hover { border-color: var(--muted); }
-  :focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+  button.primary {
+    color: var(--accent-fg); border-color: transparent; font-weight: 600;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    box-shadow: 0 2px 8px -2px color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+  button.primary:hover { filter: brightness(1.07); }
+
   .filters {
-    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
-    padding: 8px 24px 12px; border-bottom: 1px solid var(--border);
+    display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;
+    margin: 1rem 1.5rem 0; padding: 0.7rem;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 0.8rem;
+    box-shadow: var(--shadow);
   }
   .filters input[type=search], .filters select {
-    font: inherit; color: var(--text); background: var(--surface);
-    border: 1px solid var(--border); border-radius: 6px; padding: 0.35em 0.55em;
+    font: inherit; font-size: 0.95rem; color: var(--text); background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.4em 0.65em;
+    transition: border-color .15s, box-shadow .15s;
   }
-  .filters input[type=search] { flex: 1 1 260px; min-width: 200px; }
-  .filters label.check { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); }
+  .filters input[type=search]:hover, .filters select:hover { border-color: var(--border-strong); }
+  .filters input[type=search]:focus, .filters select:focus {
+    outline: none; border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+  }
+  .filters input[type=search] { flex: 1 1 260px; min-width: 200px; padding-left: 2em;
+    background: var(--surface-2) no-repeat 0.6em 50% / 0.95em
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239aa0ad' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E"); }
+  .filters label.check {
+    display: inline-flex; gap: 0.45em; align-items: center; color: var(--muted); font-size: 0.95rem;
+    padding: 0.35em 0.7em; border-radius: 0.5rem; cursor: pointer;
+  }
+  .filters label.check:hover { background: var(--surface-2); }
+  .filters input[type=checkbox] { accent-color: var(--accent); width: 1em; height: 1em; }
   .active-labels { display: flex; flex-wrap: wrap; gap: 4px; }
   .active-labels .label { cursor: pointer; }
   .active-labels .label::after { content: " ×"; }
-  .summary { padding: 8px 24px; color: var(--muted); font-size: 1rem; }
-  .table-wrap { padding: 0 24px 32px; overflow-x: auto; }
+
+  .summary { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; padding: 0.9rem 1.5rem 0.6rem; }
+  .stat {
+    display: inline-flex; align-items: baseline; gap: 0.4em;
+    font-size: 0.9rem; color: var(--muted);
+    background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 0.2em 0.8em;
+  }
+  .stat b { color: var(--text); font-size: 1rem; font-variant-numeric: tabular-nums; }
+  .stat.alert b { color: var(--orange-fg); }
+  .stat.loading { border-style: dashed; }
+
+  .table-wrap { padding: 0 1.5rem 2rem; overflow-x: auto; }
   table.mrs {
     width: 100%; border-collapse: separate; border-spacing: 0;
-    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 0.8rem;
+    box-shadow: var(--shadow);
   }
   table.mrs th, table.mrs td {
-    padding: 0.55rem 0.8rem; border-bottom: 1px solid var(--border);
+    padding: 0.7rem 0.85rem; border-bottom: 1px solid var(--border);
     text-align: left; vertical-align: middle;
   }
   table.mrs tbody tr:last-child td { border-bottom: 0; }
-  table.mrs tbody tr:hover td { background: var(--bg); }
-  table.mrs th {
-    position: sticky; top: 0; z-index: 1; background: var(--surface);
-    font-size: 0.93rem; font-weight: 600; color: var(--muted); white-space: nowrap;
+  table.mrs tbody tr { transition: background .12s; }
+  table.mrs tbody tr:hover td { background: var(--surface-2); }
+  table.mrs tbody tr:hover td.g-quality { background: color-mix(in srgb, var(--quality-bg) 60%, var(--surface-2)); }
+  table.mrs tbody tr:hover td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+  table.mrs thead th {
+    position: sticky; z-index: 1; background: var(--surface);
+    font-size: 0.8rem; font-weight: 600; color: var(--muted); white-space: nowrap;
+    text-transform: uppercase; letter-spacing: 0.04em;
   }
+  /* Deux lignes d'en-tête collantes : la seconde se colle sous la première, de hauteur fixe. */
+  table.mrs thead tr.groups th { top: 0; height: 2rem; padding-top: 0.35rem; padding-bottom: 0.1rem; border-bottom: 0; }
+  table.mrs thead tr.columns th { top: 2rem; }
+  table.mrs thead tr.groups th:first-child { border-top-left-radius: 0.8rem; }
+  table.mrs thead tr.groups th:last-child { border-top-right-radius: 0.8rem; }
+  table.mrs thead tr.groups th span {
+    display: block; font-size: 0.72rem; letter-spacing: 0.08em; color: var(--faint);
+    border-bottom: 2px solid var(--border); padding-bottom: 0.2rem;
+  }
+  table.mrs thead tr.groups th.g-quality span { color: var(--accent); border-bottom-color: var(--accent); }
+  table.mrs thead tr.groups th.g-mr span { border-bottom-color: transparent; }
   table.mrs th button {
     all: unset; cursor: pointer; display: inline-flex; gap: 0.3em; align-items: center;
   }
   table.mrs th button:hover { color: var(--text); }
   table.mrs th button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-  table.mrs th[aria-sort] { color: var(--text); }
+  table.mrs th[aria-sort] { color: var(--accent); }
   table.mrs th .arrow { font-size: 0.8em; min-width: 0.8em; }
   table.mrs th.num, table.mrs td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.mrs .g-quality { background: var(--quality-bg); }
+  table.mrs thead th.g-quality { background: var(--quality-bg); }
+  table.mrs .g-first { border-left: 1px solid var(--border); }
+  table.mrs td.g-time { color: var(--muted); font-variant-numeric: tabular-nums; }
   table.mrs td.nowrap { white-space: nowrap; }
   table.mrs td.signal { white-space: nowrap; }
   table.mrs td.signal .stack { display: flex; flex-direction: column; align-items: flex-start; gap: 0.3rem; }
+
   .mr-cell { min-width: 22rem; }
-  .mr-cell .title { font-weight: 600; font-size: 1.1rem; }
+  .mr-cell .title { font-weight: 600; font-size: 1.05rem; line-height: 1.35; }
+  .mr-cell .title a { color: var(--text); }
+  .mr-cell .title a:hover { color: var(--link); }
   .mr-cell .title .draft {
-    font-weight: 500; font-size: 0.86rem; color: var(--grey-fg); background: var(--grey-bg);
-    border-radius: 4px; padding: 1px 6px; margin-right: 6px; vertical-align: 1px;
+    font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--grey-fg); background: var(--grey-bg); border: 1px dashed var(--border-strong);
+    border-radius: 4px; padding: 1px 6px; margin-right: 6px; vertical-align: 2px;
   }
-  .mr-cell .sub { color: var(--muted); font-size: 0.93rem; }
-  .mr-cell .sub code { font-size: 0.86rem; background: var(--grey-bg); border-radius: 4px; padding: 0 4px; }
-  .mr-cell .labels { margin-top: 0.25rem; }
+  .mr-cell .sub { color: var(--muted); font-size: 0.85rem; margin-top: 0.2rem; }
+  .mr-cell .sub .iid { font-weight: 600; color: var(--accent); }
+  .mr-cell .sub code {
+    font-size: 0.8rem; background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 4px; padding: 0 5px;
+  }
+  .mr-cell .labels { margin-top: 0.35rem; }
+
+  .author { display: inline-flex; align-items: center; gap: 0.5em; white-space: nowrap; }
+  .avatar {
+    width: 1.8em; height: 1.8em; border-radius: 50%; flex: none;
+    display: grid; place-items: center; font-size: 0.78rem; font-weight: 700; color: #fff;
+    background: hsl(var(--hue) 55% 50%);
+  }
+
   .ok { color: var(--muted); }
-  .ok.good { color: var(--green-fg); }
+  .ok.good { color: var(--green-fg); font-weight: 600; }
   .muted { color: var(--muted); }
   .labels { display: flex; flex-wrap: wrap; gap: 4px; }
   .label {
-    font-size: 0.93rem; border-radius: 1em; padding: 0.1em 0.65em;
+    font-size: 0.8rem; font-weight: 500; border-radius: 999px; padding: 0.1em 0.65em;
     background: var(--blue-bg); color: var(--blue-fg); border: 0; cursor: pointer;
   }
+  .label:hover { filter: brightness(0.96); }
   .pill {
-    display: inline-flex; align-items: center; gap: 4px;
-    font-size: 1.1rem; font-weight: 700; border-radius: 1.1em; padding: 0.3em 0.85em;
+    display: inline-flex; align-items: center; gap: 0.45em;
+    font-size: 1rem; font-weight: 700; border-radius: 999px; padding: 0.28em 0.8em;
     white-space: nowrap; font-variant-numeric: tabular-nums;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 18%, transparent);
   }
-  a.pill:hover { text-decoration: none; filter: brightness(0.95); }
-  .pill.red { background: var(--red-bg); color: var(--red-fg); }
-  .pill.orange { background: var(--orange-bg); color: var(--orange-fg); }
-  .pill.green { background: var(--green-bg); color: var(--green-fg); }
-  .pill.grey { background: var(--grey-bg); color: var(--grey-fg); font-weight: 500; }
-  .pill.loading { background: var(--grey-bg); color: var(--grey-fg); font-weight: 500; opacity: .7; }
+  .pill::before {
+    content: ""; width: 0.5em; height: 0.5em; border-radius: 50%; background: var(--dot, currentColor);
+  }
+  a.pill:hover { text-decoration: none; filter: brightness(0.96); }
+  .pill.red { background: var(--red-bg); color: var(--red-fg); --dot: var(--red-dot); }
+  .pill.orange { background: var(--orange-bg); color: var(--orange-fg); --dot: var(--orange-dot); }
+  .pill.green { background: var(--green-bg); color: var(--green-fg); --dot: var(--green-dot); }
+  .pill.grey { background: var(--grey-bg); color: var(--grey-fg); --dot: var(--grey-dot); font-weight: 500; }
+  .pill.loading {
+    color: var(--grey-fg); font-weight: 500; --dot: var(--grey-dot);
+    background: linear-gradient(90deg, var(--grey-bg) 25%, var(--surface-2) 50%, var(--grey-bg) 75%) 0 0 / 200% 100%;
+    animation: shimmer 1.4s linear infinite;
+  }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+  @media (prefers-reduced-motion: reduce) { .pill.loading { animation: none; } }
+
   .error-banner {
-    margin: 12px 24px; padding: 10px 14px; border-radius: 8px;
-    background: var(--red-bg); color: var(--red-fg);
+    margin: 1rem 1.5rem 0; padding: 0.7rem 1rem; border-radius: 0.6rem;
+    background: var(--red-bg); color: var(--red-fg); border: 1px solid color-mix(in srgb, var(--red-fg) 25%, transparent);
   }
-  .empty { padding: 32px 24px; color: var(--muted); text-align: center; }
+  .empty { padding: 3rem 1.5rem; color: var(--muted); text-align: center; }
   @media (max-width: 720px) {
-    header, .filters, .summary { padding-left: 16px; padding-right: 16px; }
+    header, .summary { padding-left: 16px; padding-right: 16px; }
+    .filters { margin-left: 16px; margin-right: 16px; }
     .table-wrap { padding: 0 16px 24px; }
   }
 </style>
 </head>
 <body>
 <header>
+  <span class="brand" aria-hidden="true">MR</span>
   <h1>MR ouvertes</h1>
-  <span class="meta" id="project"></span>
+  <span class="project" id="project"></span>
   <span class="spacer"></span>
   <span class="meta" id="refreshed"></span>
-  <button id="refresh" type="button">Rafraîchir</button>
+  <button id="refresh" type="button" class="primary">Rafraîchir</button>
 </header>
 
 <div class="filters">
@@ -167,7 +282,7 @@
 <div class="summary" id="summary"></div>
 <div class="table-wrap">
   <table class="mrs">
-    <thead><tr id="headers"></tr></thead>
+    <thead id="headers"></thead>
     <tbody id="list"></tbody>
   </table>
 </div>
@@ -197,14 +312,16 @@ const PIPELINE_RANK = { failed: 5, canceled: 4, running: 3, pending: 3, created:
 // Les signaux trient par gravité décroissante au premier clic, pour faire remonter les alertes.
 const COLUMNS = [
   { key: "title", label: "MR", firstDir: "asc", cellClass: "mr-cell", value: mr => mr.title.replace(/^Draft:\s*/i, ""), render: mrCell },
-  { key: "author", label: "Auteur", firstDir: "asc", cellClass: "nowrap", value: mr => mr.author?.name ?? null, render: mr => escapeHtml(mr.author?.name ?? "?") },
+  { key: "author", label: "Auteur", firstDir: "asc", cellClass: "nowrap", value: mr => mr.author?.name ?? null, render: authorCell },
+  { key: "commits", label: "Commits", firstDir: "desc", num: true, cellClass: "num", value: commitsCount, render: commitsCell },
+  { key: "comments", label: "Commentaires", firstDir: "desc", num: true, cellClass: "num", value: mr => mr.user_notes_count, render: mr => String(mr.user_notes_count) },
+  { key: "threads", label: "Threads non résolus", firstDir: "desc", num: true, cellClass: "num",
+    help: "Threads non résolus / threads résolubles au total",
+    value: mr => { const t = signalsOf(mr).threads; return t && !t.error ? t.unresolved + t.total / 10000 : null; },
+    render: threadsCell },
   { key: "pipeline", label: "Pipeline", firstDir: "desc", cellClass: "signal",
     value: mr => { const s = signalsOf(mr); return s.pipeline ? PIPELINE_RANK[s.pipeline.status] ?? 3 : null; },
     render: pipelineCell },
-  { key: "pit", label: "Mutants restants", firstDir: "desc", cellClass: "signal",
-    help: "Mutants PIT survivants, non couverts ou en erreur, sur les classes modifiées par la MR",
-    value: mr => { const p = signalsOf(mr).pit; return p?.state === "ok" ? 1000 * p.survived + p.noCoverage + p.errors : null; },
-    render: pitCell },
   { key: "issues", label: "Issues Sonar", firstDir: "desc", cellClass: "signal",
     value: mr => { const x = signalsOf(mr).sonar; return sonarUsable(x) ? x.issues + (x.gate && x.gate !== "OK" ? 0.5 : 0) : null; },
     render: issuesCell },
@@ -212,21 +329,31 @@ const COLUMNS = [
     help: "Couverture Sonar du nouveau code de la MR",
     value: mr => { const x = signalsOf(mr).sonar; return sonarUsable(x) ? x.coverage : null; },
     render: coverageCell },
-  { key: "commits", label: "Commits", firstDir: "desc", num: true, cellClass: "num", value: commitsCount, render: commitsCell },
+  { key: "pit", label: "Mutants restants", firstDir: "desc", cellClass: "signal",
+    help: "Mutants PIT survivants, non couverts ou en erreur, sur les classes modifiées par la MR",
+    value: mr => { const p = signalsOf(mr).pit; return p?.state === "ok" ? 1000 * p.survived + p.noCoverage + p.errors : null; },
+    render: pitCell },
   { key: "last_commit", label: "Dernier commit", firstDir: "desc", cellClass: "nowrap",
     help: "Date du commit le plus récent — un commentaire ne la fait pas bouger",
     value: lastCommitDate, render: mr => dateCell(lastCommitDate(mr), "Dernier commit") },
-  { key: "threads", label: "Threads non résolus", firstDir: "desc", num: true, cellClass: "num",
-    help: "Threads non résolus / threads résolubles au total",
-    value: mr => { const t = signalsOf(mr).threads; return t && !t.error ? t.unresolved + t.total / 10000 : null; },
-    render: threadsCell },
-  { key: "comments", label: "Commentaires", firstDir: "desc", num: true, cellClass: "num", value: mr => mr.user_notes_count, render: mr => String(mr.user_notes_count) },
   { key: "activity", label: "Activité", firstDir: "desc", cellClass: "nowrap",
     help: "Dernière activité GitLab : commit, commentaire, label, approbation…",
     value: mr => mr.updated_at, render: mr => dateCell(mr.updated_at, "Dernière activité") },
   { key: "created", label: "Créée", firstDir: "desc", cellClass: "nowrap", value: mr => mr.created_at, render: mr => dateCell(mr.created_at, "Créée le") },
 ];
 const DEFAULT_SORT = { key: "activity", dir: "desc" };
+// Regroupement visuel des colonnes : l'identité de la MR à gauche, les indicateurs qualité au centre,
+// les durées à droite.
+const COLUMN_GROUPS = [
+  { key: "mr", label: "", columns: ["title", "author"] },
+  { key: "review", label: "Revue", columns: ["commits", "comments", "threads"] },
+  { key: "quality", label: "Qualité", columns: ["pipeline", "issues", "coverage", "pit"] },
+  { key: "time", label: "Durées", columns: ["last_commit", "activity", "created"] },
+];
+const groupClass = key => {
+  const group = COLUMN_GROUPS.find(g => g.columns.includes(key));
+  return group ? `g-${group.key}${group.columns[0] === key && group.key !== "mr" ? " g-first" : ""}` : "";
+};
 
 const state = {
   config: null,
@@ -319,7 +446,9 @@ async function refresh() {
     state.signals = new Map(mrs.map(mr => [mr.iid, { loading: true }]));
     populateFilterOptions();
     render();
-    $("refreshed").textContent = "mis à jour à " + new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+    const now = new Date();
+    $("refreshed").textContent = "mis à jour à " + now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) +
+      " le " + now.toLocaleDateString("fr-FR");
     await runLimited(mrs, MAX_PARALLEL_MRS, async mr => {
       state.signals.set(mr.iid, await loadSignals(mr));
       render();
@@ -520,7 +649,7 @@ function pitCell(mr) {
   if (pit.noCoverage > 0) out.push(pill("orange", `${pit.noCoverage} non couvert${plural(pit.noCoverage)}`, detail, pit.link));
   if (pit.errors > 0) out.push(pill("orange", `${pit.errors} en erreur`, detail, pit.link));
   if (pit.jobFailed) out.push(pill("orange", "Job en échec", "Le job mutation_test a échoué ; la note peut être partielle", pit.link));
-  if (!out.length) return `<a class="ok good" href="${escapeHtml(pit.link)}" target="_blank" rel="noopener" title="${escapeHtml(detail)}">aucun</a>`;
+  if (!out.length) return `<a class="ok good" href="${escapeHtml(pit.link)}" target="_blank" rel="noopener" title="${escapeHtml(detail)}">0</a>`;
   return `<div class="stack">${out.join("")}</div>`;
 }
 
@@ -546,7 +675,7 @@ function issuesCell(mr) {
   if (sonar.issues > 0) out.push(pill("red", `${sonar.issues} issue${plural(sonar.issues)}`, "Issues Sonar ouvertes sur la MR", sonar.links.issues));
   if (sonar.gate && sonar.gate !== "OK") out.push(pill("red", `Quality Gate ${sonar.gate}`, "Quality Gate Sonar non passé", sonar.links.dashboard));
   if (sonar.jobFailed) out.push(pill("orange", "Job en échec", "Le job sonar a échoué", sonar.links.dashboard));
-  if (!out.length) return `<a class="ok good" href="${escapeHtml(sonar.links.issues)}" target="_blank" rel="noopener">aucune</a>`;
+  if (!out.length) return `<a class="ok good" href="${escapeHtml(sonar.links.issues)}" target="_blank" rel="noopener">0</a>`;
   return `<div class="stack">${out.join("")}</div>`;
 }
 
@@ -661,8 +790,10 @@ function render() {
   const visible = state.mrs.filter(matches).sort(comparator(column, state.filters.dir));
   const withAlerts = state.mrs.filter(mr => alertScore(mr) > 0).length;
   const loading = [...state.signals.values()].filter(s => s.loading).length;
-  $("summary").textContent = `${visible.length} MR affichée${plural(visible.length)} sur ${state.mrs.length} ouvertes · ` +
-    `${withAlerts} avec alertes` + (loading ? ` · signaux en cours de chargement (${loading})` : "");
+  $("summary").innerHTML =
+    `<span class="stat"><b>${visible.length}</b> affichée${plural(visible.length)} sur ${state.mrs.length} ouvertes</span>` +
+    `<span class="stat${withAlerts ? " alert" : ""}"><b>${withAlerts}</b> avec alertes</span>` +
+    (loading ? `<span class="stat loading"><b>${loading}</b> en chargement…</span>` : "");
   $("list").innerHTML = visible.length
     ? visible.map(renderRow).join("")
     : `<tr><td class="empty" colspan="${COLUMNS.length}">Aucune MR ne correspond aux filtres.</td></tr>`;
@@ -684,17 +815,27 @@ function comparator(column, dir) {
 }
 
 function renderHeaders() {
-  $("headers").innerHTML = COLUMNS.map(column => {
+  const groups = COLUMN_GROUPS
+    .map(g => `<th colspan="${g.columns.length}" class="g-${g.key}${g.key !== "mr" ? " g-first" : ""}"><span>${escapeHtml(g.label) || "&nbsp;"}</span></th>`)
+    .join("");
+  $("headers").innerHTML = `<tr class="groups">${groups}</tr><tr class="columns">` + COLUMNS.map(column => {
     const active = state.filters.sort === column.key;
     const arrow = active ? (state.filters.dir === "asc" ? "▲" : "▼") : "";
     const ariaSort = active ? ` aria-sort="${state.filters.dir === "asc" ? "ascending" : "descending"}"` : "";
-    return `<th class="${column.num ? "num" : ""}"${ariaSort} title="${escapeHtml(column.help ?? "")}">` +
+    return `<th class="${column.num ? "num" : ""} ${groupClass(column.key)}"${ariaSort} title="${escapeHtml(column.help ?? "")}">` +
       `<button type="button" data-sort="${column.key}">${escapeHtml(column.label)}<span class="arrow">${arrow}</span></button></th>`;
-  }).join("");
+  }).join("") + "</tr>";
 }
 
 function renderRow(mr) {
-  return `<tr>${COLUMNS.map(c => `<td class="${c.cellClass ?? ""}">${c.render(mr)}</td>`).join("")}</tr>`;
+  return `<tr>${COLUMNS.map(c => `<td class="${c.cellClass ?? ""} ${groupClass(c.key)}">${c.render(mr)}</td>`).join("")}</tr>`;
+}
+
+function authorCell(mr) {
+  const name = mr.author?.name ?? "?";
+  const initials = name.split(/\s+/).map(part => part[0] ?? "").join("").slice(0, 2).toUpperCase();
+  const hue = [...name].reduce((sum, char) => (sum * 31 + char.charCodeAt(0)) % 360, 7);
+  return `<span class="author"><span class="avatar" style="--hue:${hue}" aria-hidden="true">${escapeHtml(initials)}</span>${escapeHtml(name)}</span>`;
 }
 
 function mrCell(mr) {
@@ -703,7 +844,7 @@ function mrCell(mr) {
     .join("");
   const conflicts = mr.has_conflicts ? " " + pill("red", "Conflits", "La MR est en conflit avec sa branche cible", mr.web_url) : "";
   return `<div class="title">${mr.draft ? '<span class="draft">Draft</span>' : ""}<a href="${escapeHtml(mr.web_url)}" target="_blank" rel="noopener">${escapeHtml(mr.title.replace(/^Draft:\s*/i, ""))}</a>${conflicts}</div>
-    <div class="sub">!${mr.iid} · <code>${escapeHtml(mr.source_branch)}</code> → <code>${escapeHtml(mr.target_branch)}</code></div>
+    <div class="sub"><span class="iid">!${mr.iid}</span> · <code>${escapeHtml(mr.source_branch)}</code> → <code>${escapeHtml(mr.target_branch)}</code></div>
     ${labels ? `<div class="labels">${labels}</div>` : ""}`;
 }
 
@@ -726,14 +867,15 @@ function commitsCell(mr) {
 
 // ---------- Utilitaires ----------
 
-const RELATIVE = new Intl.RelativeTimeFormat("fr", { numeric: "always" });
+// « - 4 heures » plutôt que « il y a 4 heures » : la colonne se lit plus vite sans le préfixe répété.
+const durationFormat = unit => new Intl.NumberFormat("fr", { style: "unit", unit, unitDisplay: "long" });
 
 function relative(iso) {
   const seconds = (new Date(iso) - Date.now()) / 1000;
   const steps = [[60, "second"], [60, "minute"], [24, "hour"], [Infinity, "day"]];
   let value = seconds;
   for (const [size, unit] of steps) {
-    if (Math.abs(value) < size) return RELATIVE.format(Math.round(value), unit);
+    if (Math.abs(value) < size) return `${value < 0 ? "- " : ""}${durationFormat(unit).format(Math.abs(Math.round(value)))}`;
     value /= size;
   }
 }
