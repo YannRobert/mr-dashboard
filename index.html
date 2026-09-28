@@ -1049,7 +1049,7 @@ function commitsCell(mr) {
   const commits = signalsOf(mr).commits;
   if (!commits) return `<span class="muted">…</span>`;
   if (commits.error) return `<span class="muted" title="${escapeHtml(commits.error)}">?</span>`;
-  return String(commits.count);
+  return `<a href="${escapeHtml(mr.web_url)}/commits" target="_blank" rel="noopener" title="Commits de la MR">${commits.count}</a>`;
 }
 
 function behindCell(mr) {
