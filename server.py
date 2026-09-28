@@ -20,12 +20,17 @@ Prérequis (les mêmes que scripts/mr-ci-signals.py) :
     ~/.config/glab-cli/config.yml authentifié contre gitlab.example.com.
 """
 import argparse
+import base64
+import http.client
 import json
 import os
-import urllib.error
+import ssl
+import threading
+import time
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
 
 DEFAULT_PORT = 8765
 DEFAULT_SONAR_HOST = "https://sonarqube.example.com"
@@ -34,7 +39,14 @@ DEFAULT_GITLAB_HOST = "https://gitlab.example.com"
 DEFAULT_GITLAB_PROJECT = "group/project"
 DEFAULT_GITLAB_TOKEN_HOST = "gitlab.example.com"
 DEFAULT_GLAB_CONFIG = os.path.expanduser("~/.config/glab-cli/config.yml")
-FORWARDED_RESPONSE_HEADERS = ("X-Total", "X-Total-Pages", "X-Next-Page", "X-Page", "X-Per-Page")
+# Content-Encoding : les réponses gzip sont relayées telles quelles, le navigateur les décompresse.
+FORWARDED_RESPONSE_HEADERS = ("Content-Encoding", "X-Total", "X-Total-Pages", "X-Next-Page", "X-Page", "X-Per-Page")
+UPSTREAM_TIMEOUT_S = 30
+# Une connexion inactive plus longtemps est fermée plutôt que réutilisée : le proxy ou le serveur l'a
+# probablement déjà coupée, et l'essayer coûterait un aller-retour pour rien.
+UPSTREAM_IDLE_S = 30
+# La page charge 4 MR en parallèle, jusqu'à 3 requêtes chacune.
+UPSTREAM_MAX_IDLE_PER_HOST = 12
 STATIC_DIR = Path(__file__).resolve().parent
 
 
@@ -50,9 +62,132 @@ def gitlab_token(config_path, target_host):
     raise RuntimeError(f"aucun token trouvé pour {target_host} dans {config_path}")
 
 
+class UpstreamPool:
+    """Connexions gardées ouvertes par hôte amont.
+
+    Via un proxy HTTPS, ouvrir une connexion (CONNECT + poignée de main TLS) coûte ~500 ms :
+    davantage que la requête elle-même. Une actualisation en enchaîne des dizaines ; les réutiliser
+    divise leur durée par ~4. Proxy lu dans l'environnement (https_proxy / no_proxy), comme urllib.
+    """
+
+    def __init__(self):
+        self._idle = {}
+        self._lock = threading.Lock()
+
+    def get(
+            self,
+            url,
+            headers
+    ):
+        """GET, et renvoie (statut, corps, en-têtes) ; une connexion réutilisée que l'amont a fermée
+        entre-temps est remplacée une fois, la requête étant idempotente."""
+        target = urlsplit(url)
+        path = target.path + ("?" + target.query if target.query else "")
+        connection, reused = self._acquire(target)
+        try:
+            return self._send(
+                target,
+                connection,
+                path,
+                headers
+            )
+        except (ConnectionError, http.client.HTTPException, ssl.SSLError):
+            if not reused:
+                raise
+            return self._send(
+                target,
+                self._connect(target),
+                path,
+                headers
+            )
+
+    def _send(
+            self,
+            target,
+            connection,
+            path,
+            headers
+    ):
+        try:
+            connection.request(
+                "GET",
+                path,
+                headers=headers
+            )
+            response = connection.getresponse()
+            body = response.read()
+        except BaseException:
+            connection.close()
+            raise
+        if response.will_close:
+            connection.close()
+        else:
+            self._release(
+                target,
+                connection
+            )
+        return response.status, body, response.headers
+
+    def _acquire(self, target):
+        now = time.monotonic()
+        with self._lock:
+            idle = self._idle.get(target.netloc, [])
+            while idle:
+                connection, released_at = idle.pop()
+                if now - released_at < UPSTREAM_IDLE_S:
+                    return connection, True
+                connection.close()
+        return self._connect(target), False
+
+    def _release(
+            self,
+            target,
+            connection
+    ):
+        with self._lock:
+            idle = self._idle.setdefault(target.netloc, [])
+            if len(idle) < UPSTREAM_MAX_IDLE_PER_HOST:
+                idle.append((connection, time.monotonic()))
+                return
+        connection.close()
+
+    @staticmethod
+    def _connect(target):
+        secure = target.scheme == "https"
+        connection_class = http.client.HTTPSConnection if secure else http.client.HTTPConnection
+        port = target.port or (443 if secure else 80)
+        proxy = urllib.request.getproxies().get(target.scheme)
+        if not proxy or urllib.request.proxy_bypass(target.hostname):
+            return connection_class(
+                target.hostname,
+                port,
+                timeout=UPSTREAM_TIMEOUT_S
+            )
+        proxy = urlsplit(proxy if "://" in proxy else "http://" + proxy)
+        tunnel_headers = {}
+        if proxy.username:
+            credentials = f"{unquote(proxy.username)}:{unquote(proxy.password or '')}"
+            tunnel_headers["Proxy-Authorization"] = "Basic " + base64.b64encode(credentials.encode()).decode()
+        connection = connection_class(
+            proxy.hostname,
+            proxy.port or 80,
+            timeout=UPSTREAM_TIMEOUT_S
+        )
+        connection.set_tunnel(
+            target.hostname,
+            port,
+            headers=tunnel_headers
+        )
+        return connection
+
+
 def make_handler(settings):
+    upstream = UpstreamPool()
 
     class Handler(BaseHTTPRequestHandler):
+
+        # Connexion gardée entre deux requêtes du navigateur ; chaque réponse porte son Content-Length.
+        protocol_version = "HTTP/1.1"
 
         def do_GET(self):
             # Refuse tout autre nom d'hôte : une page tierce qui ferait pointer son domaine sur
@@ -85,14 +220,22 @@ def make_handler(settings):
                 url,
                 headers
         ):
-            request = urllib.request.Request(url, headers=headers)
             try:
-                with urllib.request.urlopen(request, timeout=30) as response:
-                    self.send_body(response.status, response.read(), response.headers)
-            except urllib.error.HTTPError as error:
-                self.send_body(error.code, error.read(), error.headers)
-            except urllib.error.URLError as error:
-                self.send_json(502, {"message": f"relay failed: {error.reason}"})
+                status, body, upstream_headers = upstream.get(
+                    url,
+                    {**headers, "Accept-Encoding": "gzip"}
+                )
+            except (OSError, http.client.HTTPException) as error:
+                self.send_json(
+                    502,
+                    {"message": f"relay failed: {error}"}
+                )
+                return
+            self.send_body(
+                status,
+                body,
+                upstream_headers
+            )
 
         def send_body(
                 self,
