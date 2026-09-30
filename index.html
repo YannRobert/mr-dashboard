@@ -571,6 +571,7 @@ const groupClass = key => {
 
 const state = {
   config: null,
+  configLoaded: false,
   mrs: [],
   // undefined tant que rien n'est chargé, null si la branche n'a aucun pipeline.
   branchPipeline: undefined,
@@ -1083,7 +1084,13 @@ async function refresh() {
   $("refresh").disabled = true;
   if (initial) $("errors").innerHTML = "";
   try {
-    state.config ??= (await api("/config")).body;
+    // Relue une fois par page, même si la sauvegarde en a fourni une : le serveur a pu être relancé
+    // avec un autre profil.
+    if (!state.configLoaded) {
+      state.config = (await api("/config")).body;
+      state.configLoaded = true;
+    }
+    snapshot.config = state.config;
     $("project").textContent = state.config.gitlabProject;
     const [mrs, { nodes: graphqlNodes, branchPipeline }] = await Promise.all([
       gitlabAll(`${projectPath()}/merge_requests?state=opened`),
@@ -1129,6 +1136,12 @@ async function refresh() {
 }
 
 function applySnapshot(snapshot) {
+  // Config de la sauvegarde tant que celle du serveur n'est pas lue : le pipeline de la branche en a
+  // besoin pour s'afficher dès le chargement.
+  if (!state.configLoaded && snapshot.config) {
+    state.config = snapshot.config;
+    $("project").textContent = state.config.gitlabProject;
+  }
   state.mrs = snapshot.mrs;
   state.branchPipeline = snapshot.branchPipeline;
   state.signals = snapshot.signals;
@@ -1150,6 +1163,7 @@ function saveSnapshot(snapshot) {
     localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({
       version: SNAPSHOT_VERSION,
       at: snapshot.at.toISOString(),
+      config: snapshot.config,
       mrs: snapshot.mrs,
       branchPipeline: snapshot.branchPipeline,
       signals: [...snapshot.signals],
@@ -1165,6 +1179,7 @@ function readSnapshot() {
     if (saved?.version !== SNAPSHOT_VERSION) return null;
     return {
       at: new Date(saved.at),
+      config: saved.config,
       mrs: saved.mrs,
       branchPipeline: saved.branchPipeline,
       signals: new Map(saved.signals),
@@ -1268,18 +1283,12 @@ const GRAPHQL_MR_FIELDS = `
 // Dernier pipeline de la branche suivie, et durées de ses derniers pipelines réussis (les échecs,
 // interrompus en cours de route, fausseraient la fourchette) ; demandés avec la première page seulement.
 const SUCCESSFUL_BUILDS_SAMPLE = 5;
-// Pipeline en cours ⇒ le précédent abouti (réussi ou en échec) s'affiche aussi : on en lit assez pour
-// enjamber ceux qui tournent encore ou qui ont été annulés par un push suivant.
-const BRANCH_PIPELINES_SAMPLE = 5;
+// Pipeline en cours ⇒ le précédent abouti (réussi ou en échec) s'affiche aussi. Demandé par statut
+// plutôt qu'en lisant les N derniers : une rafale de pushes annule autant de pipelines qu'elle veut.
 const ACTIVE_PIPELINE_GROUPS = new Set([
   "running", "pending", "created", "preparing", "waiting-for-resource", "waiting-for-callback", "scheduled",
 ]);
-const CONCLUSIVE_PIPELINE_GROUPS = new Set(["success", "success-with-warnings", "failed"]);
-const GRAPHQL_BRANCH_PIPELINE = `
-  successfulPipelines: pipelines(ref: $branch, status: SUCCESS, first: ${SUCCESSFUL_BUILDS_SAMPLE}) @include(if: $first) {
-    nodes { duration }
-  }
-  pipelines(ref: $branch, first: ${BRANCH_PIPELINES_SAMPLE}) @include(if: $first) {
+const GRAPHQL_PIPELINE_DETAIL = `
     nodes {
       id path duration createdAt startedAt
       detailedStatus { text label group }
@@ -1293,8 +1302,14 @@ const GRAPHQL_BRANCH_PIPELINE = `
           jobs { nodes { name webPath duration detailedStatus { text group } } }
         }
       }
-    }
-  }`;
+    }`;
+const GRAPHQL_BRANCH_PIPELINE = `
+  successfulPipelines: pipelines(ref: $branch, status: SUCCESS, first: ${SUCCESSFUL_BUILDS_SAMPLE}) @include(if: $first) {
+    nodes { duration }
+  }
+  pipelines(ref: $branch, first: 1) @include(if: $first) { ${GRAPHQL_PIPELINE_DETAIL} }
+  lastSuccess: pipelines(ref: $branch, status: SUCCESS, first: 1) @include(if: $first) { ${GRAPHQL_PIPELINE_DETAIL} }
+  lastFailure: pipelines(ref: $branch, status: FAILED, first: 1) @include(if: $first) { ${GRAPHQL_PIPELINE_DETAIL} }`;
 
 async function loadGraphqlMergeRequests(report) {
   const nodes = new Map();
@@ -2252,11 +2267,17 @@ function behindCell(mr) {
 // ---------- Pipeline de la branche suivie ----------
 
 function withBuildDurations(project) {
-  const [pipeline, ...older] = project.pipelines?.nodes ?? [];
+  const pipeline = project.pipelines?.nodes[0];
   if (!pipeline) return null;
   const buildDurations = (project.successfulPipelines?.nodes ?? []).map(node => node.duration).filter(Boolean);
-  const previous = isActive(pipeline) ? older.find(node => CONCLUSIVE_PIPELINE_GROUPS.has(node.detailedStatus.group)) ?? null : null;
+  const previous = isActive(pipeline) ? latestConclusive(project) : null;
   return { ...pipeline, buildDurations, previous };
+}
+
+// Le plus récent du dernier réussi et du dernier en échec.
+function latestConclusive(project) {
+  const candidates = [project.lastSuccess?.nodes[0], project.lastFailure?.nodes[0]].filter(Boolean);
+  return candidates.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0] ?? null;
 }
 
 function isActive(pipeline) {
