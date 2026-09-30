@@ -315,6 +315,37 @@
   button.with-icon { display: inline-flex; align-items: center; gap: 0.45em; }
   button.with-icon .orca-logo { height: 0.95em; width: auto; flex: none; }
   dialog.ai-prompt .actions { display: flex; justify-content: flex-end; align-items: center; gap: 0.6rem; margin-top: 0.8rem; }
+  /* Activité des commits, au survol du nombre de commits : courbe cumulée et commentaires. Volet ancré
+     dans le coin bas droit de la fenêtre, pour ne jamais recouvrir la ligne de la MR survolée. */
+  .commit-activity {
+    position: fixed; z-index: 50; right: 1rem; bottom: 1rem; width: min(44rem, calc(100vw - 2rem)); max-height: 60vh; overflow: auto;
+    padding: 0.8rem 1rem 1rem; background: var(--surface); color: var(--text);
+    border: 1px solid var(--border-strong); border-top: 3px solid var(--accent); border-radius: 0.8rem;
+    box-shadow: 0 0.4rem 1.6rem rgb(0 0 0 / 0.25);
+  }
+  .commit-activity[hidden] { display: none; }
+  .ca-body { position: relative; }
+  .ca-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 0.8rem; margin-bottom: 0.2rem; padding-right: 2.5rem; }
+  .ca-close { position: absolute; top: 0; right: 0; line-height: 1; }
+  .ca-mr-title { font-weight: normal; }
+  .ca-head h2 { margin: 0; font-size: 1.05rem; }
+  .ca-head .muted, .ca-note { color: var(--muted); font-size: 0.85rem; }
+  .ca-note { margin: 0 0 0.6rem; }
+  .ca-chart { display: block; width: 100%; height: auto; overflow: visible; }
+  .ca-chart text { font-size: 10px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+  .ca-axis { stroke: var(--border-strong); stroke-width: 1; }
+  .ca-merge { stroke: var(--muted); stroke-width: 2; stroke-dasharray: 2 2; }
+  .ca-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+  .ca-area { fill: color-mix(in srgb, var(--accent) 7%, transparent); }
+  .ca-area.office { fill: color-mix(in srgb, var(--accent) 26%, transparent); }
+  .ca-others { fill: var(--red-dot); stroke: var(--surface); stroke-width: 1.5; }
+  .ca-mine { fill: var(--green-dot); stroke: var(--surface); stroke-width: 1.5; }
+  .ca-others:hover, .ca-mine:hover { stroke: var(--text); }
+  .ca-hit { fill: transparent; }
+  .ca-hit:hover { fill: color-mix(in srgb, var(--accent) 14%, transparent); }
+  .ca-legend { display: flex; flex-wrap: wrap; gap: 0.3rem 1.2rem; margin-top: 0.5rem; font-size: 0.85rem; color: var(--muted); }
+  .ca-legend-item { display: inline-flex; align-items: center; gap: 0.4em; }
+  .ca-legend-item svg { width: 1.2em; height: 0.9em; overflow: visible; }
   .pill {
     display: inline-flex; align-items: center; gap: 0.45em;
     font-size: 1rem; font-weight: 700; border-radius: 999px; padding: 0.28em 0.8em;
@@ -465,6 +496,10 @@
     <button type="button" id="ai-copy" class="primary" data-i18n="dialog.copy">Copier</button>
   </div>
 </dialog>
+
+<section class="commit-activity" id="commit-activity" aria-labelledby="ca-title" hidden>
+  <div class="ca-body" id="ca-body"></div>
+</section>
 
 <div id="errors"></div>
 <div class="summary" id="summary"></div>
@@ -799,6 +834,23 @@ const I18N = {
     "approved": p => (p.n > 1 ? `Approuvée ×${p.n}` : "Approuvée"),
     "approved.title": p => `Approuvée par ${p.names}`,
     "commits.title": "Commits de la MR",
+    "ca.title": p => `Activité des commits de !${p.iid}`,
+    "ca.summary": p => `${p.n} commit${plural(p.n)}${p.merges ? ` (+ ${p.merges} merge${plural(p.merges)})` : ""} sur ${p.span} — dernier il y a ${p.last}`,
+    "ca.comments.summary": p => `${p.others} commentaire${plural(p.others)} des autres, ${p.mine} de l'auteur`,
+    "ca.note": "La pente est le rythme : raide pendant le build, elle s'aplatit en finalisation ; un long plateau à droite, la MR est posée. Des marches juste après un point rouge sont des corrections de revue. Dates d'auteur des commits (poste du développeur, conservées au rebase).",
+    "ca.loading": "Chargement des commits et des commentaires…",
+    "ca.close": "Fermer le volet",
+    "ca.error": p => `Activité indisponible : ${p.message}`,
+    "ca.empty": "Aucun commit hors merges",
+    "ca.legend.commits": "Commits cumulés",
+    "ca.legend.office": p => `Plus foncé : heures de bureau (${p.from} h – ${p.to} h)`,
+    "ca.legend.others": "Commentaires des autres",
+    "ca.legend.mine": "Commentaires de l'auteur",
+    "ca.legend.merge": "Merge (non compté)",
+    "ca.merge": p => `Merge — ${p.title}\n${p.author}, ${p.date}`,
+    "ca.comments.others": p => `${p.n} commentaire${plural(p.n)} — ${p.authors}\n${p.from}${p.to ? ` → ${p.to}` : ""}`,
+    "ca.comments.mine": p => `${p.n} commentaire${plural(p.n)} de l'auteur — ${p.authors}\n${p.from}${p.to ? ` → ${p.to}` : ""}`,
+    "ca.cumulCount": p => `${p.n}ᵉ commit — ${p.sha} ${p.title}\n${p.date}`,
     "behind.upToDate": p => `À jour avec ${p.target}`,
     "behind.late": p => `${p.n} commit${plural(p.n)} de retard`,
     "behind.none": "à jour",
@@ -970,6 +1022,23 @@ const I18N = {
     "approved": p => (p.n > 1 ? `Approved ×${p.n}` : "Approved"),
     "approved.title": p => `Approved by ${p.names}`,
     "commits.title": "MR commits",
+    "ca.title": p => `Commit activity of !${p.iid}`,
+    "ca.summary": p => `${p.n} commit${pluralEn(p.n)}${p.merges ? ` (+ ${p.merges} merge${pluralEn(p.merges)})` : ""} over ${p.span} — last one ${p.last} ago`,
+    "ca.comments.summary": p => `${p.others} comment${pluralEn(p.others)} by others, ${p.mine} by the author`,
+    "ca.note": "The slope is the pace: steep while building, flattening while polishing; a long plateau on the right means the MR has settled. Steps right after a red dot are review fixes. Commit author dates (developer's machine, kept across rebases).",
+    "ca.loading": "Loading commits and comments…",
+    "ca.close": "Close the panel",
+    "ca.error": p => `Activity unavailable: ${p.message}`,
+    "ca.empty": "No commit besides merges",
+    "ca.legend.commits": "Cumulative commits",
+    "ca.legend.office": p => `Darker: office hours (${p.from}:00 – ${p.to}:00)`,
+    "ca.legend.others": "Comments by others",
+    "ca.legend.mine": "Comments by the author",
+    "ca.legend.merge": "Merge (not counted)",
+    "ca.merge": p => `Merge — ${p.title}\n${p.author}, ${p.date}`,
+    "ca.comments.others": p => `${p.n} comment${pluralEn(p.n)} — ${p.authors}\n${p.from}${p.to ? ` → ${p.to}` : ""}`,
+    "ca.comments.mine": p => `${p.n} comment${pluralEn(p.n)} by the author — ${p.authors}\n${p.from}${p.to ? ` → ${p.to}` : ""}`,
+    "ca.cumulCount": p => `Commit #${p.n} — ${p.sha} ${p.title}\n${p.date}`,
     "behind.upToDate": p => `Up to date with ${p.target}`,
     "behind.late": p => `${p.n} commit${pluralEn(p.n)} late`,
     "behind.none": "up to date",
@@ -2380,7 +2449,322 @@ function commitsCell(mr) {
   const commits = signalsOf(mr).commits;
   if (!commits) return `<span class="muted">…</span>`;
   if (commits.error) return `<span class="muted" title="${escapeHtml(commits.error)}">?</span>`;
-  return `<a href="${escapeHtml(mr.web_url)}/commits" target="_blank" rel="noopener" title="${escapeHtml(t("commits.title"))}">${commits.count}</a>`;
+  return `<a href="${escapeHtml(mr.web_url)}/commits" target="_blank" rel="noopener" aria-label="${escapeHtml(t("commits.title"))}" aria-haspopup="dialog" data-commit-activity="${mr.iid}">${commits.count}</a>`;
+}
+
+// ---------- Activité des commits (survol du nombre de commits) ----------
+
+// Délai avant ouverture : un simple passage de la souris sur la colonne — en allant vers le volet,
+// notamment — ne doit ni rien charger, ni changer la MR affichée.
+const COMMIT_ACTIVITY_OPEN_MS = 350;
+// Géométrie du graphique, en unités du viewBox (le SVG s'adapte à la largeur de la popup).
+const CA_W = 560;
+const CA_H = 210;
+const CA_MARGIN = { left: 30, right: 12, top: 12, bottom: 18 };
+// Demi-largeur d'un libellé de jour, en unités du viewBox, et écart minimal entre deux minuits pour
+// l'écrire.
+const CA_DAY_LABEL_HALF_WIDTH = 15;
+const CA_DAY_LABEL_MIN_SPACING = 38;
+// Coche d'un merge, posée en travers de la courbe : courte, pour ne pas se confondre avec les traits
+// des jours.
+const CA_MERGE_HALF_HEIGHT = 6;
+// Heures de bureau, à l'heure locale : la surface sous la courbe y est plus opaque.
+const OFFICE_START_HOUR = 8;
+const OFFICE_END_HOUR = 20;
+// Commentaires rapprochés d'un même camp (auteur ou autres) fondus en un point : une revue postée
+// d'un bloc compte des dizaines de diff notes à la même minute.
+const COMMENT_BURST_MS = 30 * 60000;
+// Comptes techniques qui commentent les MR (rapports PIT, Trivy, Sonar) : ni revue, ni réponse.
+const BOT_USERNAME = /^(project|group)_\d+_bot|^sonarqube$/;
+
+const commitActivity = { anchor: null, openTimer: 0, cache: new Map() };
+
+// Rechargé seulement si la MR a reçu un push ou un commentaire depuis : nombre de commits, date du
+// dernier push et nombre de commentaires servent de clé de cache.
+function loadCommitActivity(mr) {
+  const commits = signalsOf(mr).commits;
+  const key = `${commits?.count}|${commits?.pushDate}|${mr.user_notes_count}`;
+  const cached = commitActivity.cache.get(mr.iid);
+  if (cached?.key === key) return cached.promise;
+  const promise = Promise.all([
+    gitlabAll(`${projectPath()}/merge_requests/${mr.iid}/commits`),
+    gitlabAll(`${projectPath()}/merge_requests/${mr.iid}/notes?sort=asc&order_by=created_at`),
+  ]).then(([commitList, notes]) => activityOf(
+    mr,
+    commitList,
+    notes
+  ));
+  promise.catch(() => commitActivity.cache.delete(mr.iid));
+  commitActivity.cache.set(mr.iid, { key, promise });
+  return promise;
+}
+
+// Un merge (plus d'un parent) n'est pas du travail du développeur : c'est la cible ramenée dans la
+// branche, souvent par le reviewer. Il est sorti de la courbe et montré comme un jalon.
+function activityOf(
+  mr,
+  commitList,
+  notes
+) {
+  const event = c => ({ date: new Date(c.authored_date).getTime(), sha: c.short_id, title: c.title, author: c.author_name });
+  const byDate = (a, b) => a.date - b.date;
+  const isMerge = c => (c.parent_ids?.length ?? 1) > 1;
+  // La note de mutation est un rapport d'outil, même quand elle est publiée sous un compte personnel.
+  const isToolReport = n => BOT_USERNAME.test(n.author.username) || n.body?.startsWith(state.config.pitMarker);
+  const comments = notes
+    .filter(n => !n.system && !isToolReport(n))
+    .map(n => ({ date: new Date(n.created_at).getTime(), author: n.author.name, mine: n.author.username === mr.author.username }))
+    .sort(byDate);
+  return {
+    commits: commitList.filter(c => !isMerge(c)).map(event).sort(byDate),
+    merges: commitList.filter(isMerge).map(event).sort(byDate),
+    comments,
+  };
+}
+
+function commentBursts(comments) {
+  const bursts = [];
+  for (const comment of comments) {
+    const burst = bursts.findLast(b => b.mine === comment.mine);
+    if (burst && comment.date - burst.to <= COMMENT_BURST_MS) {
+      burst.to = comment.date;
+      burst.n++;
+      burst.authors.add(comment.author);
+    } else {
+      bursts.push({ from: comment.date, to: comment.date, n: 1, mine: comment.mine, authors: new Set([comment.author]) });
+    }
+  }
+  return bursts;
+}
+
+function scheduleCommitActivity(anchor) {
+  // Même MR : le volet l'affiche déjà — la cellule a pu être recréée par un rendu du tableau.
+  if (commitActivity.anchor?.dataset.commitActivity === anchor.dataset.commitActivity) {
+    commitActivity.anchor = anchor;
+    return;
+  }
+  clearTimeout(commitActivity.openTimer);
+  commitActivity.openTimer = setTimeout(
+    () => openCommitActivity(anchor),
+    COMMIT_ACTIVITY_OPEN_MS
+  );
+}
+
+function cancelCommitActivityOpen() {
+  clearTimeout(commitActivity.openTimer);
+}
+
+function closeCommitActivity() {
+  cancelCommitActivityOpen();
+  commitActivity.anchor = null;
+  $("commit-activity").hidden = true;
+  document.body.style.paddingBottom = "";
+}
+
+async function openCommitActivity(anchor) {
+  const mr = state.mrs.find(m => String(m.iid) === anchor.dataset.commitActivity);
+  if (!mr) return;
+  commitActivity.anchor = anchor;
+  const body = $("ca-body");
+  const head = `<div class="ca-head"><h2 id="ca-title">${escapeHtml(t("ca.title", { iid: mr.iid }))} ` +
+    `<span class="ca-mr-title">${escapeHtml(mr.title)}</span></h2>` +
+    `<button type="button" class="dismiss ca-close" data-ca-close aria-label="${escapeHtml(t("ca.close"))}">×</button>`;
+  body.innerHTML = `${head}<span class="muted">${escapeHtml(t("ca.loading"))}</span></div>`;
+  showCommitActivity();
+  let content;
+  try {
+    const activity = await loadCommitActivity(mr);
+    content = activity.commits.length
+      ? renderCommitActivity(activity, head)
+      : `${head}<span class="muted">${escapeHtml(t("ca.empty"))}</span></div>`;
+  } catch (error) {
+    content = `${head}<span class="muted">${escapeHtml(t("ca.error", { message: error.message }))}</span></div>`;
+  }
+  // Survol passé à une autre MR pendant le chargement : ce résultat n'est plus attendu.
+  if (commitActivity.anchor !== anchor) return;
+  body.innerHTML = content;
+  showCommitActivity();
+}
+
+// Le volet recouvre le bas droit de la page : la marge qu'il réserve laisse défiler les dernières lignes au-dessus.
+function showCommitActivity() {
+  const panel = $("commit-activity");
+  panel.hidden = false;
+  document.body.style.paddingBottom = `calc(${panel.offsetHeight}px + 1rem)`;
+}
+
+function renderCommitActivity(
+  activity,
+  head
+) {
+  const { commits, merges, comments } = activity;
+  const now = gitlabNow();
+  const dates = [...commits, ...merges, ...comments].map(e => e.date);
+  const start = Math.min(...dates);
+  const end = Math.max(now, ...dates);
+  // Le graphique part du minuit du premier jour : la journée d'arrivée du premier commit se lit entière.
+  const midnight = new Date(start);
+  midnight.setHours(0, 0, 0, 0);
+  const summary = t("ca.summary", {
+    n: commits.length,
+    merges: merges.length,
+    span: compactDuration(end - start),
+    last: compactDuration(now - commits.at(-1).date),
+  });
+  const commentSummary = t("ca.comments.summary", {
+    others: comments.filter(c => !c.mine).length,
+    mine: comments.filter(c => c.mine).length,
+  });
+  return `${head}<span class="muted">${escapeHtml(summary)} · ${escapeHtml(commentSummary)}</span></div>` +
+    `<p class="ca-note">${escapeHtml(t("ca.note"))}</p>` +
+    cumulativeChart(
+      activity,
+      midnight.getTime(),
+      end
+    ) +
+    caLegend(merges.length > 0);
+}
+
+// Nombre de commits cumulé, en escalier jusqu'à maintenant. Chaque commentaire est posé sur la courbe
+// à sa date : des marches juste après un point rouge sont des corrections de revue.
+function cumulativeChart(
+  activity,
+  start,
+  end
+) {
+  const { commits, merges, comments } = activity;
+  const top = CA_MARGIN.top;
+  const base = CA_H - CA_MARGIN.bottom;
+  const span = Math.max(end - start, 60000);
+  const x = time => CA_MARGIN.left + (time - start) / span * (CA_W - CA_MARGIN.left - CA_MARGIN.right);
+  const y = n => base - n / commits.length * (base - top);
+  const countAt = time => commits.filter(c => c.date <= time).length;
+  let d = `M${x(start)},${base}`;
+  commits.forEach((commit, i) => {
+    d += `H${x(commit.date)}V${y(i + 1)}`;
+  });
+  d += `H${x(end)}`;
+  const mergeLines = merges.map(merge => {
+    const tip = caTitle(t("ca.merge", { title: merge.title, author: merge.author, date: formatDate(merge.date) }));
+    const mx = x(merge.date);
+    const my = y(countAt(merge.date));
+    return `<line class="ca-merge" x1="${mx}" x2="${mx}" y1="${my - CA_MERGE_HALF_HEIGHT}" y2="${my + CA_MERGE_HALF_HEIGHT}"/>` +
+      `<rect class="ca-hit" x="${mx - 4}" y="${my - CA_MERGE_HALF_HEIGHT - 2}" width="8" height="${2 * CA_MERGE_HALF_HEIGHT + 4}">${tip}</rect>`;
+  }).join("");
+  const commitHits = commits.map((commit, i) => {
+    const tip = caTitle(t("ca.cumulCount", { n: i + 1, sha: commit.sha, title: commit.title, date: formatDate(commit.date) }));
+    return `<circle class="ca-hit" cx="${x(commit.date)}" cy="${y(i + 1)}" r="5">${tip}</circle>`;
+  }).join("");
+  const dots = commentBursts(comments).map(burst => {
+    const cx = x(burst.from);
+    const cy = y(countAt(burst.from));
+    const r = 4 + Math.min(4, Math.sqrt(burst.n) - 1);
+    const tip = caTitle(t(burst.mine ? "ca.comments.mine" : "ca.comments.others", {
+      n: burst.n,
+      authors: [...burst.authors].join(", "),
+      from: formatDate(burst.from),
+      to: burst.n > 1 ? formatDate(burst.to) : "",
+    }));
+    return burst.mine
+      ? `<path class="ca-mine" d="${caDiamond(cx, cy, r + 1)}">${tip}</path>`
+      : `<circle class="ca-others" cx="${cx}" cy="${cy}" r="${r}">${tip}</circle>`;
+  }).join("");
+  return `<svg class="ca-chart" viewBox="0 0 ${CA_W} ${CA_H}" role="img" aria-labelledby="ca-title">` +
+    `<text x="${CA_MARGIN.left - 5}" y="${top + 4}" text-anchor="end">${commits.length}</text>` +
+    `<text x="${CA_MARGIN.left - 5}" y="${base}" text-anchor="end">0</text>` +
+    caOfficeHoursClip(start, end, x, top, base) +
+    `<path class="ca-area" d="${d}V${base}Z"/>` +
+    `<path class="ca-area office" d="${d}V${base}Z" clip-path="url(#ca-office-hours)"/>` +
+    `<path class="ca-line" d="${d}"/>` +
+    mergeLines + commitHits + dots +
+    `<line class="ca-axis" x1="${CA_MARGIN.left}" x2="${CA_W - CA_MARGIN.right}" y1="${base}" y2="${base}"/>` +
+    caDayTicks(start, end, x, base) +
+    `</svg>`;
+}
+
+// Un trait sous l'axe à chaque minuit local, origine comprise. Le jour n'est écrit que si les traits
+// sont assez espacés. Au ras d'un bord — l'origine, ou le jour qui vient de commencer —, il est calé sur
+// ce bord plutôt que centré sur son trait, qu'il déborderait.
+function caDayTicks(
+  start,
+  end,
+  x,
+  base
+) {
+  const midnight = new Date(start);
+  midnight.setHours(0, 0, 0, 0);
+  if (midnight.getTime() < start) midnight.setDate(midnight.getDate() + 1);
+  const ticks = [];
+  for (const day = midnight; day.getTime() < end; day.setDate(day.getDate() + 1)) {
+    ticks.push(day.getTime());
+  }
+  const spacing = ticks.length > 1 ? x(ticks[1]) - x(ticks[0]) : x(end) - x(start);
+  const labelled = spacing >= CA_DAY_LABEL_MIN_SPACING;
+  return ticks.map(time => {
+    const tx = x(time);
+    const right = CA_W - CA_MARGIN.right;
+    const anchor = tx > right - CA_DAY_LABEL_HALF_WIDTH ? `x="${right}" text-anchor="end"`
+      : tx < CA_MARGIN.left + CA_DAY_LABEL_HALF_WIDTH ? `x="${CA_MARGIN.left}" text-anchor="start"`
+      : `x="${tx}" text-anchor="middle"`;
+    const label = labelled
+      ? `<text ${anchor} y="${CA_H - 4}">${escapeHtml(new Date(time).toLocaleDateString(locale(), { weekday: "short", day: "numeric" }))}</text>`
+      : "";
+    return `<line class="ca-axis" x1="${tx}" x2="${tx}" y1="${base}" y2="${base + 4}"/>${label}`;
+  }).join("");
+}
+
+// Plages de 8 h à 20 h de chaque jour affiché, qui découpent la surface opaque sous la courbe. Un seul
+// graphique est affiché à la fois : l'identifiant fixe ne peut pas entrer en collision.
+function caOfficeHoursClip(
+  start,
+  end,
+  x,
+  top,
+  base
+) {
+  const rects = [];
+  const day = new Date(start);
+  day.setHours(0, 0, 0, 0);
+  for (; day.getTime() < end; day.setDate(day.getDate() + 1)) {
+    const from = new Date(day).setHours(OFFICE_START_HOUR);
+    const to = new Date(day).setHours(OFFICE_END_HOUR);
+    const x0 = x(Math.max(from, start));
+    const x1 = x(Math.min(to, end));
+    if (x1 > x0) rects.push(`<rect x="${x0}" y="${top}" width="${x1 - x0}" height="${base - top}"/>`);
+  }
+  return `<defs><clipPath id="ca-office-hours">${rects.join("")}</clipPath></defs>`;
+}
+
+// Deux camps, deux formes en plus des deux couleurs : rouge et vert se confondent pour un daltonien.
+function caLegend(withMerges) {
+  const item = (
+    swatch,
+    key,
+    params
+  ) => `<span class="ca-legend-item"><svg viewBox="0 0 16 12" aria-hidden="true">${swatch}</svg>${escapeHtml(t(key, params))}</span>`;
+  return `<div class="ca-legend">` +
+    item(`<path class="ca-line" d="M1,10H6V3H15"/>`, "ca.legend.commits") +
+    item(
+      `<rect class="ca-area" x="0" y="1" width="8" height="10"/><rect class="ca-area office" x="8" y="1" width="8" height="10"/>`,
+      "ca.legend.office",
+      { from: OFFICE_START_HOUR, to: OFFICE_END_HOUR }
+    ) +
+    item(`<circle class="ca-others" cx="8" cy="6" r="4"/>`, "ca.legend.others") +
+    item(`<path class="ca-mine" d="${caDiamond(8, 6, 5)}"/>`, "ca.legend.mine") +
+    (withMerges ? item(`<path class="ca-line" d="M1,6H15"/><line class="ca-merge" x1="8" x2="8" y1="1" y2="11"/>`, "ca.legend.merge") : "") +
+    `</div>`;
+}
+
+function caDiamond(
+  cx,
+  cy,
+  r
+) {
+  return `M${cx},${cy - r}L${cx + r},${cy}L${cx},${cy + r}L${cx - r},${cy}Z`;
+}
+
+function caTitle(text) {
+  return `<title>${escapeHtml(text)}</title>`;
 }
 
 function behindCell(mr) {
@@ -2709,6 +3093,27 @@ document.addEventListener("click", e => {
   } else if (remove) {
     updateFilters({ labels: state.filters.labels.filter(l => l !== remove.dataset.removeLabel) });
   }
+});
+// Volet d'activité des commits : ouvert au survol ou au focus du nombre de commits, il reste ouvert
+// quand la souris le rejoint et ne se ferme que par ×, Échap ou un clic hors de lui.
+document.addEventListener("mouseover", e => {
+  const anchor = e.target.closest("[data-commit-activity]");
+  if (anchor) scheduleCommitActivity(anchor);
+});
+document.addEventListener("mouseout", e => {
+  const anchor = e.target.closest("[data-commit-activity]");
+  if (anchor && !anchor.contains(e.relatedTarget)) cancelCommitActivityOpen();
+});
+document.addEventListener("focusin", e => {
+  const anchor = e.target.closest("[data-commit-activity]");
+  if (anchor) scheduleCommitActivity(anchor);
+});
+document.addEventListener("click", e => {
+  if (!commitActivity.anchor) return;
+  if (e.target.closest("[data-ca-close]") || !e.target.closest("#commit-activity, [data-commit-activity]")) closeCommitActivity();
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && commitActivity.anchor) closeCommitActivity();
 });
 $("refresh").addEventListener("click", () => refresh());
 $("autoRefresh").addEventListener("change", e => {
