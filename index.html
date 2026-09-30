@@ -1188,9 +1188,10 @@ async function refresh() {
     snapshot.config = state.config;
     refreshBuildHistoryIfStale();
     $("project").textContent = state.config.gitlabProject;
-    const [mrs, { nodes: graphqlNodes, branchPipeline }] = await Promise.all([
+    const [mrs, graphqlNodes, branchPipeline] = await Promise.all([
       gitlabAll(`${projectPath()}/merge_requests?state=opened`),
       loadGraphqlMergeRequests(report),
+      loadBranchPipeline(),
       loadSonarPullRequests(report),
     ]);
     for (const mr of mrs) {
@@ -1366,8 +1367,8 @@ function renderFreshness() {
 }
 
 // Une seule requête GraphQL, par page de 100, pour toutes les MR ouvertes : la taille (l'API REST ne
-// donne que le nombre de fichiers), les commits, les approbations, les compteurs de threads et les jobs
-// du pipeline de tête — autant de requêtes REST en moins pour chaque MR.
+// donne que le nombre de fichiers), les commits, le dernier push, les approbations, les compteurs de
+// threads et les jobs du pipeline de tête — autant de requêtes REST en moins pour chaque MR.
 const GRAPHQL_MR_FIELDS = `
   iid
   diffStatsSummary { additions deletions fileCount }
@@ -1379,7 +1380,8 @@ const GRAPHQL_MR_FIELDS = `
   resolvedDiscussionsCount
   headPipeline { id jobs(retried: false) { nodes { id name status startedAt finishedAt webPath } } }`;
 // Dernier pipeline de la branche suivie, et durées de ses derniers pipelines réussis (les échecs,
-// interrompus en cours de route, fausseraient la fourchette) ; demandés avec la première page seulement.
+// interrompus en cours de route, fausseraient la fourchette). Requête à part de celle des MR : GitLab
+// plafonne la complexité d'une requête à 250, et ses trois pipelines détaillés en pèsent une bonne part.
 const SUCCESSFUL_BUILDS_SAMPLE = 5;
 // Pipeline en cours ⇒ le précédent abouti (réussi ou en échec) s'affiche aussi. Demandé par statut
 // plutôt qu'en lisant les N derniers : une rafale de pushes annule autant de pipelines qu'elle veut.
@@ -1402,19 +1404,17 @@ const GRAPHQL_PIPELINE_DETAIL = `
       }
     }`;
 const GRAPHQL_BRANCH_PIPELINE = `
-  successfulPipelines: pipelines(ref: $branch, status: SUCCESS, first: ${SUCCESSFUL_BUILDS_SAMPLE}) @include(if: $first) {
+  successfulPipelines: pipelines(ref: $branch, status: SUCCESS, first: ${SUCCESSFUL_BUILDS_SAMPLE}) {
     nodes { duration }
   }
-  pipelines(ref: $branch, first: 1) @include(if: $first) { ${GRAPHQL_PIPELINE_DETAIL} }
-  lastSuccess: pipelines(ref: $branch, status: SUCCESS, first: 1) @include(if: $first) { ${GRAPHQL_PIPELINE_DETAIL} }
-  lastFailure: pipelines(ref: $branch, status: FAILED, first: 1) @include(if: $first) { ${GRAPHQL_PIPELINE_DETAIL} }`;
+  pipelines(ref: $branch, first: 1) { ${GRAPHQL_PIPELINE_DETAIL} }
+  lastSuccess: pipelines(ref: $branch, status: SUCCESS, first: 1) { ${GRAPHQL_PIPELINE_DETAIL} }
+  lastFailure: pipelines(ref: $branch, status: FAILED, first: 1) { ${GRAPHQL_PIPELINE_DETAIL} }`;
 
 async function loadGraphqlMergeRequests(report) {
   const nodes = new Map();
-  let branchPipeline = null;
-  const query = `query($project: ID!, $after: String, $branch: String!, $first: Boolean!) {
+  const query = `query($project: ID!, $after: String) {
     project(fullPath: $project) {
-      ${GRAPHQL_BRANCH_PIPELINE}
       mergeRequests(state: opened, first: 100, after: $after) {
         pageInfo { hasNextPage endCursor }
         nodes { ${GRAPHQL_MR_FIELDS} }
@@ -1424,24 +1424,37 @@ async function loadGraphqlMergeRequests(report) {
   try {
     let after = null;
     do {
-      const variables = JSON.stringify({
-        project: state.config.gitlabProject,
-        after,
-        branch: state.config.pipelineBranch ?? "",
-        first: !after && Boolean(state.config.pipelineBranch),
-      });
+      const variables = JSON.stringify({ project: state.config.gitlabProject, after });
       const { body } = await api(`/graphql?query=${encodeURIComponent(query)}&variables=${encodeURIComponent(variables)}`);
       if (body.errors?.length) throw new Error(body.errors.map(e => e.message).join(", "));
-      if (!after) branchPipeline = withBuildDurations(body.data.project);
       const page = body.data.project.mergeRequests;
       for (const mr of page.nodes) nodes.set(mr.iid, mr);
       after = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
     } while (after);
   } catch (error) {
     report(t("error.graphql", { message: error.message }));
-    branchPipeline = { error: error.message };
   }
-  return { nodes, branchPipeline };
+  return nodes;
+}
+
+// null sans branche suivie ; l'erreur est rendue plutôt que levée, pour s'afficher à la place du pipeline.
+async function loadBranchPipeline() {
+  if (!state.config.pipelineBranch) return null;
+  try {
+    return await fetchBranchPipeline();
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+async function fetchBranchPipeline() {
+  const query = `query($project: ID!, $branch: String!) {
+    project(fullPath: $project) { ${GRAPHQL_BRANCH_PIPELINE} }
+  }`;
+  const variables = JSON.stringify({ project: state.config.gitlabProject, branch: state.config.pipelineBranch });
+  const { body } = await api(`/graphql?query=${encodeURIComponent(query)}&variables=${encodeURIComponent(variables)}`);
+  if (body.errors?.length) throw new Error(body.errors.map(e => e.message).join(", "));
+  return withBuildDurations(body.data.project);
 }
 
 async function loadSonarPullRequests(report) {
@@ -2401,14 +2414,8 @@ async function pollBranchPipeline() {
     scheduleBranchPipelinePoll();
     return;
   }
-  const query = `query($project: ID!, $branch: String!, $first: Boolean!) {
-    project(fullPath: $project) { ${GRAPHQL_BRANCH_PIPELINE} }
-  }`;
   try {
-    const variables = JSON.stringify({ project: state.config.gitlabProject, branch: state.config.pipelineBranch, first: true });
-    const { body } = await api(`/graphql?query=${encodeURIComponent(query)}&variables=${encodeURIComponent(variables)}`);
-    if (body.errors?.length) throw new Error(body.errors.map(e => e.message).join(", "));
-    state.branchPipeline = withBuildDurations(body.data.project);
+    state.branchPipeline = await fetchBranchPipeline();
     renderBranchPipeline();
     // Sauvegardé à la date de la dernière mise à jour complète, et seulement si la sauvegarde est encore
     // celle qu'affiche cet onglet : un autre onglet a pu en écrire une plus récente depuis.
