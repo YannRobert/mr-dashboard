@@ -195,8 +195,10 @@
   }
   table.mrs th, table.mrs td {
     padding: 0.7rem 0.85rem; border-bottom: 1px solid var(--border);
-    text-align: left; vertical-align: middle;
+    text-align: center; vertical-align: middle;
   }
+  /* Valeurs centrées comme leurs en-têtes, sauf le titre de la MR : un texte long se lit à gauche. */
+  table.mrs td.mr-cell { text-align: left; }
   table.mrs tbody tr:last-child td { border-bottom: 0; }
   table.mrs tbody tr { transition: background .12s; }
   table.mrs tbody tr:hover td { background: var(--surface-2); }
@@ -236,14 +238,14 @@
   table.mrs th button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   table.mrs th[aria-sort] { color: var(--accent); }
   table.mrs th .arrow { font-size: 0.8em; min-width: 0.8em; }
-  table.mrs th.num, table.mrs td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.mrs td.num { font-variant-numeric: tabular-nums; }
   table.mrs .g-quality { background: var(--quality-bg); }
   table.mrs thead th.g-quality { background: var(--quality-bg); }
   table.mrs .g-first { border-left: 1px solid var(--border); }
   table.mrs td.g-time { color: var(--muted); font-variant-numeric: tabular-nums; }
   table.mrs td.nowrap { white-space: nowrap; }
   table.mrs td.signal { white-space: nowrap; }
-  table.mrs td.signal .stack { display: flex; flex-direction: column; align-items: flex-start; gap: 0.3rem; }
+  table.mrs td.signal .stack { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; }
 
   .mr-cell { min-width: 22rem; }
   .mr-cell .title { font-weight: 600; font-size: 1.05rem; line-height: 1.35; }
