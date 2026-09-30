@@ -509,6 +509,8 @@ const BUILD_HISTORY_KEY = "mr-dashboard.build-history";
 const BUILD_HISTORY_SIZE = 200;
 const BUILD_HISTORY_TTL_MS = 12 * 3600_000;
 const BUILD_HISTORY_HEIGHT = 32;
+// Pipeline de la branche en cours ⇒ relu seul à ce rythme, plus serré que la mise à jour des MR.
+const BRANCH_PIPELINE_POLL_MS = 60_000;
 // Verrou partagé entre onglets : une seule mise à jour automatique à la fois pour tout le navigateur.
 const REFRESH_LOCK = "mr-dashboard.refresh";
 
@@ -587,6 +589,7 @@ const state = {
   config: null,
   buildHistory: readBuildHistory(),
   buildHistoryLoading: false,
+  branchPipelineTimer: null,
   configLoaded: false,
   mrs: [],
   // undefined tant que rien n'est chargé, null si la branche n'a aucun pipeline.
@@ -1173,6 +1176,7 @@ function applySnapshot(snapshot) {
   render();
   renderStatus();
   notifyProblems();
+  scheduleBranchPipelinePoll();
 }
 
 // Sauvegarde best effort : stockage plein ou bloqué ⇒ on retire l'ancienne plutôt que de rejouer plus tard
@@ -2284,6 +2288,48 @@ function behindCell(mr) {
 }
 
 // ---------- Pipeline de la branche suivie ----------
+
+// Tant que le dernier pipeline de la branche tourne, il est relu seul toutes les BRANCH_PIPELINE_POLL_MS ;
+// la relecture s'arrête d'elle-même quand il est terminé.
+function scheduleBranchPipelinePoll() {
+  clearTimeout(state.branchPipelineTimer);
+  state.branchPipelineTimer = null;
+  const p = state.branchPipeline;
+  if (!p || p.error || !isActive(p)) return;
+  state.branchPipelineTimer = setTimeout(pollBranchPipeline, BRANCH_PIPELINE_POLL_MS);
+}
+
+async function pollBranchPipeline() {
+  // Une mise à jour complète en cours rapportera le pipeline elle-même.
+  if (state.refreshing) {
+    scheduleBranchPipelinePoll();
+    return;
+  }
+  const query = `query($project: ID!, $branch: String!, $first: Boolean!) {
+    project(fullPath: $project) { ${GRAPHQL_BRANCH_PIPELINE} }
+  }`;
+  try {
+    const variables = JSON.stringify({ project: state.config.gitlabProject, branch: state.config.pipelineBranch, first: true });
+    const { body } = await api(`/graphql?query=${encodeURIComponent(query)}&variables=${encodeURIComponent(variables)}`);
+    if (body.errors?.length) throw new Error(body.errors.map(e => e.message).join(", "));
+    state.branchPipeline = withBuildDurations(body.data.project);
+    renderBranchPipeline();
+    // Sauvegardé à la date de la dernière mise à jour complète, et seulement si la sauvegarde est encore
+    // celle qu'affiche cet onglet : un autre onglet a pu en écrire une plus récente depuis.
+    if (readSnapshot()?.at.getTime() === state.refreshedAt?.getTime()) {
+      saveSnapshot({
+        at: state.refreshedAt,
+        config: state.config,
+        mrs: state.mrs,
+        branchPipeline: state.branchPipeline,
+        signals: state.signals,
+      });
+    }
+  } catch (error) {
+    console.error("Relecture du pipeline de la branche impossible :", error);
+  }
+  scheduleBranchPipelinePoll();
+}
 
 function readBuildHistory() {
   try {
