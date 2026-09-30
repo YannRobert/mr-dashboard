@@ -406,7 +406,6 @@
 <script>
 "use strict";
 
-const PIT_MARKER = "<!-- mutation-report -->";
 const PENDING_JOB_STATUSES = new Set(["created", "pending", "running", "waiting_for_resource", "preparing", "scheduled", "manual"]);
 const MAX_PARALLEL_MRS = 4;
 const RETENTION_SETTING = "sonar.dbcleaner.daysBeforeDeletingInactiveBranchesAndPRs";
@@ -649,29 +648,29 @@ const I18N = {
     "reason.expired": "Analyse expirée",
     "reason.notFound": "Introuvable",
     "reason.disabled": "Non configuré",
-    "pit.notApplicable": "Le dernier pipeline ne contient pas de job mutation_test",
-    "pit.pending": p => `Job mutation_test : ${p.status}`,
+    "pit.notApplicable": () => `Le dernier pipeline ne contient pas de job ${state.config.pitJob}`,
+    "pit.pending": p => `Job ${state.config.pitJob} : ${p.status}`,
     "pit.noNote": p => `Job ${p.status}, aucune note ${p.marker} publiée`,
-    "pit.failed": "Le dernier job mutation_test a échoué ; la note date d'un run précédent",
+    "pit.failed": () => `Le dernier job ${state.config.pitJob} a échoué ; la note date d'un run précédent`,
     "pit.unreadable": "Tableau de la note PIT non reconnu",
     "pit.detail": p => `${p.total} mutants — ${p.killed} tués, ${p.survived} survivants, ${p.noCoverage} non couverts, ${p.errors} en erreur` +
       (p.strength != null ? ` — test strength ${p.strength} %` : ""),
     "pit.survived": p => `${p.n} survivant${plural(p.n)}`,
     "pit.noCoverage": p => `${p.n} non couvert${plural(p.n)}`,
     "pit.errors": p => `${p.n} en erreur`,
-    "pit.jobFailed": "Le job mutation_test a échoué ; la note peut être partielle",
-    "sonar.notApplicable": "Le dernier pipeline ne contient pas de job sonar",
-    "sonar.pending": p => `Job sonar : ${p.status} — première analyse de la MR`,
+    "pit.jobFailed": () => `Le job ${state.config.pitJob} a échoué ; la note peut être partielle`,
+    "sonar.notApplicable": () => `Le dernier pipeline ne contient pas de job ${state.config.sonarJob}`,
+    "sonar.pending": p => `Job ${state.config.sonarJob} : ${p.status} — première analyse de la MR`,
     "sonar.expired": p => `Sonar supprime l'analyse d'une MR sans push depuis ${p.days} jours ; relancer le pipeline pour la recalculer`,
-    "sonar.notFound": p => `Job sonar ${p.status}, mais aucune analyse Sonar pour cette MR`,
+    "sonar.notFound": p => `Job ${state.config.sonarJob} ${p.status}, mais aucune analyse Sonar pour cette MR`,
     "sonar.disabled": "SONAR_TOKEN absent côté serveur",
     "sonar.stale": "Périmé",
-    "sonar.staleTitle": p => `Dernière analyse ${p.date}, antérieure au dernier job sonar`,
+    "sonar.staleTitle": p => `Dernière analyse ${p.date}, antérieure au dernier job ${state.config.sonarJob}`,
     "sonar.issues": p => `${p.n} issue${plural(p.n)}`,
     "sonar.issuesTitle": "Issues Sonar ouvertes sur la MR",
     "sonar.gate": p => `Quality Gate ${p.gate}`,
     "sonar.gateTitle": "Quality Gate Sonar non passé",
-    "sonar.jobFailed": "Le job sonar a échoué",
+    "sonar.jobFailed": () => `Le job ${state.config.sonarJob} a échoué`,
     "job.failed": "Job en échec",
     "coverage.none": "Aucune ligne nouvelle à couvrir",
     "coverage.detail": p => `Couverture du nouveau code : ${p.lines} lignes à couvrir, ${p.uncovered} non couvertes, ${p.conditions} conditions non couvertes`,
@@ -803,29 +802,29 @@ const I18N = {
     "reason.expired": "Analysis expired",
     "reason.notFound": "Not found",
     "reason.disabled": "Not configured",
-    "pit.notApplicable": "The latest pipeline has no mutation_test job",
-    "pit.pending": p => `mutation_test job: ${p.status}`,
+    "pit.notApplicable": () => `The latest pipeline has no ${state.config.pitJob} job`,
+    "pit.pending": p => `${state.config.pitJob} job: ${p.status}`,
     "pit.noNote": p => `Job ${p.status}, no ${p.marker} note published`,
-    "pit.failed": "The latest mutation_test job failed; the note comes from a previous run",
+    "pit.failed": () => `The latest ${state.config.pitJob} job failed; the note comes from a previous run`,
     "pit.unreadable": "PIT note table not recognised",
     "pit.detail": p => `${p.total} mutants — ${p.killed} killed, ${p.survived} survived, ${p.noCoverage} not covered, ${p.errors} in error` +
       (p.strength != null ? ` — test strength ${p.strength}%` : ""),
     "pit.survived": p => `${p.n} survivor${pluralEn(p.n)}`,
     "pit.noCoverage": p => `${p.n} not covered`,
     "pit.errors": p => `${p.n} in error`,
-    "pit.jobFailed": "The mutation_test job failed; the note may be partial",
-    "sonar.notApplicable": "The latest pipeline has no sonar job",
-    "sonar.pending": p => `sonar job: ${p.status} — first analysis of the MR`,
+    "pit.jobFailed": () => `The ${state.config.pitJob} job failed; the note may be partial`,
+    "sonar.notApplicable": () => `The latest pipeline has no ${state.config.sonarJob} job`,
+    "sonar.pending": p => `${state.config.sonarJob} job: ${p.status} — first analysis of the MR`,
     "sonar.expired": p => `Sonar deletes the analysis of an MR with no push for ${p.days} days; rerun the pipeline to compute it again`,
-    "sonar.notFound": p => `sonar job ${p.status}, but no Sonar analysis for this MR`,
+    "sonar.notFound": p => `${state.config.sonarJob} job ${p.status}, but no Sonar analysis for this MR`,
     "sonar.disabled": "SONAR_TOKEN missing on the server side",
     "sonar.stale": "Stale",
-    "sonar.staleTitle": p => `Last analysis ${p.date}, older than the latest sonar job`,
+    "sonar.staleTitle": p => `Last analysis ${p.date}, older than the latest ${state.config.sonarJob} job`,
     "sonar.issues": p => `${p.n} issue${pluralEn(p.n)}`,
     "sonar.issuesTitle": "Open Sonar issues on the MR",
     "sonar.gate": p => `Quality Gate ${p.gate}`,
     "sonar.gateTitle": "Sonar Quality Gate not passed",
-    "sonar.jobFailed": "The sonar job failed",
+    "sonar.jobFailed": () => `The ${state.config.sonarJob} job failed`,
     "job.failed": "Job failed",
     "coverage.none": "No new line to cover",
     "coverage.detail": p => `New code coverage: ${p.lines} lines to cover, ${p.uncovered} not covered, ${p.conditions} conditions not covered`,
@@ -1187,8 +1186,8 @@ async function loadSignals(mr) {
     ]);
     signals.behind = behind;
     const job = name => jobs.filter(j => j.name === name).sort((a, b) => b.id - a.id)[0];
-    signals.pit = pitSignal(job("mutation_test"), pitNote, mr);
-    signals.sonar = await sonarSignal(job("sonar"), mr);
+    signals.pit = pitSignal(job(state.config.pitJob), pitNote, mr);
+    signals.sonar = await sonarSignal(job(state.config.sonarJob), mr);
   } catch (error) {
     signals.error = error.message;
   }
@@ -1214,7 +1213,7 @@ async function loadThreads(discussionsLoading) {
 function latestPitNote(discussions) {
   return discussions
     .flatMap(d => d.notes)
-    .filter(n => n.body.startsWith(PIT_MARKER))
+    .filter(n => n.body.startsWith(state.config.pitMarker))
     .sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0];
 }
 
@@ -1266,7 +1265,7 @@ function pitSignal(job, note, mr) {
   // Job en cours : la note du run précédent reste la dernière valeur connue — l'afficher, marquée
   // « en cours », plutôt que de la masquer. Sans note, il n'y a rien à montrer.
   if (running && !note) return { state: "pending", reason: "pending", info: { status: job.status }, link: job.web_url };
-  if (!note) return { state: "absent", reason: "noNote", info: { status: job.status, marker: PIT_MARKER }, link: job.web_url };
+  if (!note) return { state: "absent", reason: "noNote", info: { status: job.status, marker: state.config.pitMarker }, link: job.web_url };
   // Seul un job en échec rend la note suspecte. Un job réussi republie la note, mais GitLab ne
   // bouge pas son updated_at si le contenu est identique : comparer les dates donnerait un faux
   // « périmé » à chaque résultat inchangé.
@@ -1925,7 +1924,7 @@ function aiFixPrompt(mr) {
   // dégrader un indicateur jusque-là parfait : la boucle de vérification vaut donc dans tous les cas.
   parts.push(
     "Une fois les modifications effectuées et poussées sur la branche de la MR, attends la fin du pipeline puis vérifie " +
-    `l'état des indicateurs avec \`python3 scripts/mr-ci-signals.py ${mr.iid}\`. Tant que les indicateurs ne sont pas ` +
+    `l'état des indicateurs avec \`${state.config.signalsCommand} ${mr.iid}\`. Tant que les indicateurs ne sont pas ` +
     "parfaits (pipeline vert, 0 issue Sonar, Quality Gate OK, 100 % de couverture du nouveau code, aucun mutant " +
     "survivant, non couvert ou en erreur), effectue les corrections nécessaires."
   );

@@ -3,22 +3,51 @@
 # Lance le serveur du MisteR Dashboard détaché de la session courante (setsid nohup), pour qu'il
 # survive au terminal ou à la session Claude Code qui l'a démarré.
 #
-# Usage : scripts/mr-dashboard/start.sh [--port 9100]
-#   Les arguments sont transmis tels quels à server.py.
+# Usage : scripts/mr-dashboard/start.sh [profil] [options de server.py…]
+#   profil   nom d'un fichier de profiles/ sans son extension (défaut : back) — projet GitLab, clé
+#            Sonar, port… ; chaque profil tourne en parallèle des autres sur son propre port
+#   options  transmises telles quelles à server.py, après celles du profil (elles l'emportent)
 #
 # Le serveur servi est celui du dépôt (ou du worktree) où vit ce script, quel que soit le
 # répertoire courant.
 #
-# Variables d'environnement :
-#   MR_DASHBOARD_LOG   fichier journal   (défaut : ~/.local/state/mr-dashboard.log)
+# Fichiers d'état, un jeu par profil, dans ~/.local/state :
+#   mr-dashboard-<profil>.log   journal du serveur
+#   mr-dashboard-<profil>.pid   PID, lu par stop.sh
 
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-log_file="${MR_DASHBOARD_LOG:-$HOME/.local/state/mr-dashboard.log}"
+state_dir="$HOME/.local/state"
 
+profile=back
+if [[ $# -gt 0 && "$1" != -* ]]; then
+    profile="$1"
+    shift
+fi
+profile_file="$script_dir/profiles/$profile.conf"
+if [[ ! -f "$profile_file" ]]; then
+    echo "Profil inconnu : $profile (aucun $profile_file)." >&2
+    echo "Profils disponibles : $(cd "$script_dir/profiles" && ls -- *.conf | sed 's/\.conf$//' | xargs)" >&2
+    exit 1
+fi
+
+PORT= GITLAB_PROJECT= SONAR_PROJECT= SONAR_JOB= PIT_JOB= PIT_MARKER= REPO_DIR=
+# shellcheck source=profiles/back.conf
+source "$profile_file"
+
+args=()
+[[ -n "$PORT" ]] && args+=(--port "$PORT")
+[[ -n "$GITLAB_PROJECT" ]] && args+=(--gitlab-project "$GITLAB_PROJECT")
+[[ -n "$SONAR_PROJECT" ]] && args+=(--sonar-project "$SONAR_PROJECT")
+[[ -n "$SONAR_JOB" ]] && args+=(--sonar-job "$SONAR_JOB")
+[[ -n "$PIT_JOB" ]] && args+=(--pit-job "$PIT_JOB")
+[[ -n "$PIT_MARKER" ]] && args+=(--pit-marker "$PIT_MARKER")
+[[ -n "$REPO_DIR" ]] && args+=(--repo-dir "${REPO_DIR/#\~/$HOME}")
+args+=("$@")
+
+# Port réellement utilisé : la dernière occurrence l'emporte, comme dans argparse.
 port=8765
-args=("$@")
 for ((i = 0; i < ${#args[@]}; i++)); do
     case "${args[i]}" in
         --port) port="${args[i + 1]:-$port}" ;;
@@ -26,26 +55,33 @@ for ((i = 0; i < ${#args[@]}; i++)); do
     esac
 done
 url="http://localhost:${port}/"
+log_file="$state_dir/mr-dashboard-$profile.log"
+pid_file="$state_dir/mr-dashboard-$profile.pid"
 
-if running="$(pgrep -af mr-dashboard/server.py)"; then
-    echo "Déjà lancé :"
-    echo "$running"
-    echo "$url"
+if [[ -f "$pid_file" ]] && kill -0 "$(cat "$pid_file")" 2> /dev/null; then
+    echo "Profil $profile déjà lancé (PID $(cat "$pid_file")) : $url"
     exit 0
+fi
+# Test par ss et non par curl : sous WSL, une connexion à un port libre n'est pas refusée, elle
+# reste en attente.
+if [[ -n "$(ss -Hltn "sport = :$port")" ]]; then
+    echo "Le port $port est déjà pris par un autre process : choisir un autre PORT dans $profile_file." >&2
+    exit 1
 fi
 
 if [[ -z "${SONAR_TOKEN:-}" ]]; then
     echo "⚠️  SONAR_TOKEN absent : les pastilles Sonar resteront grises." >&2
 fi
 
-mkdir -p "$(dirname "$log_file")"
-setsid nohup python3 "$script_dir/server.py" "$@" > "$log_file" 2>&1 < /dev/null &
+mkdir -p "$state_dir"
+setsid nohup python3 "$script_dir/server.py" "${args[@]}" > "$log_file" 2>&1 < /dev/null &
+echo $! > "$pid_file"
 disown
 
 for _ in $(seq 1 20); do
-    if [[ "$(curl -s -o /dev/null -w '%{http_code}' "$url")" == "200" ]]; then
-        echo "MisteR Dashboard lancé : $url"
-        echo "Journal : $log_file — arrêt : $script_dir/stop.sh"
+    if [[ "$(curl -s --max-time 1 -o /dev/null -w '%{http_code}' "$url")" == "200" ]]; then
+        echo "MisteR Dashboard ($profile) lancé : $url"
+        echo "Journal : $log_file — arrêt : $script_dir/stop.sh $profile"
         exit 0
     fi
     sleep 0.5

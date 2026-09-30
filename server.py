@@ -17,6 +17,11 @@ d'une MR (cf. orca_launcher.py), quand le serveur tourne dans WSL et qu'Orca est
 Usage :
     python3 scripts/mr-dashboard/server.py            # puis http://localhost:8765
     python3 scripts/mr-dashboard/server.py --port 9100
+    python3 scripts/mr-dashboard/server.py --gitlab-project <groupe/projet> --sonar-project <clé> \
+        --repo-dir <clone local du projet> --port 8766   # un autre projet GitLab
+
+Le projet suivi n'est pas forcément ce dépôt : scripts/mr-dashboard/start.sh lit ces options dans un
+profil (scripts/mr-dashboard/profiles/<nom>.conf).
 
 Prérequis (les mêmes que scripts/mr-ci-signals.py) :
     SONAR_TOKEN dans l'environnement — sans lui, les pastilles Sonar restent grises.
@@ -27,13 +32,14 @@ import base64
 import http.client
 import json
 import os
+import shlex
 import ssl
 import threading
 import time
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlsplit
+from urllib.parse import quote, unquote, urlsplit
 
 from orca_launcher import OrcaError, OrcaLauncher
 
@@ -44,6 +50,9 @@ DEFAULT_GITLAB_HOST = "https://gitlab.example.com"
 DEFAULT_GITLAB_PROJECT = "group/project"
 DEFAULT_GITLAB_TOKEN_HOST = "gitlab.example.com"
 DEFAULT_GLAB_CONFIG = os.path.expanduser("~/.config/glab-cli/config.yml")
+DEFAULT_SONAR_JOB = "sonar"
+DEFAULT_PIT_JOB = "mutation_test"
+DEFAULT_PIT_MARKER = "<!-- mutation-report -->"
 # Content-Encoding : les réponses gzip sont relayées telles quelles, le navigateur les décompresse.
 FORWARDED_RESPONSE_HEADERS = ("Content-Encoding", "X-Total", "X-Total-Pages", "X-Next-Page", "X-Page", "X-Per-Page")
 UPSTREAM_TIMEOUT_S = 30
@@ -53,6 +62,7 @@ UPSTREAM_IDLE_S = 30
 # La page charge 4 MR en parallèle, jusqu'à 3 requêtes chacune.
 UPSTREAM_MAX_IDLE_PER_HOST = 12
 STATIC_DIR = Path(__file__).resolve().parent
+SIGNALS_SCRIPT = STATIC_DIR.parent / "mr-ci-signals.py"
 # Exigé sur le POST : un en-tête non standard impose au navigateur un preflight CORS, que ce serveur
 # ne satisfait jamais — une page tierce ne peut donc pas déclencher l'action.
 ACTION_HEADER = "X-MR-Dashboard"
@@ -332,6 +342,23 @@ def make_handler(
     return Handler
 
 
+def signals_command(args):
+    """Commande de vérification citée par le prompt de correction, exécutée depuis --repo-dir.
+
+    Ce dépôt suivi : chemin relatif et options par défaut, pour un prompt lisible. Un autre projet :
+    chemin absolu de ce script, que son clone n'a pas, et options du projet suivi.
+    """
+    if args.gitlab_project == DEFAULT_GITLAB_PROJECT and args.sonar_project == DEFAULT_SONAR_PROJECT:
+        return "python3 scripts/mr-ci-signals.py"
+    return (
+        f"python3 {shlex.quote(str(SIGNALS_SCRIPT))}"
+        f" --gitlab-host {shlex.quote(args.gitlab_host)}"
+        f" --gitlab-project {shlex.quote(quote(args.gitlab_project, safe=''))}"
+        f" --sonar-host {shlex.quote(args.sonar_host)}"
+        f" --sonar-project {shlex.quote(args.sonar_project)}"
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
@@ -341,11 +368,20 @@ def main():
     parser.add_argument("--gitlab-project", default=DEFAULT_GITLAB_PROJECT, help="chemin du projet, non encodé")
     parser.add_argument("--gitlab-token-host", default=DEFAULT_GITLAB_TOKEN_HOST)
     parser.add_argument("--glab-config", default=DEFAULT_GLAB_CONFIG)
+    parser.add_argument("--sonar-job", default=DEFAULT_SONAR_JOB, help="nom du job CI qui lance l'analyse Sonar")
+    parser.add_argument("--pit-job", default=DEFAULT_PIT_JOB, help="nom du job CI qui publie la note de mutation")
+    parser.add_argument("--pit-marker", default=DEFAULT_PIT_MARKER, help="début de la note de mutation publiée sur la MR")
+    parser.add_argument(
+        "--repo-dir",
+        type=Path,
+        default=STATIC_DIR,
+        help="clone local du projet suivi, où Orca ouvre la session de correction (défaut : ce dépôt)"
+    )
     parser.add_argument("--quiet", action="store_true", help="ne pas journaliser chaque requête")
     args = parser.parse_args()
 
     sonar_token = os.environ.get("SONAR_TOKEN")
-    orca = OrcaLauncher.detect(STATIC_DIR)
+    orca = OrcaLauncher.detect(args.repo_dir)
     if not sonar_token:
         print("⚠️  SONAR_TOKEN absent : les pastilles Sonar resteront grises.")
     settings = {
@@ -360,6 +396,10 @@ def main():
             "sonarWeb": args.sonar_host,
             "sonarProject": args.sonar_project,
             "sonarEnabled": bool(sonar_token),
+            "sonarJob": args.sonar_job,
+            "pitJob": args.pit_job,
+            "pitMarker": args.pit_marker,
+            "signalsCommand": signals_command(args),
             "orcaEnabled": orca is not None,
         },
     }

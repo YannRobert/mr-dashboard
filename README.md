@@ -2,8 +2,9 @@
 
 Créé et maintenu par [Yann ROBERT](https://github.com/YannRobert)
 
-Tableau de bord local des MR ouvertes du projet `group/project`, avec les signaux CI
-(pipeline, Sonar, PIT, threads, retard sur la cible) et des notifications navigateur.
+Tableau de bord local des MR ouvertes d'un projet GitLab — par défaut `group/project` —,
+avec les signaux CI (pipeline, Sonar, PIT, threads, retard sur la cible) et des notifications
+navigateur.
 
 `server.py` sert la page (`index.html`) et relaie les appels GitLab et Sonar, pour garder les tokens
 hors du navigateur. Il n'écoute que sur `127.0.0.1`.
@@ -21,21 +22,36 @@ il est **tué au bout de 2 h** ; lancé au premier plan d'un terminal, il meurt 
 détache donc avec `setsid nohup`, via le lanceur :
 
 ```bash
-scripts/mr-dashboard/start.sh              # ou : start.sh --port 9100
+scripts/mr-dashboard/start.sh              # profil back (ce dépôt)
+scripts/mr-dashboard/start.sh <profil>     # autre projet, cf. § Suivre un autre projet
 ```
 
-Il ne lance rien si une instance tourne déjà (le port serait pris), attend que la page réponde en
-`200`, puis affiche l'URL ; en cas d'échec, il affiche la fin du journal (`~/.local/state/mr-dashboard.log`,
-surchargeable par `MR_DASHBOARD_LOG`).
+Il ne lance rien si le profil tourne déjà ou si son port est pris, attend que la page réponde en
+`200`, puis affiche l'URL ; en cas d'échec, il affiche la fin du journal. Les options passées après
+le profil sont transmises à `server.py` et l'emportent sur celles du profil
+(`start.sh back --port 9100`).
 
 | Action | Commande |
 |---|---|
-| Vérifier qu'il répond | `curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8765/` (attendu : `200`) |
-| Consulter le journal | `tail -f ~/.local/state/mr-dashboard.log` |
-| Arrêter | `scripts/mr-dashboard/stop.sh` |
-| Autre port | `scripts/mr-dashboard/start.sh --port 9100` |
+| Vérifier qu'il répond | `curl -s --max-time 2 -o /dev/null -w '%{http_code}\n' http://localhost:8765/` (attendu : `200`) |
+| Consulter le journal | `tail -f ~/.local/state/mr-dashboard-<profil>.log` |
+| Arrêter un profil | `scripts/mr-dashboard/stop.sh <profil>` |
+| Tout arrêter | `scripts/mr-dashboard/stop.sh` |
 
 Le serveur ne survit pas à un redémarrage de WSL : le relancer avec `start.sh`.
+
+## Suivre un autre projet
+
+Tout ce qui est propre au projet suivi vient d'un **profil**, `profiles/<nom>.conf` : projet GitLab,
+clé Sonar, noms des jobs Sonar et PIT, marqueur de la note de mutation, port, et clone local où le
+bouton de correction ouvre Orca. `profiles/back.conf` documente chaque variable ; pour un autre projet
+(le front par exemple), le copier sous un autre nom, l'adapter — **avec un autre `PORT`** pour faire
+tourner les deux ensemble — puis `start.sh <nom>`.
+
+- Un job absent du pipeline du projet (pas de mutation testing, par exemple) laisse simplement la
+  pastille correspondante grise.
+- Le prompt de correction cite `scripts/mr-ci-signals.py` de ce dépôt par son chemin absolu, avec les
+  options du projet suivi : son clone n'a pas ce script.
 
 ## Ouvrir le dashboard
 
