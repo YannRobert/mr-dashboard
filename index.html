@@ -361,9 +361,18 @@
   .bp-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.8rem; }
   .bp-head .bp-commit { font-weight: 600; color: var(--text); }
   .bp-head .muted, .bp-head code { color: var(--muted); }
-  .bp-history { display: inline-flex; align-items: stretch; gap: 0.35rem; }
-  .bp-history-bars { color: var(--accent); fill: currentColor; }
-  .bp-history-bars a:hover rect { fill: var(--orange-dot); }
+  .bp-history { display: inline-flex; align-items: stretch; gap: 0.35rem; position: relative; }
+  /* Survol : le même SVG agrandi en surimpression (vectoriel, donc net), sans rien ajouter au DOM. */
+  .bp-history-bars {
+    color: var(--accent); stroke: currentColor; stroke-width: 1; overflow: visible;
+    background: var(--surface); border-radius: 2px;
+    transform-origin: left top; transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .bp-history:hover .bp-history-bars {
+    position: relative; z-index: 5; transform: scale(4);
+    box-shadow: 0 0 0 1px var(--border), 0 2px 6px rgba(0, 0, 0, .15);
+  }
+  @media (prefers-reduced-motion: reduce) { .bp-history-bars { transition: none; } }
   .bp-history-scale {
     display: flex; flex-direction: column; justify-content: space-between;
     font-size: 0.7rem; line-height: 1; color: var(--muted); font-variant-numeric: tabular-nums;
@@ -2397,31 +2406,29 @@ async function loadBuildHistory(
   return builds.slice(0, BUILD_HISTORY_SIZE).reverse();
 }
 
-// Barres depuis zéro : l'échelle ne grossit pas les écarts.
+// Barres depuis zéro : l'échelle ne grossit pas les écarts. Un seul <path>, un trait vertical par
+// build, pour ne pas ajouter un élément au DOM par build.
 function buildHistoryChart() {
   const history = state.buildHistory;
   if (!history?.builds.length || history.branch !== state.config.pipelineBranch) return "";
-  const builds = history.builds;
-  const durations = builds.map(build => build.d);
+  const durations = history.builds.map(build => build.d);
   const max = Math.max(...durations);
   const min = Math.min(...durations);
-  const pipelines = `${state.config.gitlabWeb}/${state.config.gitlabProject}/-/pipelines/`;
-  const bars = builds.map((build, index) => {
-    const height = Math.max(1, Math.round(build.d / max * BUILD_HISTORY_HEIGHT));
-    const tooltip = `#${build.id} — ${minutesSeconds(build.d)} — ${formatDate(build.c)}`;
-    return `<a href="${escapeHtml(pipelines + build.id)}" target="_blank" rel="noopener"><rect x="${index}" y="${BUILD_HISTORY_HEIGHT - height}" width="1" height="${height}"><title>${escapeHtml(tooltip)}</title></rect></a>`;
+  const bars = durations.map((duration, index) => {
+    const height = Math.max(1, Math.round(duration / max * BUILD_HISTORY_HEIGHT));
+    return `M${index + 0.5} ${BUILD_HISTORY_HEIGHT}v-${height}`;
   }).join("");
   const summary = t("buildHistory.title", {
-    count: builds.length,
-    from: formatDate(builds[0].c),
-    to: formatDate(builds.at(-1).c),
+    count: durations.length,
+    from: formatDate(history.builds[0].c),
+    to: formatDate(history.builds.at(-1).c),
     min: minutesSeconds(min),
     max: minutesSeconds(max),
     at: formatDate(history.at),
   });
-  const svg = `<svg class="bp-history-bars" width="${builds.length}" height="${BUILD_HISTORY_HEIGHT}" viewBox="0 0 ${builds.length} ${BUILD_HISTORY_HEIGHT}" shape-rendering="crispEdges" role="img" aria-label="${escapeHtml(summary)}">${bars}</svg>`;
+  const svg = `<svg class="bp-history-bars" width="${durations.length}" height="${BUILD_HISTORY_HEIGHT}" viewBox="0 0 ${durations.length} ${BUILD_HISTORY_HEIGHT}" shape-rendering="crispEdges" role="img" aria-label="${escapeHtml(summary)}"><path d="${bars}"/></svg>`;
   const scale = `<span class="bp-history-scale"><span>${escapeHtml(minutesSeconds(max))}</span><span>${escapeHtml(minutesSeconds(min))}</span></span>`;
-  return `<span class="bp-history" title="${escapeHtml(summary)}">${svg}${scale}</span>`;
+  return `<span class="bp-history">${svg}${scale}</span>`;
 }
 
 function withBuildDurations(project) {
