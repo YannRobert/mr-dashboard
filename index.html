@@ -722,9 +722,9 @@ const I18N = {
     "help.coverage": "Couverture Sonar du nouveau code de la MR",
     "help.pit": "Mutants PIT survivants, non couverts ou en erreur, sur les classes modifiées par la MR",
     "help.behind": "Commits de la branche cible absents de la MR ; entre parenthèses, depuis quand : date du commit de la cible qui suit le dernier commit commun avec la MR",
-    "help.last_commit": "Date du commit le plus récent — un commentaire ne la fait pas bouger",
+    "help.last_commit": "Date du dernier push, à l'heure de GitLab — un commentaire ne la fait pas bouger ; la date du commit, fixée par le poste du développeur, est dans l'infobulle",
     "help.activity": "Dernière activité GitLab : commit, commentaire, label, approbation…",
-    "date.lastCommit": p => `Dernier commit : ${p.date}`,
+    "date.lastCommit": p => `Dernier push : ${p.push}\nDate du commit : ${p.commit}`,
     "commit.active": `Active : dernier commit il y a moins de ${ACTIVE_COMMIT_HOURS} h`,
     "commit.idle": `Endormie : aucun commit depuis plus de ${IDLE_COMMIT_HOURS} h`,
     "stalled": "🚨 À traiter",
@@ -893,9 +893,9 @@ const I18N = {
     "help.coverage": "Sonar coverage of the MR's new code",
     "help.pit": "PIT mutants surviving, not covered or in error, on the classes changed by the MR",
     "help.behind": "Target branch commits missing from the MR; in parentheses, since when: date of the target commit that follows the last commit shared with the MR",
-    "help.last_commit": "Date of the most recent commit — a comment does not move it",
+    "help.last_commit": "Date of the last push, by GitLab's clock — a comment does not move it; the commit date, set by the developer's machine, is in the tooltip",
     "help.activity": "Last GitLab activity: commit, comment, label, approval…",
-    "date.lastCommit": p => `Last commit: ${p.date}`,
+    "date.lastCommit": p => `Last push: ${p.push}\nCommit date: ${p.commit}`,
     "commit.active": `Active: last commit less than ${ACTIVE_COMMIT_HOURS} h ago`,
     "commit.idle": `Idle: no commit for more than ${IDLE_COMMIT_HOURS} h`,
     "stalled": "🚨 Needs action",
@@ -1373,6 +1373,7 @@ const GRAPHQL_MR_FIELDS = `
   diffStatsSummary { additions deletions fileCount }
   commitCount
   commits(first: 1) { nodes { committedDate } }
+  mergeRequestDiffs(first: 1) { nodes { createdAt } }
   approvedBy { nodes { name } }
   resolvableDiscussionsCount
   resolvedDiscussionsCount
@@ -1557,11 +1558,15 @@ async function loadApprovals(mr) {
   }
 }
 
-// Date du dernier commit = committed_date le plus récent, et non l'updated_at de la MR, que GitLab
-// bouge aussi sur un commentaire, un label ou une approbation. Le premier commit renvoyé par GraphQL
-// est la tête de la branche, dont la date de commit est la plus récente.
+// Dates du dernier commit et du dernier push, et non l'updated_at de la MR, que GitLab bouge aussi sur
+// un commentaire, un label ou une approbation. Le premier commit renvoyé par GraphQL est la tête de la
+// branche, la première version de diff le dernier push.
 function graphqlCommits(node) {
-  return { count: node.commitCount, lastDate: node.commits.nodes[0]?.committedDate ?? null };
+  return {
+    count: node.commitCount,
+    commitDate: node.commits.nodes[0]?.committedDate ?? null,
+    pushDate: node.mergeRequestDiffs.nodes[0]?.createdAt ?? null,
+  };
 }
 
 function graphqlApprovals(node) {
@@ -1582,9 +1587,15 @@ function restJob(job) {
 
 async function loadCommits(mr) {
   try {
-    const commits = await gitlabAll(`${projectPath()}/merge_requests/${mr.iid}/commits`);
-    const last = commits.map(c => c.committed_date).sort().at(-1) ?? null;
-    return { count: commits.length, lastDate: last };
+    const [commits, versions] = await Promise.all([
+      gitlabAll(`${projectPath()}/merge_requests/${mr.iid}/commits`),
+      api(`/gitlab/${projectPath()}/merge_requests/${mr.iid}/versions?per_page=1`).then(response => response.body),
+    ]);
+    return {
+      count: commits.length,
+      commitDate: commits.map(c => c.committed_date).sort().at(-1) ?? null,
+      pushDate: versions[0]?.created_at ?? null,
+    };
   } catch (error) {
     return { error: error.message };
   }
@@ -1787,8 +1798,12 @@ function commitsCount(mr) {
   return commits && !commits.error ? commits.count : null;
 }
 
+// Date du dernier push, et non celle du commit : GitLab date une version de la MR à sa réception,
+// alors que la date de commit vient du poste du développeur, qui peut l'avoir réglée à sa guise
+// (horloge fausse, rebase, commit --date). La date de commit reste lisible dans l'infobulle.
 function lastCommitDate(mr) {
-  return signalsOf(mr).commits?.lastDate ?? null;
+  const commits = signalsOf(mr).commits;
+  return commits?.pushDate ?? commits?.commitDate ?? null;
 }
 
 function commitAgeHours(mr) {
@@ -1803,7 +1818,14 @@ function lastCommitCell(mr) {
     : hours > IDLE_COMMIT_HOURS ? ["😴", "commit.idle"]
     : null;
   const badge = mood ? `<span class="commit-mood" title="${escapeHtml(t(mood[1]))}">${mood[0]}</span>` : "";
-  return dateCell(lastCommitDate(mr), "date.lastCommit") + badge;
+  const commits = signalsOf(mr).commits;
+  const pushDate = lastCommitDate(mr);
+  if (!pushDate) return dateCell(null, "");
+  const tooltip = t("date.lastCommit", {
+    push: formatDate(pushDate),
+    commit: commits.commitDate ? formatDate(commits.commitDate) : "—",
+  });
+  return `<span title="${escapeHtml(tooltip)}">${relative(pushDate)}</span>${badge}`;
 }
 
 // Une action simple est attendue (correction, rebase) et personne n'a poussé depuis STALLED_ALERT_HOURS.
