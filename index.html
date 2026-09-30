@@ -346,7 +346,8 @@
   /* Dernier pipeline de la branche suivie : stages reliés comme dans GitLab, jobs listés sous chacun. */
   .branch-pipeline { padding: 0 1.5rem 2rem; }
   .branch-pipeline[hidden] { display: none; }
-  .branch-pipeline h2 { font-size: 1.05rem; margin: 0 0 0.6rem; color: var(--muted); font-weight: 600; }
+  .bp-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 1.2rem; margin: 0 0 0.6rem; }
+  .branch-pipeline h2 { font-size: 1.05rem; margin: 0; color: var(--muted); font-weight: 600; }
   .branch-pipeline h2 code { color: var(--text); }
   .bp-card {
     background: var(--surface); border: 1px solid var(--border); border-radius: 0.8rem;
@@ -360,7 +361,7 @@
   .bp-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.8rem; }
   .bp-head .bp-commit { font-weight: 600; color: var(--text); }
   .bp-head .muted, .bp-head code { color: var(--muted); }
-  .bp-builds { margin-top: 0.5rem; color: var(--muted); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+  .bp-builds { color: var(--muted); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
   .bp-stages { display: flex; list-style: none; margin: 0.9rem 0 0; padding: 0; }
   .bp-stage { min-width: 8.5rem; padding-right: 1.2rem; }
   .bp-stage-head { display: flex; align-items: center; gap: 0.4em; font-weight: 600; margin-bottom: 0.4rem; }
@@ -2290,7 +2291,8 @@ function renderBranchPipeline() {
   const p = state.branchPipeline;
   section.hidden = !branch || p === undefined;
   if (section.hidden) return;
-  const title = `<h2 id="branch-pipeline-title">${t("branchPipeline.title", { branch: `<code>${escapeHtml(branch)}</code>` })}</h2>`;
+  const heading = `<h2 id="branch-pipeline-title">${t("branchPipeline.title", { branch: `<code>${escapeHtml(branch)}</code>` })}</h2>`;
+  const title = `<div class="bp-title">${heading}${p?.error ? "" : buildDurationsLine(p?.buildDurations)}</div>`;
   if (!p) {
     section.innerHTML = `${title}<div class="bp-card muted">${escapeHtml(t("branchPipeline.none"))}</div>`;
     return;
@@ -2299,15 +2301,14 @@ function renderBranchPipeline() {
     section.innerHTML = `${title}<div class="bp-card">${pill("grey", t("unavailable"), p.error)}</div>`;
     return;
   }
-  const current = pipelineCard(p, "", buildDurationsLine(p.buildDurations));
-  const previous = p.previous ? pipelineCard(p.previous, `<span class="bp-label">${escapeHtml(t("branchPipeline.previous"))}</span>`, "") : "";
+  const current = pipelineCard(p, "");
+  const previous = p.previous ? pipelineCard(p.previous, `<span class="bp-label">${escapeHtml(t("branchPipeline.previous"))}</span>`) : "";
   section.innerHTML = `${title}${current}${previous}`;
 }
 
 function pipelineCard(
   p,
-  label,
-  extra
+  label
 ) {
   const web = path => state.config.gitlabWeb + path;
   const link = (path, html, cls = "") => `<a${cls ? ` class="${cls}"` : ""} href="${escapeHtml(web(path))}" target="_blank" rel="noopener">${html}</a>`;
@@ -2335,7 +2336,7 @@ function pipelineCard(
     const tooltip = escapeHtml(`${stage.name} : ${stage.detailedStatus.label}`);
     return `<li class="bp-stage"><div class="bp-stage-head" title="${tooltip}">${stageIcon(stage.detailedStatus.group)}${escapeHtml(stage.name)}</div><ul class="bp-jobs">${jobs}</ul></li>`;
   }).join("");
-  return `<div class="bp-card"><div class="bp-head">${head}</div>${extra}<ol class="bp-stages">${stages}</ol></div>`;
+  return `<div class="bp-card"><div class="bp-head">${head}</div><ol class="bp-stages">${stages}</ol></div>`;
 }
 
 function buildDurationsLine(durations) {
@@ -2346,7 +2347,7 @@ function buildDurationsLine(durations) {
     ? t("branchPipeline.buildsSame", { duration: minutesSeconds(min) })
     : t("branchPipeline.buildsRange", { min: minutesSeconds(min), max: minutesSeconds(max) });
   const tooltip = t("branchPipeline.buildsTitle", { count: durations.length, durations: durations.map(minutesSeconds).join(", ") });
-  return `<div class="bp-builds" title="${escapeHtml(tooltip)}">${escapeHtml(t("branchPipeline.builds", { branch: state.config.pipelineBranch, range }))}</div>`;
+  return `<span class="bp-builds" title="${escapeHtml(tooltip)}">${escapeHtml(t("branchPipeline.builds", { branch: state.config.pipelineBranch, range }))}</span>`;
 }
 
 // 612 s ⇒ « 10'12" ».
