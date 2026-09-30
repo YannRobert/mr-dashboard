@@ -377,6 +377,7 @@
     display: flex; flex-direction: column; justify-content: space-between;
     font-size: 0.7rem; line-height: 1; color: var(--muted); font-variant-numeric: tabular-nums;
   }
+  .bp-all { font-size: 0.9rem; }
   .bp-builds { color: var(--muted); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
   .bp-stages { display: flex; list-style: none; margin: 0.9rem 0 0; padding: 0; }
   .bp-stage { min-width: 8.5rem; padding-right: 1.2rem; }
@@ -737,6 +738,8 @@ const I18N = {
     "unavailable": "Indisponible",
     "pipeline.none": "Aucun",
     "branchPipeline.title": p => `Dernier pipeline de ${p.branch}`,
+    "branchPipeline.all": "Tous les pipelines",
+    "branchPipeline.allTitle": p => `Pipelines de ${p.branch} dans GitLab`,
     "branchPipeline.none": "Aucun pipeline sur cette branche.",
     "branchPipeline.running": p => `en cours depuis ${p.duration}`,
     "branchPipeline.durationTitle": "Durée du pipeline",
@@ -906,6 +909,8 @@ const I18N = {
     "unavailable": "Unavailable",
     "pipeline.none": "None",
     "branchPipeline.title": p => `Latest ${p.branch} pipeline`,
+    "branchPipeline.all": "All pipelines",
+    "branchPipeline.allTitle": p => `${p.branch} pipelines in GitLab`,
     "branchPipeline.none": "No pipeline on this branch.",
     "branchPipeline.running": p => `running for ${p.duration}`,
     "branchPipeline.durationTitle": "Pipeline duration",
@@ -2516,7 +2521,9 @@ function renderBranchPipeline() {
   section.hidden = !branch || p === undefined;
   if (section.hidden) return;
   const heading = `<h2 id="branch-pipeline-title">${t("branchPipeline.title", { branch: `<code>${escapeHtml(branch)}</code>` })}</h2>`;
-  const title = `<div class="bp-title">${heading}${p?.error ? "" : buildDurationsLine(p?.buildDurations)}${buildHistoryChart()}</div>`;
+  const pipelinesUrl = `${state.config.gitlabWeb}/${state.config.gitlabProject}/-/pipelines?${new URLSearchParams({ ref: branch, scope: "all" })}`;
+  const allLink = `<a class="bp-all" href="${escapeHtml(pipelinesUrl)}" target="_blank" rel="noopener" title="${escapeHtml(t("branchPipeline.allTitle", { branch }))}">${escapeHtml(t("branchPipeline.all"))} ↗</a>`;
+  const title = `<div class="bp-title">${heading}${allLink}${p?.error ? "" : buildDurationsLine(p?.buildDurations)}${buildHistoryChart()}</div>`;
   if (!p) {
     section.innerHTML = `${title}<div class="bp-card muted">${escapeHtml(t("branchPipeline.none"))}</div>`;
     return;
