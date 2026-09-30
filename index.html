@@ -346,7 +346,7 @@
   /* Dernier pipeline de la branche suivie : stages reliés comme dans GitLab, jobs listés sous chacun. */
   .branch-pipeline { padding: 0 1.5rem 2rem; }
   .branch-pipeline[hidden] { display: none; }
-  .bp-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 1.2rem; margin: 0 0 0.6rem; }
+  .bp-title { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 1.2rem; margin: 0 0 0.6rem; }
   .branch-pipeline h2 { font-size: 1.05rem; margin: 0; color: var(--muted); font-weight: 600; }
   .branch-pipeline h2 code { color: var(--text); }
   .bp-card {
@@ -361,6 +361,13 @@
   .bp-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.8rem; }
   .bp-head .bp-commit { font-weight: 600; color: var(--text); }
   .bp-head .muted, .bp-head code { color: var(--muted); }
+  .bp-history { display: inline-flex; align-items: stretch; gap: 0.35rem; }
+  .bp-history-bars { color: var(--accent); fill: currentColor; }
+  .bp-history-bars a:hover rect { fill: var(--orange-dot); }
+  .bp-history-scale {
+    display: flex; flex-direction: column; justify-content: space-between;
+    font-size: 0.7rem; line-height: 1; color: var(--muted); font-variant-numeric: tabular-nums;
+  }
   .bp-builds { color: var(--muted); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
   .bp-stages { display: flex; list-style: none; margin: 0.9rem 0 0; padding: 0; }
   .bp-stage { min-width: 8.5rem; padding-right: 1.2rem; }
@@ -496,6 +503,12 @@ const FRESHNESS_SEGMENTS = 5;
 // est ignorée.
 const SNAPSHOT_KEY = "mr-dashboard.snapshot";
 const SNAPSHOT_VERSION = 2;
+// Historique des durées des builds réussis de la branche suivie, un pixel par build : rechargé au plus
+// toutes les BUILD_HISTORY_TTL_MS, à part de la mise à jour des MR qu'il ne retarde pas.
+const BUILD_HISTORY_KEY = "mr-dashboard.build-history";
+const BUILD_HISTORY_SIZE = 200;
+const BUILD_HISTORY_TTL_MS = 12 * 3600_000;
+const BUILD_HISTORY_HEIGHT = 32;
 // Verrou partagé entre onglets : une seule mise à jour automatique à la fois pour tout le navigateur.
 const REFRESH_LOCK = "mr-dashboard.refresh";
 
@@ -572,6 +585,8 @@ const groupClass = key => {
 
 const state = {
   config: null,
+  buildHistory: readBuildHistory(),
+  buildHistoryLoading: false,
   configLoaded: false,
   mrs: [],
   // undefined tant que rien n'est chargé, null si la branche n'a aucun pipeline.
@@ -712,6 +727,7 @@ const I18N = {
     "branchPipeline.durationTitle": "Durée du pipeline",
     "branchPipeline.ago": p => `il y a ${p.age}`,
     "branchPipeline.previous": "Précédent",
+    "buildHistory.title": p => `Durée des ${p.count} derniers builds réussis, du ${p.from} au ${p.to} : de ${p.min} à ${p.max} (chargé le ${p.at})`,
     "branchPipeline.builds": p => `Durée d'un build sur ${p.branch} : ${p.range}`,
     "branchPipeline.buildsRange": p => `entre ${p.min} et ${p.max}`,
     "branchPipeline.buildsSame": p => p.duration,
@@ -879,6 +895,7 @@ const I18N = {
     "branchPipeline.durationTitle": "Pipeline duration",
     "branchPipeline.ago": p => `${p.age} ago`,
     "branchPipeline.previous": "Previous",
+    "buildHistory.title": p => `Duration of the last ${p.count} successful builds, ${p.from} to ${p.to}: ${p.min} to ${p.max} (loaded ${p.at})`,
     "branchPipeline.builds": p => `Build time on ${p.branch}: ${p.range}`,
     "branchPipeline.buildsRange": p => `between ${p.min} and ${p.max}`,
     "branchPipeline.buildsSame": p => p.duration,
@@ -1092,6 +1109,7 @@ async function refresh() {
       state.configLoaded = true;
     }
     snapshot.config = state.config;
+    refreshBuildHistoryIfStale();
     $("project").textContent = state.config.gitlabProject;
     const [mrs, { nodes: graphqlNodes, branchPipeline }] = await Promise.all([
       gitlabAll(`${projectPath()}/merge_requests?state=opened`),
@@ -2267,6 +2285,99 @@ function behindCell(mr) {
 
 // ---------- Pipeline de la branche suivie ----------
 
+function readBuildHistory() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(BUILD_HISTORY_KEY));
+    return Array.isArray(saved?.builds) ? saved : null;
+  } catch (ignored) {
+    return null;
+  }
+}
+
+// Sans effet si l'historique de ce projet et de cette branche a moins de BUILD_HISTORY_TTL_MS : tous
+// les onglets le partagent par localStorage.
+async function refreshBuildHistoryIfStale() {
+  const { gitlabProject: project, pipelineBranch: branch } = state.config;
+  if (!branch || state.buildHistoryLoading) return;
+  const current = readBuildHistory() ?? state.buildHistory;
+  const sameTarget = current?.project === project && current?.branch === branch;
+  if (sameTarget && Date.now() - new Date(current.at) < BUILD_HISTORY_TTL_MS) {
+    state.buildHistory = current;
+    return;
+  }
+  state.buildHistoryLoading = true;
+  try {
+    const builds = await loadBuildHistory(
+      project,
+      branch
+    );
+    state.buildHistory = { project, branch, at: new Date().toISOString(), builds };
+    try {
+      localStorage.setItem(BUILD_HISTORY_KEY, JSON.stringify(state.buildHistory));
+    } catch (ignored) { /* stockage plein ou bloqué : rechargé au prochain chargement */ }
+    renderBranchPipeline();
+  } catch (error) {
+    console.error("Historique des builds indisponible :", error);
+  } finally {
+    state.buildHistoryLoading = false;
+  }
+}
+
+// Du plus ancien au plus récent : { id, d: durée en secondes, c: date de création }.
+async function loadBuildHistory(
+  project,
+  branch
+) {
+  const query = `query($project: ID!, $branch: String!, $after: String) {
+    project(fullPath: $project) {
+      pipelines(ref: $branch, status: SUCCESS, first: 100, after: $after) {
+        pageInfo { hasNextPage endCursor }
+        nodes { id duration createdAt }
+      }
+    }
+  }`;
+  const builds = [];
+  let after = null;
+  do {
+    const variables = JSON.stringify({ project, branch, after });
+    const { body } = await api(`/graphql?query=${encodeURIComponent(query)}&variables=${encodeURIComponent(variables)}`);
+    if (body.errors?.length) throw new Error(body.errors.map(e => e.message).join(", "));
+    const page = body.data.project.pipelines;
+    for (const node of page.nodes) {
+      if (node.duration) builds.push({ id: node.id.split("/").pop(), d: node.duration, c: node.createdAt });
+    }
+    after = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
+  } while (after && builds.length < BUILD_HISTORY_SIZE);
+  return builds.slice(0, BUILD_HISTORY_SIZE).reverse();
+}
+
+// Barres depuis zéro : l'échelle ne grossit pas les écarts.
+function buildHistoryChart() {
+  const history = state.buildHistory;
+  if (!history?.builds.length || history.branch !== state.config.pipelineBranch) return "";
+  const builds = history.builds;
+  const durations = builds.map(build => build.d);
+  const max = Math.max(...durations);
+  const min = Math.min(...durations);
+  const pipelines = `${state.config.gitlabWeb}/${state.config.gitlabProject}/-/pipelines/`;
+  const bars = builds.map((build, index) => {
+    const height = Math.max(1, Math.round(build.d / max * BUILD_HISTORY_HEIGHT));
+    const tooltip = `#${build.id} — ${minutesSeconds(build.d)} — ${formatDate(build.c)}`;
+    return `<a href="${escapeHtml(pipelines + build.id)}" target="_blank" rel="noopener"><rect x="${index}" y="${BUILD_HISTORY_HEIGHT - height}" width="1" height="${height}"><title>${escapeHtml(tooltip)}</title></rect></a>`;
+  }).join("");
+  const summary = t("buildHistory.title", {
+    count: builds.length,
+    from: formatDate(builds[0].c),
+    to: formatDate(builds.at(-1).c),
+    min: minutesSeconds(min),
+    max: minutesSeconds(max),
+    at: formatDate(history.at),
+  });
+  const svg = `<svg class="bp-history-bars" width="${builds.length}" height="${BUILD_HISTORY_HEIGHT}" viewBox="0 0 ${builds.length} ${BUILD_HISTORY_HEIGHT}" shape-rendering="crispEdges" role="img" aria-label="${escapeHtml(summary)}">${bars}</svg>`;
+  const scale = `<span class="bp-history-scale"><span>${escapeHtml(minutesSeconds(max))}</span><span>${escapeHtml(minutesSeconds(min))}</span></span>`;
+  return `<span class="bp-history" title="${escapeHtml(summary)}">${svg}${scale}</span>`;
+}
+
 function withBuildDurations(project) {
   const pipeline = project.pipelines?.nodes[0];
   if (!pipeline) return null;
@@ -2292,7 +2403,7 @@ function renderBranchPipeline() {
   section.hidden = !branch || p === undefined;
   if (section.hidden) return;
   const heading = `<h2 id="branch-pipeline-title">${t("branchPipeline.title", { branch: `<code>${escapeHtml(branch)}</code>` })}</h2>`;
-  const title = `<div class="bp-title">${heading}${p?.error ? "" : buildDurationsLine(p?.buildDurations)}</div>`;
+  const title = `<div class="bp-title">${heading}${p?.error ? "" : buildDurationsLine(p?.buildDurations)}${buildHistoryChart()}</div>`;
   if (!p) {
     section.innerHTML = `${title}<div class="bp-card muted">${escapeHtml(t("branchPipeline.none"))}</div>`;
     return;
