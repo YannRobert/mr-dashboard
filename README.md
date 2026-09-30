@@ -66,6 +66,12 @@ ensemble — puis `start.sh <nom>`.
   navigateur. Sur ses propres MR, la notification reste affichée et revient toutes les 15 minutes tant
   qu'un problème reste ouvert.
 - `?lang=en` pour forcer l'anglais.
+- **Ouvertes | Mergées**, dans l'en-tête : la vue des MR mergées (`?view=merged`) relit l'histoire des
+  MR fermées sur une période de merge (7, 30 — par défaut —, 90 jours ou toutes), pour comprendre
+  après coup pourquoi certaines ont duré. Ni pipeline, ni qualité, ni retard : durée totale,
+  développement (premier commit → dernier push) et stabilisation (dernier push → merge), en temps
+  calendaire. Le volet d'activité des commits s'y arrête au merge. Chargée à la demande, elle n'est
+  ni sauvegardée, ni actualisée automatiquement, ni notifiée.
 
 ### Aucune notification ne s'affiche
 

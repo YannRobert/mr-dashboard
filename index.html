@@ -120,7 +120,7 @@
      calcul pendant l'attente. */
   header .refresh-controls { position: relative; }
   .freshness { position: absolute; left: 0.8rem; right: 0.8rem; bottom: 3px; height: 4px; display: flex; gap: 3px; pointer-events: none; }
-  .freshness[hidden] { display: none; }
+  .freshness[hidden], header label.auto[hidden] { display: none; }
   .freshness i {
     flex: 1; border-radius: 999px; background: var(--green-dot);
     animation: freshness-color var(--cycle) linear var(--delay) forwards, freshness-off var(--off) steps(1, end) var(--delay) forwards;
@@ -131,12 +131,12 @@
     80%, 100% { background: var(--red-dot); }
   }
   @keyframes freshness-off { to { opacity: 0.15; } }
-  .lang-switch { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 0.5rem; overflow: hidden; }
-  .lang-switch button {
+  .lang-switch, .view-switch { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 0.5rem; overflow: hidden; }
+  .lang-switch button, .view-switch button {
     border: 0; border-radius: 0; padding: 0.35em 0.65em; font-size: 0.85rem; font-weight: 600;
     color: var(--muted); background: var(--surface);
   }
-  .lang-switch button[aria-pressed="true"] { color: var(--accent-fg); background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
+  .lang-switch button[aria-pressed="true"], .view-switch button[aria-pressed="true"] { color: var(--accent-fg); background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
   button {
     font: inherit; color: var(--text); background: var(--surface);
     border: 1px solid var(--border-strong); border-radius: 0.5rem; padding: 0.35em 0.9em; cursor: pointer;
@@ -167,6 +167,7 @@
   .filters input[type=search] { flex: 1 1 260px; min-width: 200px; padding-left: 2em;
     background: var(--surface-2) no-repeat 0.6em 50% / 0.95em
       url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239aa0ad' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E"); }
+  .filters label.check[hidden] { display: none; }
   .filters label.check {
     display: inline-flex; gap: 0.45em; align-items: center; color: var(--muted); font-size: 0.95rem;
     padding: 0.35em 0.7em; border-radius: 0.5rem; cursor: pointer;
@@ -335,6 +336,7 @@
   .ca-chart text { font-size: 10px; fill: var(--muted); font-variant-numeric: tabular-nums; }
   .ca-axis { stroke: var(--border-strong); stroke-width: 1; }
   .ca-merge { stroke: var(--muted); stroke-width: 2; stroke-dasharray: 2 2; }
+  .ca-merged { stroke: var(--accent-2); stroke-width: 2; }
   .ca-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
   .ca-area { fill: color-mix(in srgb, var(--accent) 7%, transparent); }
   .ca-area.office { fill: color-mix(in srgb, var(--accent) 26%, transparent); }
@@ -446,13 +448,17 @@
   <span class="brand" aria-hidden="true" title="MisteR = MR">MR</span>
   <h1><span class="name"><span><b class="initial">M</b>iste<b class="initial">R</b></span> <span>Dashboard</span></span> <span class="tagline" data-i18n="tagline">Le dashboard très rapide des Merge Requests</span></h1>
   <span class="project" id="project"></span>
+  <div class="view-switch" role="group" aria-label="Vue" data-i18n-aria-label="view.group">
+    <button type="button" data-view="open" data-i18n="view.open">Ouvertes</button>
+    <button type="button" data-view="merged" data-i18n="view.merged">Mergées</button>
+  </div>
   <span class="spacer"></span>
   <div class="status" role="status" aria-live="polite">
     <span class="meta" id="refreshed"></span>
   </div>
   <span class="divider" aria-hidden="true"></span>
   <div class="refresh-controls" role="group" aria-label="Actualisation" data-i18n-aria-label="refresh.group">
-    <label class="auto" data-i18n-title="autoRefresh.title"><input type="checkbox" id="autoRefresh" checked autocomplete="off"> <span data-i18n="autoRefresh">Actualisation auto</span></label>
+    <label class="auto" id="autoRefresh-control" data-i18n-title="autoRefresh.title"><input type="checkbox" id="autoRefresh" checked autocomplete="off"> <span data-i18n="autoRefresh">Actualisation auto</span></label>
     <button id="refresh" type="button" class="primary" data-i18n="refresh">Rafraîchir</button>
     <div class="freshness" id="freshness" hidden aria-hidden="true"></div>
   </div>
@@ -468,6 +474,12 @@
 <div class="filters">
   <input type="search" id="q" placeholder="Rechercher : titre, !iid, branche, ticket…" aria-label="Recherche"
          data-i18n-placeholder="search.placeholder" data-i18n-aria-label="search.aria">
+  <select id="period" aria-label="Période de merge" data-i18n-aria-label="filter.period" hidden>
+    <option value="7" data-i18n="period.7">Mergées ces 7 derniers jours</option>
+    <option value="30" data-i18n="period.30">Mergées ces 30 derniers jours</option>
+    <option value="90" data-i18n="period.90">Mergées ces 90 derniers jours</option>
+    <option value="all" data-i18n="period.all">Toutes les MR mergées</option>
+  </select>
   <select id="target" aria-label="Branche cible" data-i18n-aria-label="filter.target"></select>
   <select id="author" aria-label="Auteur" data-i18n-aria-label="filter.author"></select>
   <select id="reviewer" aria-label="Reviewer" data-i18n-aria-label="filter.reviewer"></select>
@@ -478,7 +490,7 @@
     <option value="no" data-i18n="filter.draftNo">Hors Draft</option>
     <option value="yes" data-i18n="filter.draftYes">Draft seules</option>
   </select>
-  <label class="check"><input type="checkbox" id="alerts"> <span data-i18n="filter.alerts">Avec alertes seulement</span></label>
+  <label class="check" id="alerts-control"><input type="checkbox" id="alerts"> <span data-i18n="filter.alerts">Avec alertes seulement</span></label>
   <div class="active-labels" id="activeLabels"></div>
 </div>
 
@@ -616,29 +628,51 @@ const COLUMNS = [
   { key: "activity", firstDir: "desc", cellClass: "nowrap",
     value: mr => mr.updated_at, render: mr => dateCell(mr.updated_at, "date.activity") },
   { key: "created", firstDir: "desc", cellClass: "nowrap", value: mr => mr.created_at, render: mr => dateCell(mr.created_at, "date.created") },
+  // Vue des MR mergées : durées calendaires, nuits et week-ends compris.
+  { key: "merged", firstDir: "desc", cellClass: "nowrap", value: mr => mr.merged_at, render: mr => dateCell(mr.merged_at, "date.merged") },
+  { key: "duration", firstDir: "desc", cellClass: "num nowrap",
+    value: mr => elapsed(mr.created_at, mr.merged_at), render: mr => durationCell(mr.created_at, mr.merged_at) },
+  { key: "build", firstDir: "desc", cellClass: "num nowrap",
+    value: mr => elapsed(firstCommitDate(mr), lastCommitDate(mr)), render: mr => durationCell(firstCommitDate(mr), lastCommitDate(mr)) },
+  { key: "stabilisation", firstDir: "desc", cellClass: "num nowrap",
+    value: mr => elapsed(lastCommitDate(mr), mr.merged_at), render: mr => durationCell(lastCommitDate(mr), mr.merged_at) },
 ];
-const DEFAULT_SORT = { key: "activity", dir: "desc" };
+// Deux vues : les MR ouvertes, suivies en continu, et les MR mergées, relues pour comprendre après coup
+// pourquoi certaines ont duré. Une MR mergée n'a plus rien à corriger : ni pipeline, ni qualité, ni
+// retard sur la cible, seulement l'histoire de son développement.
+const VIEWS = ["open", "merged"];
+const DEFAULT_SORTS = { open: { key: "activity", dir: "desc" }, merged: { key: "merged", dir: "desc" } };
 // Regroupement visuel des colonnes : l'identité de la MR à gauche, les indicateurs qualité au centre,
 // le retard sur la branche cible, puis les durées à droite.
-const COLUMN_GROUPS = [
-  { key: "mr", columns: ["title", "author"] },
-  { key: "review", columns: ["commits", "comments", "threads"] },
-  { key: "quality", columns: ["pipeline", "issues", "coverage", "pit"] },
-  { key: "target", columns: ["behind"] },
-  { key: "time", columns: ["last_commit", "activity", "created"] },
-];
+const COLUMN_GROUPS = {
+  open: [
+    { key: "mr", columns: ["title", "author"] },
+    { key: "review", columns: ["commits", "comments", "threads"] },
+    { key: "quality", columns: ["pipeline", "issues", "coverage", "pit"] },
+    { key: "target", columns: ["behind"] },
+    { key: "time", columns: ["last_commit", "activity", "created"] },
+  ],
+  merged: [
+    { key: "mr", columns: ["title", "author"] },
+    { key: "review", columns: ["commits", "comments", "threads"] },
+    { key: "lifecycle", columns: ["merged", "duration", "build", "stabilisation"] },
+  ],
+};
+// Période de la vue des MR mergées, en jours de merge ; « all » : toutes.
+const MERGED_PERIODS = ["7", "30", "90", "all"];
+const DEFAULT_MERGED_PERIOD = "30";
 // Sonar et PIT ne sont suivis que si le profil les déclare : un projet qui n'en a pas n'en voit pas les
 // colonnes. Config pas encore lue, ou servie par un serveur antérieur à ces options : tout est suivi.
 const sonarTracked = () => state.config?.sonarTracked !== false;
 const pitTracked = () => state.config?.pitTracked !== false;
 const UNTRACKED_COLUMNS = { issues: () => !sonarTracked(), coverage: () => !sonarTracked(), pit: () => !pitTracked() };
-const shownColumns = () => COLUMNS.filter(c => !UNTRACKED_COLUMNS[c.key]?.());
-const shownGroups = () => {
-  const shown = new Set(shownColumns().map(c => c.key));
-  return COLUMN_GROUPS
-    .map(g => ({ ...g, columns: g.columns.filter(key => shown.has(key)) }))
-    .filter(g => g.columns.length);
-};
+const mergedView = () => state.filters.view === "merged";
+const defaultSort = () => DEFAULT_SORTS[state.filters.view];
+const viewGroups = view => COLUMN_GROUPS[view]
+  .map(g => ({ ...g, columns: g.columns.filter(key => !UNTRACKED_COLUMNS[key]?.()) }))
+  .filter(g => g.columns.length);
+const shownGroups = () => viewGroups(state.filters.view);
+const shownColumns = () => shownGroups().flatMap(g => g.columns).map(key => COLUMNS.find(c => c.key === key));
 const groupClass = key => {
   const group = shownGroups().find(g => g.columns.includes(key));
   return group ? `g-${group.key}${group.columns[0] === key && group.key !== "mr" ? " g-first" : ""}` : "";
@@ -654,6 +688,9 @@ const state = {
   // undefined tant que rien n'est chargé, null si la branche n'a aucun pipeline.
   branchPipeline: undefined,
   signals: new Map(),
+  // Vue des MR mergées : chargée à la demande, jamais sauvegardée ni actualisée automatiquement.
+  // seq écarte le résultat d'un chargement dépassé par un autre (période changée entre-temps).
+  merged: { mrs: [], signals: new Map(), period: null, loading: false, loadedAt: null, seq: 0 },
   sonarPullRequests: new Map(),
   sonarRetentionDays: DEFAULT_SONAR_RETENTION_DAYS,
   filters: readFiltersFromUrl(),
@@ -869,6 +906,31 @@ const I18N = {
     "behind.count": p => `${p.n} commit${plural(p.n)} de ${p.target} absent${plural(p.n)} de la MR`,
     "behind.since": p => `Retard depuis le ${p.date} (commit ${p.next}, après le dernier commit commun ${p.base})`,
     "unit.day": "j",
+    "view.group": "Vue",
+    "view.open": "Ouvertes",
+    "view.merged": "Mergées",
+    "filter.period": "Période de merge",
+    "period.7": "Mergées ces 7 derniers jours",
+    "period.30": "Mergées ces 30 derniers jours",
+    "period.90": "Mergées ces 90 derniers jours",
+    "period.all": "Toutes les MR mergées",
+    "group.lifecycle": "Cycle de vie (calendaire)",
+    "col.merged": "Mergée",
+    "col.duration": "Durée\ntotale",
+    "col.build": "Développement",
+    "col.stabilisation": "Stabilisation",
+    "help.merged": "Date du merge",
+    "help.duration": "De la création de la MR à son merge, en temps calendaire : nuits et week-ends compris",
+    "help.build": "Du premier commit (date d'auteur, conservée au rebase) au dernier push, en temps calendaire — un merge de la cible poussé en fin de MR compte comme dernier push",
+    "help.stabilisation": "Du dernier push au merge, en temps calendaire : le temps passé en revue et en attente sans nouveau commit",
+    "date.merged": p => `Mergée le : ${p.date}`,
+    "duration.title": p => `Du ${p.from} au ${p.to}`,
+    "summary.merged": p => `<b>${p.n}</b> affichée${plural(p.n)} sur ${p.total} mergées`,
+    "summary.mergedLoading": "Chargement des MR mergées…",
+    "error.merged": p => `Chargement des MR mergées impossible : ${p.message}`,
+    "ca.summary.merged": p => `${p.n} commit${plural(p.n)}${p.merges ? ` (+ ${p.merges} merge${plural(p.merges)})` : ""} sur ${p.span} — mergée ${p.last} après le dernier`,
+    "ca.merged": p => `MR mergée le ${p.date}`,
+    "ca.legend.merged": "Merge de la MR",
   },
   en: {
     "page.title": "MisteR Dashboard: the Merge Requests dashboard",
@@ -1057,6 +1119,31 @@ const I18N = {
     "behind.count": p => `${p.n} commit${pluralEn(p.n)} of ${p.target} missing from the MR`,
     "behind.since": p => `Behind since ${p.date} (commit ${p.next}, after the last common commit ${p.base})`,
     "unit.day": "d",
+    "view.group": "View",
+    "view.open": "Open",
+    "view.merged": "Merged",
+    "filter.period": "Merge period",
+    "period.7": "Merged in the last 7 days",
+    "period.30": "Merged in the last 30 days",
+    "period.90": "Merged in the last 90 days",
+    "period.all": "All merged MRs",
+    "group.lifecycle": "Lifecycle (calendar time)",
+    "col.merged": "Merged",
+    "col.duration": "Total\nduration",
+    "col.build": "Development",
+    "col.stabilisation": "Stabilisation",
+    "help.merged": "Merge date",
+    "help.duration": "From the MR's creation to its merge, in calendar time: nights and weekends included",
+    "help.build": "From the first commit (author date, kept on rebase) to the last push, in calendar time — a merge of the target pushed at the end counts as the last push",
+    "help.stabilisation": "From the last push to the merge, in calendar time: time spent in review and waiting without a new commit",
+    "date.merged": p => `Merged on: ${p.date}`,
+    "duration.title": p => `From ${p.from} to ${p.to}`,
+    "summary.merged": p => `<b>${p.n}</b> shown out of ${p.total} merged`,
+    "summary.mergedLoading": "Loading merged MRs…",
+    "error.merged": p => `Could not load merged MRs: ${p.message}`,
+    "ca.summary.merged": p => `${p.n} commit${pluralEn(p.n)}${p.merges ? ` (+ ${p.merges} merge${pluralEn(p.merges)})` : ""} over ${p.span} — merged ${p.last} after the last one`,
+    "ca.merged": p => `MR merged on ${p.date}`,
+    "ca.legend.merged": "MR merge",
   },
 };
 
@@ -1094,7 +1181,7 @@ function applyStaticTexts() {
 function renderStatus() {
   const time = date => date.toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
   const parts = [];
-  const at = state.refreshedAt;
+  const at = mergedView() ? state.merged.loadedAt : state.refreshedAt;
   if (at) {
     // Deux lignes à coupure fixe : laissé au retour à la ligne automatique, le texte se coupait à un
     // endroit différent selon la largeur de l'en-tête.
@@ -1103,7 +1190,9 @@ function renderStatus() {
   }
   // Progression et échec partagent la troisième ligne : l'échec précédent est remplacé par la
   // progression le temps de la nouvelle tentative, qui dira s'il persiste.
-  if (state.progress) parts.push(`<span class="progress">${escapeHtml(t("progress", state.progress))}</span>`);
+  if (mergedView()) {
+    if (state.merged.loading) parts.push(`<span class="progress">${escapeHtml(t("summary.mergedLoading"))}</span>`);
+  } else if (state.progress) parts.push(`<span class="progress">${escapeHtml(t("progress", state.progress))}</span>`);
   else if (state.lastFailure) {
     parts.push(`<span class="failed" title="${escapeHtml(state.lastFailure.message)}">${escapeHtml(t("failed", { time: time(state.lastFailure.at) }))}</span>`);
   }
@@ -1124,7 +1213,10 @@ function setLang(lang) {
 
 function readFiltersFromUrl() {
   const p = new URLSearchParams(location.search);
+  const view = VIEWS.includes(p.get("view")) ? p.get("view") : "open";
   return {
+    view,
+    period: MERGED_PERIODS.includes(p.get("period")) ? p.get("period") : DEFAULT_MERGED_PERIOD,
     q: p.get("q") || "",
     // null : branche cible par défaut du profil, connue une fois la config lue (cf. applyDefaultTarget).
     target: p.has("target") ? p.get("target") : null,
@@ -1133,8 +1225,8 @@ function readFiltersFromUrl() {
     assignee: p.get("assignee") || "",
     labels: (p.get("labels") || "").split(",").filter(Boolean),
     draft: p.get("draft") || "",
-    sort: COLUMNS.some(c => c.key === p.get("sort")) ? p.get("sort") : DEFAULT_SORT.key,
-    dir: p.get("dir") === "asc" || p.get("dir") === "desc" ? p.get("dir") : DEFAULT_SORT.dir,
+    sort: COLUMN_GROUPS[view].some(g => g.columns.includes(p.get("sort"))) ? p.get("sort") : DEFAULT_SORTS[view].key,
+    dir: p.get("dir") === "asc" || p.get("dir") === "desc" ? p.get("dir") : DEFAULT_SORTS[view].dir,
     alerts: p.get("alerts") === "1",
   };
 }
@@ -1149,6 +1241,8 @@ function applyDefaultTarget() {
 function writeFiltersToUrl() {
   const f = state.filters;
   const p = new URLSearchParams();
+  if (f.view !== "open") p.set("view", f.view);
+  if (f.view === "merged" && f.period !== DEFAULT_MERGED_PERIOD) p.set("period", f.period);
   if (f.q) p.set("q", f.q);
   if (f.target !== null && f.target !== defaultTarget()) p.set("target", f.target);
   if (f.author) p.set("author", f.author);
@@ -1156,7 +1250,7 @@ function writeFiltersToUrl() {
   if (f.assignee) p.set("assignee", f.assignee);
   if (f.labels.length) p.set("labels", f.labels.join(","));
   if (f.draft) p.set("draft", f.draft);
-  if (f.sort !== DEFAULT_SORT.key || f.dir !== DEFAULT_SORT.dir) {
+  if (f.sort !== defaultSort().key || f.dir !== defaultSort().dir) {
     p.set("sort", f.sort);
     p.set("dir", f.dir);
   }
@@ -1267,22 +1361,18 @@ async function refresh() {
   const snapshot = { at: new Date(), errors: [], initial };
   const report = message => (initial ? showError(message) : snapshot.errors.push(message));
   state.refreshing = true;
-  $("refresh").disabled = true;
+  syncRefreshButton();
   if (initial) $("errors").innerHTML = "";
   try {
-    // Relue une fois par page, même si la sauvegarde en a fourni une : le serveur a pu être relancé
-    // avec un autre profil.
-    if (!state.configLoaded) {
-      state.config = (await api("/config")).body;
-      state.configLoaded = true;
-    }
-    applyDefaultTarget();
+    await ensureConfig();
     snapshot.config = state.config;
     refreshBuildHistoryIfStale();
-    $("project").textContent = state.config.gitlabProject;
     const [mrs, graphqlNodes, branchPipeline] = await Promise.all([
       gitlabAll(`${projectPath()}/merge_requests?state=opened`),
-      loadGraphqlMergeRequests(report),
+      loadGraphqlMergeRequests(
+        report,
+        GRAPHQL_OPEN_MRS
+      ),
       loadBranchPipeline(),
       loadSonarPullRequests(report),
     ]);
@@ -1318,10 +1408,84 @@ async function refresh() {
     state.refreshing = false;
     state.progress = null;
     state.cycleStart = snapshot.at;
-    $("refresh").disabled = false;
+    syncRefreshButton();
     renderStatus();
     scheduleAutoRefresh();
   }
+}
+
+// Relue une fois par page, même si la sauvegarde en a fourni une : le serveur a pu être relancé avec un
+// autre profil.
+async function ensureConfig() {
+  if (!state.configLoaded) {
+    state.config = (await api("/config")).body;
+    state.configLoaded = true;
+  }
+  applyDefaultTarget();
+  $("project").textContent = state.config.gitlabProject;
+}
+
+// Chaque vue a son chargement : le bouton suit celui de la vue affichée.
+function syncRefreshButton() {
+  $("refresh").disabled = mergedView() ? state.merged.loading : state.refreshing;
+}
+
+// Deux requêtes pour toute la période : la liste REST (auteur, reviewers, labels, dates) et, en GraphQL,
+// commits, dernier push, approbations et threads. Rien par MR : l'activité détaillée n'est lue qu'au
+// survol du nombre de commits. L'API REST ignore merged_after : updated_after, que tout merge fait
+// bouger, borne la liste, et la date de merge la filtre ensuite.
+async function loadMerged({ force = false } = {}) {
+  const merged = state.merged;
+  const period = state.filters.period;
+  if (!force && merged.period === period && (merged.loading || merged.loadedAt)) return;
+  const seq = ++merged.seq;
+  Object.assign(merged, { period, loading: true });
+  syncRefreshButton();
+  renderStatus();
+  render();
+  const since = mergedSince(period);
+  try {
+    await ensureConfig();
+    const [mrs, nodes] = await Promise.all([
+      gitlabAll(`${projectPath()}/merge_requests?state=merged&order_by=updated_at${since ? `&updated_after=${encodeURIComponent(since)}` : ""}`),
+      loadGraphqlMergeRequests(
+        showError,
+        GRAPHQL_MERGED_MRS,
+        { mergedAfter: since }
+      ),
+    ]);
+    if (seq !== merged.seq) return;
+    merged.mrs = mrs.filter(mr => !since || (mr.merged_at && new Date(mr.merged_at) >= new Date(since)));
+    merged.signals = new Map(merged.mrs.map(mr => {
+      const node = nodes.get(String(mr.iid));
+      mr.diffStats = node?.diffStatsSummary;
+      return [mr.iid, mergedSignals(node)];
+    }));
+    merged.loadedAt = new Date();
+  } catch (error) {
+    if (seq === merged.seq) showError(t("error.merged", { message: error.message }));
+  } finally {
+    if (seq === merged.seq) {
+      merged.loading = false;
+      syncRefreshButton();
+      renderStatus();
+      populateFilterOptions();
+      render();
+    }
+  }
+}
+
+function mergedSince(period) {
+  return period === "all" ? null : new Date(Date.now() - Number(period) * 86400000).toISOString();
+}
+
+function mergedSignals(node) {
+  if (!node) return { commits: { error: t("error.graphql", { message: "—" }) }, threads: graphqlThreads(node) };
+  return {
+    commits: { ...graphqlCommits(node), firstDate: node.firstCommit.nodes[0]?.authoredDate ?? null },
+    threads: graphqlThreads(node),
+    approvals: graphqlApprovals(node),
+  };
 }
 
 function applySnapshot(snapshot) {
@@ -1448,7 +1612,7 @@ function scheduleAutoRefresh() {
 // Le segment le plus à droite s'éteint au bout d'une minute, le plus à gauche à l'actualisation.
 function renderFreshness() {
   const bar = $("freshness");
-  bar.hidden = !state.autoRefresh || !state.cycleStart;
+  bar.hidden = !state.autoRefresh || !state.cycleStart || mergedView();
   if (bar.hidden) return;
   const elapsed = Math.min(Date.now() - state.cycleStart, AUTO_REFRESH_MS);
   bar.style.setProperty("--cycle", `${AUTO_REFRESH_MS}ms`);
@@ -1470,8 +1634,21 @@ const GRAPHQL_MR_FIELDS = `
   mergeRequestDiffs(first: 1) { nodes { createdAt } }
   approvedBy { nodes { name } }
   resolvableDiscussionsCount
-  resolvedDiscussionsCount
-  headPipeline { id jobs(retried: false) { nodes { id name status startedAt finishedAt webPath } } }`;
+  resolvedDiscussionsCount`;
+// Sélection des MR, champs et variables propres à chaque vue. Une MR mergée n'a plus de pipeline à
+// suivre ; son plus ancien commit date le début du développement.
+const GRAPHQL_OPEN_MRS = {
+  variables: "",
+  filter: "state: opened",
+  fields: `${GRAPHQL_MR_FIELDS}
+  headPipeline { id jobs(retried: false) { nodes { id name status startedAt finishedAt webPath } } }`,
+};
+const GRAPHQL_MERGED_MRS = {
+  variables: ", $mergedAfter: Time",
+  filter: "state: merged, mergedAfter: $mergedAfter",
+  fields: `${GRAPHQL_MR_FIELDS}
+  firstCommit: commits(last: 1) { nodes { authoredDate } }`,
+};
 // Dernier pipeline de la branche suivie, et durées de ses derniers pipelines réussis (les échecs,
 // interrompus en cours de route, fausseraient la fourchette). Requête à part de celle des MR : GitLab
 // plafonne la complexité d'une requête à 250, et ses trois pipelines détaillés en pèsent une bonne part.
@@ -1504,20 +1681,24 @@ const GRAPHQL_BRANCH_PIPELINE = `
   lastSuccess: pipelines(ref: $branch, status: SUCCESS, first: 1) { ${GRAPHQL_PIPELINE_DETAIL} }
   lastFailure: pipelines(ref: $branch, status: FAILED, first: 1) { ${GRAPHQL_PIPELINE_DETAIL} }`;
 
-async function loadGraphqlMergeRequests(report) {
+async function loadGraphqlMergeRequests(
+  report,
+  selection,
+  extraVariables = {}
+) {
   const nodes = new Map();
-  const query = `query($project: ID!, $after: String) {
+  const query = `query($project: ID!, $after: String${selection.variables}) {
     project(fullPath: $project) {
-      mergeRequests(state: opened, first: 100, after: $after) {
+      mergeRequests(${selection.filter}, first: 100, after: $after) {
         pageInfo { hasNextPage endCursor }
-        nodes { ${GRAPHQL_MR_FIELDS} }
+        nodes { ${selection.fields} }
       }
     }
   }`;
   try {
     let after = null;
     do {
-      const variables = JSON.stringify({ project: state.config.gitlabProject, after });
+      const variables = JSON.stringify({ ...extraVariables, project: state.config.gitlabProject, after });
       const { body } = await api(`/graphql?query=${encodeURIComponent(query)}&variables=${encodeURIComponent(variables)}`);
       if (body.errors?.length) throw new Error(body.errors.map(e => e.message).join(", "));
       const page = body.data.project.mergeRequests;
@@ -1807,8 +1988,10 @@ function refreshingOf(job, valuesDate) {
 // Une cellule n'affiche une pastille que s'il y a quelque chose à voir (alerte, ou signal absent /
 // en cours) ; un signal propre reste en texte discret, pour que les alertes ressortent d'un coup d'œil.
 
+// Par l'état de la MR, et non par la vue affichée : les notifications lisent les MR ouvertes quelle
+// que soit la vue.
 function signalsOf(mr) {
-  return state.signals.get(mr.iid) || {};
+  return (mr.state === "merged" ? state.merged.signals : state.signals).get(mr.iid) || {};
 }
 
 function loadingOrError(s) {
@@ -1912,6 +2095,27 @@ function lastCommitDate(mr) {
   return commits?.pushDate ?? commits?.commitDate ?? null;
 }
 
+// Date d'auteur du plus ancien commit : conservée au rebase, elle date le début du développement.
+function firstCommitDate(mr) {
+  return signalsOf(mr).commits?.firstDate ?? null;
+}
+
+function elapsed(
+  from,
+  to
+) {
+  return from && to ? new Date(to) - new Date(from) : null;
+}
+
+function durationCell(
+  from,
+  to
+) {
+  if (!from || !to) return `<span class="muted">—</span>`;
+  const title = t("duration.title", { from: formatDate(from), to: formatDate(to) });
+  return `<span title="${escapeHtml(title)}">${escapeHtml(compactDuration(elapsed(from, to)))}</span>`;
+}
+
 function commitAgeHours(mr) {
   const iso = lastCommitDate(mr);
   return iso ? (gitlabNow() - new Date(iso)) / 3600000 : null;
@@ -1936,6 +2140,7 @@ function lastCommitCell(mr) {
 
 // Une action simple est attendue (correction, rebase) et personne n'a poussé depuis STALLED_ALERT_HOURS.
 function isStalled(mr) {
+  if (mr.state === "merged") return false;
   const hours = commitAgeHours(mr);
   return hours != null && hours > STALLED_ALERT_HOURS && alertScore(mr) > 0;
 }
@@ -2199,7 +2404,7 @@ function electNotifier() {
 function populateFilterOptions() {
   const people = key => {
     const map = new Map();
-    for (const mr of state.mrs) {
+    for (const mr of viewMrs()) {
       for (const u of [].concat(mr[key] || [])) if (u) map.set(u.username, u.name);
     }
     return [...map].sort((a, b) => a[1].localeCompare(b[1], locale()));
@@ -2207,9 +2412,9 @@ function populateFilterOptions() {
   fillSelect("author", t("filter.anyAuthor"), people("author"));
   fillSelect("reviewer", t("filter.anyReviewer"), people("reviewers"));
   fillSelect("assignee", t("filter.anyAssignee"), people("assignees"));
-  const targets = [...new Set(state.mrs.map(mr => mr.target_branch).concat(state.filters.target ? [state.filters.target] : []))].sort();
+  const targets = [...new Set(viewMrs().map(mr => mr.target_branch).concat(state.filters.target ? [state.filters.target] : []))].sort();
   fillSelect("target", t("filter.anyTarget"), targets.map(target => [target, "→ " + target]));
-  const labels = [...new Set(state.mrs.flatMap(mr => mr.labels))].sort((a, b) => a.localeCompare(b, locale()));
+  const labels = [...new Set(viewMrs().flatMap(mr => mr.labels))].sort((a, b) => a.localeCompare(b, locale()));
   fillSelect("label", t("filter.addLabel"), labels.filter(l => !state.filters.labels.includes(l)).map(l => [l, l]));
   $("label").value = "";
 }
@@ -2225,8 +2430,16 @@ function fillSelect(id, placeholder, options) {
   select.value = current;
 }
 
+// Les MR mergées ne sont plus ni en Draft ni en alerte, et ne s'actualisent pas d'elles-mêmes.
 function syncControlsFromState() {
   const f = state.filters;
+  const merged = mergedView();
+  for (const el of document.querySelectorAll("[data-view]")) el.setAttribute("aria-pressed", String(el.dataset.view === f.view));
+  $("period").hidden = !merged;
+  $("period").value = f.period;
+  $("draft").hidden = merged;
+  $("alerts-control").hidden = merged;
+  $("autoRefresh-control").hidden = merged;
   $("q").value = f.q;
   $("draft").value = f.draft;
   $("alerts").checked = f.alerts;
@@ -2241,10 +2454,11 @@ function matches(mr) {
   if (f.author && mr.author?.username !== f.author) return false;
   if (f.reviewer && !mr.reviewers?.some(u => u.username === f.reviewer)) return false;
   if (f.assignee && !mr.assignees?.some(u => u.username === f.assignee)) return false;
-  if (f.draft === "yes" && !mr.draft) return false;
-  if (f.draft === "no" && mr.draft) return false;
+  const merged = mergedView();
+  if (!merged && f.draft === "yes" && !mr.draft) return false;
+  if (!merged && f.draft === "no" && mr.draft) return false;
   if (f.labels.some(l => !mr.labels.includes(l))) return false;
-  if (f.alerts && alertScore(mr) === 0) return false;
+  if (!merged && f.alerts && alertScore(mr) === 0) return false;
   if (f.q) {
     const haystack = `!${mr.iid} ${mr.title} ${mr.source_branch} ${mr.author?.name ?? ""} ${mr.labels.join(" ")}`.toLowerCase();
     if (!f.q.toLowerCase().split(/\s+/).filter(Boolean).every(term => haystack.includes(term))) return false;
@@ -2259,18 +2473,31 @@ function render() {
   syncControlsFromState();
   renderHeaders();
   const columns = shownColumns();
-  const column = columns.find(c => c.key === state.filters.sort) ?? COLUMNS.find(c => c.key === DEFAULT_SORT.key);
-  const visible = state.mrs.filter(matches).sort(comparator(column, state.filters.dir));
-  const withAlerts = state.mrs.filter(mr => alertScore(mr) > 0).length;
-  const loading = [...state.signals.values()].filter(s => s.loading).length;
-  $("summary").innerHTML =
-    `<span class="stat">${t("summary.shown", { n: visible.length, total: state.mrs.length })}</span>` +
-    `<span class="stat${withAlerts ? " alert" : ""}">${t("summary.alerts", { n: withAlerts })}</span>` +
-    (loading ? `<span class="stat loading">${t("summary.loading", { n: loading })}</span>` : "");
+  const column = columns.find(c => c.key === state.filters.sort) ?? columns.find(c => c.key === defaultSort().key);
+  const mrs = viewMrs();
+  const visible = mrs.filter(matches).sort(comparator(column, state.filters.dir));
+  const mergedLoading = mergedView() && state.merged.loading;
+  $("summary").innerHTML = mergedView()
+    ? `<span class="stat">${t("summary.merged", { n: visible.length, total: mrs.length })}</span>` +
+      (mergedLoading ? `<span class="stat loading">${escapeHtml(t("summary.mergedLoading"))}</span>` : "")
+    : openSummary(visible, mrs);
   $("list").innerHTML = visible.length
     ? visible.map(renderRow).join("")
-    : `<tr><td class="empty" colspan="${columns.length}">${escapeHtml(t("empty"))}</td></tr>`;
+    : `<tr><td class="empty" colspan="${columns.length}">${escapeHtml(t(mergedLoading ? "summary.mergedLoading" : "empty"))}</td></tr>`;
 }
+
+function openSummary(
+  visible,
+  mrs
+) {
+  const withAlerts = mrs.filter(mr => alertScore(mr) > 0).length;
+  const loading = [...state.signals.values()].filter(s => s.loading).length;
+  return `<span class="stat">${t("summary.shown", { n: visible.length, total: mrs.length })}</span>` +
+    `<span class="stat${withAlerts ? " alert" : ""}">${t("summary.alerts", { n: withAlerts })}</span>` +
+    (loading ? `<span class="stat loading">${t("summary.loading", { n: loading })}</span>` : "");
+}
+
+const viewMrs = () => (mergedView() ? state.merged.mrs : state.mrs);
 
 // Une valeur inconnue (signal en chargement, absent, en erreur) est toujours rangée en fin de liste,
 // quel que soit le sens du tri : elle ne doit ni masquer ni passer pour un bon résultat.
@@ -2318,7 +2545,7 @@ function mrCell(mr) {
   const labels = mr.labels
     .map(l => `<button type="button" class="label" data-add-label="${escapeHtml(l)}" title="${escapeHtml(t("label.add"))}">${escapeHtml(l)}</button>`)
     .join("");
-  const conflicts = mr.has_conflicts ? " " + pill("red", t("conflicts"), t("conflicts.title"), mr.web_url) : "";
+  const conflicts = mr.has_conflicts && mr.state !== "merged" ? " " + pill("red", t("conflicts"), t("conflicts.title"), mr.web_url) : "";
   return `<div class="title-row"><div class="title">${mr.draft ? '<span class="draft">Draft</span>' : ""}<a href="${escapeHtml(mr.web_url)}" target="_blank" rel="noopener">${escapeHtml(mr.title.replace(/^Draft:\s*/i, ""))}</a>${conflicts}</div><div class="title-actions">${stalledPill(mr)}${approvalPill(mr)}${aiFixButton(mr)}</div></div>
     <div class="sub"><span class="iid">!${mr.iid}</span> · <code>${escapeHtml(mr.source_branch)}</code> → <code>${escapeHtml(mr.target_branch)}</code>${diffStat(mr)}</div>
     ${labels ? `<div class="labels">${labels}</div>` : ""}`;
@@ -2341,7 +2568,7 @@ function diffStat(mr) {
 // valeurs affichées dans le tableau.
 function aiFixButton(mr) {
   const s = signalsOf(mr);
-  if (s.loading) return "";
+  if (s.loading || mr.state === "merged") return "";
   const outdated = mr.has_conflicts || s.behind?.count > 0;
   if (!outdated && !qualityDefects(s).length && !(s.threads?.unresolved > 0)) return "";
   return `<button type="button" class="ai-fix" data-ai-fix="${mr.iid}" title="${escapeHtml(t("aiFix.title"))}">${escapeHtml(t("aiFix"))}</button>`;
@@ -2595,7 +2822,7 @@ function closeCommitActivity() {
 }
 
 async function openCommitActivity(anchor) {
-  const mr = state.mrs.find(m => String(m.iid) === anchor.dataset.commitActivity);
+  const mr = viewMrs().find(m => String(m.iid) === anchor.dataset.commitActivity);
   if (!mr) return;
   commitActivity.anchor = anchor;
   const body = $("ca-body");
@@ -2608,7 +2835,11 @@ async function openCommitActivity(anchor) {
   try {
     const activity = await loadCommitActivity(mr);
     content = activity.commits.length
-      ? renderCommitActivity(activity, head)
+      ? renderCommitActivity(
+        activity,
+        head,
+        mr.merged_at
+      )
       : `${head}<span class="muted">${escapeHtml(t("ca.empty"))}</span></div>`;
   } catch (error) {
     content = `${head}<span class="muted">${escapeHtml(t("ca.error", { message: error.message }))}</span></div>`;
@@ -2626,23 +2857,27 @@ function showCommitActivity() {
   document.body.style.paddingBottom = `calc(${panel.offsetHeight}px + 1rem)`;
 }
 
+// MR mergée : le graphique s'arrête à son merge — ou au dernier commentaire, posté après — au lieu de
+// courir jusqu'à maintenant.
 function renderCommitActivity(
   activity,
-  head
+  head,
+  mergedAtIso
 ) {
   const { commits, merges, comments } = activity;
-  const now = gitlabNow();
+  const mergedAt = mergedAtIso ? new Date(mergedAtIso).getTime() : null;
+  const reference = mergedAt ?? gitlabNow();
   const dates = [...commits, ...merges, ...comments].map(e => e.date);
   const start = Math.min(...dates);
-  const end = Math.max(now, ...dates);
+  const end = Math.max(reference, ...dates);
   // Le graphique part du minuit du premier jour : la journée d'arrivée du premier commit se lit entière.
   const midnight = new Date(start);
   midnight.setHours(0, 0, 0, 0);
-  const summary = t("ca.summary", {
+  const summary = t(mergedAt ? "ca.summary.merged" : "ca.summary", {
     n: commits.length,
     merges: merges.length,
     span: compactDuration(end - start),
-    last: compactDuration(now - commits.at(-1).date),
+    last: compactDuration(reference - commits.at(-1).date),
   });
   const commentSummary = t("ca.comments.summary", {
     others: comments.filter(c => !c.mine).length,
@@ -2653,9 +2888,13 @@ function renderCommitActivity(
     cumulativeChart(
       activity,
       midnight.getTime(),
-      end
+      end,
+      mergedAt
     ) +
-    caLegend(merges.length > 0);
+    caLegend(
+      merges.length > 0,
+      mergedAt !== null
+    );
 }
 
 // Nombre de commits cumulé, en escalier jusqu'à maintenant. Chaque commentaire est posé sur la courbe
@@ -2663,7 +2902,8 @@ function renderCommitActivity(
 function cumulativeChart(
   activity,
   start,
-  end
+  end,
+  mergedAt
 ) {
   const { commits, merges, comments } = activity;
   const top = CA_MARGIN.top;
@@ -2684,6 +2924,12 @@ function cumulativeChart(
     return `<line class="ca-merge" x1="${mx}" x2="${mx}" y1="${my - CA_MERGE_HALF_HEIGHT}" y2="${my + CA_MERGE_HALF_HEIGHT}"/>` +
       `<rect class="ca-hit" x="${mx - 4}" y="${my - CA_MERGE_HALF_HEIGHT - 2}" width="8" height="${2 * CA_MERGE_HALF_HEIGHT + 4}">${tip}</rect>`;
   }).join("");
+  const mergedLine = mergedAt === null ? "" : (() => {
+    const mx = x(mergedAt);
+    const tip = caTitle(t("ca.merged", { date: formatDate(mergedAt) }));
+    return `<line class="ca-merged" x1="${mx}" x2="${mx}" y1="${top}" y2="${base}"/>` +
+      `<rect class="ca-hit" x="${mx - 4}" y="${top}" width="8" height="${base - top}">${tip}</rect>`;
+  })();
   const commitHits = commits.map((commit, i) => {
     const tip = caTitle(t("ca.cumulCount", { n: i + 1, sha: commit.sha, title: commit.title, date: formatDate(commit.date) }));
     return `<circle class="ca-hit" cx="${x(commit.date)}" cy="${y(i + 1)}" r="5">${tip}</circle>`;
@@ -2709,7 +2955,7 @@ function cumulativeChart(
     `<path class="ca-area" d="${d}V${base}Z"/>` +
     `<path class="ca-area office" d="${d}V${base}Z" clip-path="url(#ca-office-hours)"/>` +
     `<path class="ca-line" d="${d}"/>` +
-    mergeLines + commitHits + dots +
+    mergedLine + mergeLines + commitHits + dots +
     `<line class="ca-axis" x1="${CA_MARGIN.left}" x2="${CA_W - CA_MARGIN.right}" y1="${base}" y2="${base}"/>` +
     caDayTicks(start, end, x, base) +
     `</svg>`;
@@ -2769,7 +3015,10 @@ function caOfficeHoursClip(
 }
 
 // Deux camps, deux formes en plus des deux couleurs : rouge et vert se confondent pour un daltonien.
-function caLegend(withMerges) {
+function caLegend(
+  withMerges,
+  merged
+) {
   const item = (
     swatch,
     key,
@@ -2785,6 +3034,7 @@ function caLegend(withMerges) {
     item(`<circle class="ca-others" cx="8" cy="6" r="4"/>`, "ca.legend.others") +
     item(`<path class="ca-mine" d="${caDiamond(8, 6, 5)}"/>`, "ca.legend.mine") +
     (withMerges ? item(`<path class="ca-line" d="M1,6H15"/><line class="ca-merge" x1="8" x2="8" y1="1" y2="11"/>`, "ca.legend.merge") : "") +
+    (merged ? item(`<line class="ca-merged" x1="8" x2="8" y1="0" y2="12"/>`, "ca.legend.merged") : "") +
     `</div>`;
 }
 
@@ -2966,7 +3216,7 @@ function renderBranchPipeline() {
   const section = $("branch-pipeline");
   const branch = state.config?.pipelineBranch;
   const p = state.branchPipeline;
-  section.hidden = !branch || p === undefined;
+  section.hidden = mergedView() || !branch || p === undefined;
   if (section.hidden) return;
   const heading = `<h2 id="branch-pipeline-title">${t("branchPipeline.title", { branch: `<code>${escapeHtml(branch)}</code>` })}</h2>`;
   const pipelinesUrl = `${state.config.gitlabWeb}/${state.config.gitlabProject}/-/pipelines?${new URLSearchParams({ ref: branch, scope: "all" })}`;
@@ -3086,6 +3336,21 @@ function showError(message) {
 
 // ---------- Événements ----------
 
+// Filtres et tri sont partagés entre les vues ; un tri sur une colonne absente de la nouvelle vue
+// reprend le tri par défaut de celle-ci.
+function setView(view) {
+  if (view === state.filters.view) return;
+  const sortShown = viewGroups(view).some(g => g.columns.includes(state.filters.sort));
+  closeCommitActivity();
+  const sort = sortShown ? {} : { sort: DEFAULT_SORTS[view].key, dir: DEFAULT_SORTS[view].dir };
+  updateFilters({ view, ...sort });
+  populateFilterOptions();
+  syncRefreshButton();
+  renderStatus();
+  renderFreshness();
+  if (view === "merged") loadMerged();
+}
+
 function updateFilters(change) {
   Object.assign(state.filters, change);
   writeFiltersToUrl();
@@ -3097,6 +3362,10 @@ $("q").addEventListener("input", e => updateFilters({ q: e.target.value }));
 for (const id of ["target", "author", "reviewer", "assignee", "draft"]) {
   $(id).addEventListener("change", e => updateFilters({ [id]: e.target.value }));
 }
+$("period").addEventListener("change", e => {
+  updateFilters({ period: e.target.value });
+  loadMerged();
+});
 $("alerts").addEventListener("change", e => updateFilters({ alerts: e.target.checked }));
 $("label").addEventListener("change", e => {
   if (e.target.value) updateFilters({ labels: [...state.filters.labels, e.target.value] });
@@ -3112,6 +3381,11 @@ document.addEventListener("click", e => {
   const lang = e.target.closest("[data-lang]");
   if (lang) {
     setLang(lang.dataset.lang);
+    return;
+  }
+  const view = e.target.closest("[data-view]");
+  if (view) {
+    setView(view.dataset.view);
     return;
   }
   const aiFix = e.target.closest("[data-ai-fix]");
@@ -3148,7 +3422,7 @@ document.addEventListener("click", e => {
 document.addEventListener("keydown", e => {
   if (e.key === "Escape" && commitActivity.anchor) closeCommitActivity();
 });
-$("refresh").addEventListener("click", () => refresh());
+$("refresh").addEventListener("click", () => (mergedView() ? loadMerged({ force: true }) : refresh()));
 $("autoRefresh").addEventListener("change", e => {
   state.autoRefresh = e.target.checked;
   saveAutoRefresh(state.autoRefresh);
@@ -3202,6 +3476,7 @@ if (saved) {
   }
 }
 sharedRefresh();
+if (mergedView()) loadMerged();
 </script>
 </body>
 </html>
