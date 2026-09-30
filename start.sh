@@ -32,7 +32,7 @@ if [[ ! -f "$profile_file" ]]; then
     exit 1
 fi
 
-PORT= GITLAB_PROJECT= SONAR_PROJECT= SONAR_JOB= PIT_JOB= PIT_MARKER= REPO_DIR=
+PORT= GITLAB_PROJECT= SONAR_PROJECT= SONAR_JOB= PIT_JOB= PIT_MARKER= PIPELINE_BRANCH= REPO_DIR=
 # shellcheck source=profiles/back.conf
 source "$profile_file"
 
@@ -43,6 +43,7 @@ args=()
 [[ -n "$SONAR_JOB" ]] && args+=(--sonar-job "$SONAR_JOB")
 [[ -n "$PIT_JOB" ]] && args+=(--pit-job "$PIT_JOB")
 [[ -n "$PIT_MARKER" ]] && args+=(--pit-marker "$PIT_MARKER")
+[[ -n "$PIPELINE_BRANCH" ]] && args+=(--pipeline-branch "$PIPELINE_BRANCH")
 [[ -n "$REPO_DIR" ]] && args+=(--repo-dir "${REPO_DIR/#\~/$HOME}")
 args+=("$@")
 

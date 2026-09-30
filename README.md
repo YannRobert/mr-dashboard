@@ -43,8 +43,8 @@ Le serveur ne survit pas à un redémarrage de WSL : le relancer avec `start.sh`
 ## Suivre un autre projet
 
 Tout ce qui est propre au projet suivi vient d'un **profil**, `profiles/<nom>.conf` : projet GitLab,
-clé Sonar, noms des jobs Sonar et PIT, marqueur de la note de mutation, port, et clone local où le
-bouton de correction ouvre Orca. `profiles/back.conf` documente chaque variable ; pour un autre projet
+clé Sonar, noms des jobs Sonar et PIT, marqueur de la note de mutation, branche dont le dernier
+pipeline s'affiche sous le tableau des MR, port, et clone local où le bouton de correction ouvre Orca. `profiles/back.conf` documente chaque variable ; pour un autre projet
 (le front par exemple), le copier sous un autre nom, l'adapter — **avec un autre `PORT`** pour faire
 tourner les deux ensemble — puis `start.sh <nom>`.
 

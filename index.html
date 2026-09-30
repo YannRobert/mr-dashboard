@@ -342,6 +342,39 @@
     background: var(--red-bg); color: var(--red-fg); border: 1px solid color-mix(in srgb, var(--red-fg) 25%, transparent);
   }
   .empty { padding: 3rem 1.5rem; color: var(--muted); text-align: center; }
+
+  /* Dernier pipeline de la branche suivie : stages reliés comme dans GitLab, jobs listés sous chacun. */
+  .branch-pipeline { padding: 0 1.5rem 2rem; }
+  .branch-pipeline[hidden] { display: none; }
+  .branch-pipeline h2 { font-size: 1.05rem; margin: 0 0 0.6rem; color: var(--muted); font-weight: 600; }
+  .branch-pipeline h2 code { color: var(--text); }
+  .bp-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 0.8rem;
+    box-shadow: var(--shadow); padding: 0.9rem 1.1rem; overflow-x: auto;
+  }
+  .bp-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.8rem; }
+  .bp-head .bp-commit { font-weight: 600; color: var(--text); }
+  .bp-head .muted, .bp-head code { color: var(--muted); }
+  .bp-stages { display: flex; list-style: none; margin: 0.9rem 0 0; padding: 0; }
+  .bp-stage { min-width: 8.5rem; padding-right: 1.2rem; }
+  .bp-stage-head { display: flex; align-items: center; gap: 0.4em; font-weight: 600; margin-bottom: 0.4rem; }
+  /* Trait vers le stage suivant, à hauteur de l'icône du stage. */
+  .bp-stage:not(:last-child) .bp-stage-head::after {
+    content: ""; flex: 1; height: 2px; background: var(--border-strong); margin-right: -1.2rem;
+  }
+  .bp-jobs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.25rem; }
+  .bp-job { display: inline-flex; align-items: center; gap: 0.4em; color: var(--text); white-space: nowrap; font-size: 0.9rem; }
+  .bp-job:hover { color: var(--link); }
+  .bp-icon {
+    display: inline-flex; align-items: center; justify-content: center; flex: none;
+    width: 1.35em; height: 1.35em; border-radius: 50%; font-size: 0.85em; font-weight: 800;
+    border: 2px solid currentColor; line-height: 1;
+  }
+  .bp-icon.green { color: var(--green-dot); }
+  .bp-icon.orange { color: var(--orange-dot); }
+  .bp-icon.red { color: var(--red-dot); }
+  .bp-icon.blue { color: var(--link); }
+  .bp-icon.grey { color: var(--grey-dot); }
   @media (max-width: 720px) {
     header h1 .tagline { display: none; }
     header .divider { display: none; }
@@ -349,6 +382,7 @@
     header, .summary { padding-left: 16px; padding-right: 16px; }
     .filters { margin-left: 16px; margin-right: 16px; }
     .table-wrap { padding: 0 16px 24px; }
+    .branch-pipeline { padding: 0 16px 24px; }
   }
 </style>
 </head>
@@ -416,6 +450,7 @@
     <tbody id="list"></tbody>
   </table>
 </div>
+<section class="branch-pipeline" id="branch-pipeline" hidden aria-labelledby="branch-pipeline-title"></section>
 
 <script>
 "use strict";
@@ -426,6 +461,13 @@ const RETENTION_SETTING = "sonar.dbcleaner.daysBeforeDeletingInactiveBranchesAnd
 const DEFAULT_SONAR_RETENTION_DAYS = 5;
 // Clés = detailed_status.group de GitLab ; un groupe absent reste gris.
 const PIPELINE_TONE = { success: "green", "success-with-warnings": "orange", failed: "red" };
+// Pipeline de la branche suivie : icône et teinte de chaque job ou stage, par groupe de statut GitLab.
+const STAGE_ICONS = {
+  success: ["✓", "green"], "success-with-warnings": ["!", "orange"], failed: ["✕", "red"],
+  running: ["↻", "blue"], canceled: ["⊘", "grey"], skipped: ["»", "grey"], manual: ["⚙", "grey"],
+  scheduled: ["◷", "grey"],
+};
+const STAGE_ICON_DEFAULT = ["…", "grey"];
 
 // Retard sur la cible au-delà duquel la durée passe en orange, puis en rouge.
 const BEHIND_ORANGE_HOURS = 12;
@@ -446,7 +488,7 @@ const FRESHNESS_SEGMENTS = 5;
 // Changer SNAPSHOT_VERSION dès que la forme de mrs / signals change : une sauvegarde d'une autre version
 // est ignorée.
 const SNAPSHOT_KEY = "mr-dashboard.snapshot";
-const SNAPSHOT_VERSION = 1;
+const SNAPSHOT_VERSION = 2;
 // Verrou partagé entre onglets : une seule mise à jour automatique à la fois pour tout le navigateur.
 const REFRESH_LOCK = "mr-dashboard.refresh";
 
@@ -524,6 +566,8 @@ const groupClass = key => {
 const state = {
   config: null,
   mrs: [],
+  // undefined tant que rien n'est chargé, null si la branche n'a aucun pipeline.
+  branchPipeline: undefined,
   signals: new Map(),
   sonarPullRequests: new Map(),
   sonarRetentionDays: DEFAULT_SONAR_RETENTION_DAYS,
@@ -654,6 +698,11 @@ const I18N = {
     "empty": "Aucune MR ne correspond aux filtres.",
     "unavailable": "Indisponible",
     "pipeline.none": "Aucun",
+    "branchPipeline.title": p => `Dernier pipeline de ${p.branch}`,
+    "branchPipeline.none": "Aucun pipeline sur cette branche.",
+    "branchPipeline.running": p => `en cours depuis ${p.duration}`,
+    "branchPipeline.durationTitle": "Durée du pipeline",
+    "branchPipeline.ago": p => `il y a ${p.age}`,
     "pipeline.title": p => `Pipeline #${p.id} : ${p.label}`,
     "reason.notApplicable": "Non applicable",
     "reason.pending": "En cours",
@@ -811,6 +860,11 @@ const I18N = {
     "empty": "No MR matches the filters.",
     "unavailable": "Unavailable",
     "pipeline.none": "None",
+    "branchPipeline.title": p => `Latest ${p.branch} pipeline`,
+    "branchPipeline.none": "No pipeline on this branch.",
+    "branchPipeline.running": p => `running for ${p.duration}`,
+    "branchPipeline.durationTitle": "Pipeline duration",
+    "branchPipeline.ago": p => `${p.age} ago`,
     "pipeline.title": p => `Pipeline #${p.id}: ${p.label}`,
     "reason.notApplicable": "Not applicable",
     "reason.pending": "Running",
@@ -1015,7 +1069,7 @@ async function refresh() {
   try {
     state.config ??= (await api("/config")).body;
     $("project").textContent = state.config.gitlabProject;
-    const [mrs, graphqlNodes] = await Promise.all([
+    const [mrs, { nodes: graphqlNodes, branchPipeline }] = await Promise.all([
       gitlabAll(`${projectPath()}/merge_requests?state=opened`),
       loadGraphqlMergeRequests(report),
       loadSonarPullRequests(report),
@@ -1025,9 +1079,11 @@ async function refresh() {
       mr.diffStats = mr.graphql?.diffStatsSummary;
     }
     snapshot.mrs = mrs;
+    snapshot.branchPipeline = branchPipeline;
     snapshot.signals = new Map(mrs.map(mr => [mr.iid, { loading: true }]));
     if (initial) {
       state.mrs = snapshot.mrs;
+      state.branchPipeline = snapshot.branchPipeline;
       state.signals = snapshot.signals;
       populateFilterOptions();
       render();
@@ -1058,6 +1114,7 @@ async function refresh() {
 
 function applySnapshot(snapshot) {
   state.mrs = snapshot.mrs;
+  state.branchPipeline = snapshot.branchPipeline;
   state.signals = snapshot.signals;
   state.refreshedAt = snapshot.at;
   if (!snapshot.initial) {
@@ -1078,6 +1135,7 @@ function saveSnapshot(snapshot) {
       version: SNAPSHOT_VERSION,
       at: snapshot.at.toISOString(),
       mrs: snapshot.mrs,
+      branchPipeline: snapshot.branchPipeline,
       signals: [...snapshot.signals],
     }));
   } catch (ignored) {
@@ -1089,7 +1147,13 @@ function readSnapshot() {
   try {
     const saved = JSON.parse(localStorage.getItem(SNAPSHOT_KEY));
     if (saved?.version !== SNAPSHOT_VERSION) return null;
-    return { at: new Date(saved.at), mrs: saved.mrs, signals: new Map(saved.signals), errors: [] };
+    return {
+      at: new Date(saved.at),
+      mrs: saved.mrs,
+      branchPipeline: saved.branchPipeline,
+      signals: new Map(saved.signals),
+      errors: [],
+    };
   } catch (ignored) {
     forgetSnapshot();
     return null;
@@ -1185,11 +1249,31 @@ const GRAPHQL_MR_FIELDS = `
   resolvableDiscussionsCount
   resolvedDiscussionsCount
   headPipeline { id jobs(retried: false) { nodes { id name status startedAt finishedAt webPath } } }`;
+// Dernier pipeline de la branche suivie, demandé avec la première page seulement.
+const GRAPHQL_BRANCH_PIPELINE = `
+  pipelines(ref: $branch, first: 1) @include(if: $first) {
+    nodes {
+      id path duration createdAt startedAt
+      detailedStatus { text label group }
+      sha(format: SHORT)
+      user { name }
+      commit { title webPath }
+      stages {
+        nodes {
+          name
+          detailedStatus { label group }
+          jobs { nodes { name webPath duration detailedStatus { text group } } }
+        }
+      }
+    }
+  }`;
 
 async function loadGraphqlMergeRequests(report) {
   const nodes = new Map();
-  const query = `query($project: ID!, $after: String) {
+  let branchPipeline = null;
+  const query = `query($project: ID!, $after: String, $branch: String!, $first: Boolean!) {
     project(fullPath: $project) {
+      ${GRAPHQL_BRANCH_PIPELINE}
       mergeRequests(state: opened, first: 100, after: $after) {
         pageInfo { hasNextPage endCursor }
         nodes { ${GRAPHQL_MR_FIELDS} }
@@ -1199,17 +1283,24 @@ async function loadGraphqlMergeRequests(report) {
   try {
     let after = null;
     do {
-      const variables = JSON.stringify({ project: state.config.gitlabProject, after });
+      const variables = JSON.stringify({
+        project: state.config.gitlabProject,
+        after,
+        branch: state.config.pipelineBranch ?? "",
+        first: !after && Boolean(state.config.pipelineBranch),
+      });
       const { body } = await api(`/graphql?query=${encodeURIComponent(query)}&variables=${encodeURIComponent(variables)}`);
       if (body.errors?.length) throw new Error(body.errors.map(e => e.message).join(", "));
+      if (!after) branchPipeline = body.data.project.pipelines?.nodes[0] ?? null;
       const page = body.data.project.mergeRequests;
       for (const mr of page.nodes) nodes.set(mr.iid, mr);
       after = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
     } while (after);
   } catch (error) {
     report(t("error.graphql", { message: error.message }));
+    branchPipeline = { error: error.message };
   }
-  return nodes;
+  return { nodes, branchPipeline };
 }
 
 async function loadSonarPullRequests(report) {
@@ -1896,6 +1987,7 @@ function matches(mr) {
 // ---------- Rendu ----------
 
 function render() {
+  renderBranchPipeline();
   syncControlsFromState();
   renderHeaders();
   const column = COLUMNS.find(c => c.key === state.filters.sort) ?? COLUMNS.find(c => c.key === DEFAULT_SORT.key);
@@ -2127,6 +2219,56 @@ function behindCell(mr) {
     ? `<div class="${tone}" title="${escapeHtml(t("behind.since", { date: formatDate(behind.since), next: behind.next, base: behind.base }))}">(${compactDuration(Date.now() - new Date(behind.since))})</div>`
     : `<div class="muted" title="${escapeHtml(behind.error ?? "")}">(?)</div>`;
   return count + since;
+}
+
+// ---------- Pipeline de la branche suivie ----------
+
+function renderBranchPipeline() {
+  const section = $("branch-pipeline");
+  const branch = state.config?.pipelineBranch;
+  const p = state.branchPipeline;
+  section.hidden = !branch || p === undefined;
+  if (section.hidden) return;
+  const title = `<h2 id="branch-pipeline-title">${t("branchPipeline.title", { branch: `<code>${escapeHtml(branch)}</code>` })}</h2>`;
+  if (!p) {
+    section.innerHTML = `${title}<div class="bp-card muted">${escapeHtml(t("branchPipeline.none"))}</div>`;
+    return;
+  }
+  if (p.error) {
+    section.innerHTML = `${title}<div class="bp-card">${pill("grey", t("unavailable"), p.error)}</div>`;
+    return;
+  }
+  const web = path => state.config.gitlabWeb + path;
+  const link = (path, html, cls = "") => `<a${cls ? ` class="${cls}"` : ""} href="${escapeHtml(web(path))}" target="_blank" rel="noopener">${html}</a>`;
+  const id = p.id.split("/").pop();
+  const status = p.detailedStatus;
+  let duration = null;
+  if (p.duration) duration = compactDuration(p.duration * 1000);
+  else if (p.startedAt) duration = t("branchPipeline.running", { duration: compactDuration(Date.now() - new Date(p.startedAt)) });
+  const head = [
+    pill(PIPELINE_TONE[status.group] ?? "grey", status.text, t("pipeline.title", { id, label: status.label }), web(p.path)),
+    link(p.path, `#${escapeHtml(id)}`),
+    p.commit ? link(p.commit.webPath, escapeHtml(p.commit.title), "bp-commit") : "",
+    `<code>${escapeHtml(p.sha)}</code>`,
+    p.user ? `<span class="muted">${escapeHtml(p.user.name)}</span>` : "",
+    duration ? `<span class="muted" title="${escapeHtml(t("branchPipeline.durationTitle"))}">⏱ ${escapeHtml(duration)}</span>` : "",
+    `<span class="muted" title="${escapeHtml(formatDate(p.createdAt))}">${escapeHtml(t("branchPipeline.ago", { age: compactDuration(Date.now() - new Date(p.createdAt)) }))}</span>`,
+  ].filter(Boolean).join("");
+  const stages = p.stages.nodes.map(stage => {
+    const jobs = stage.jobs.nodes.map(job => {
+      const jobDuration = job.duration ? ` — ${compactDuration(job.duration * 1000)}` : "";
+      const tooltip = escapeHtml(`${job.name} : ${job.detailedStatus.text}${jobDuration}`);
+      return `<li><a class="bp-job" href="${escapeHtml(web(job.webPath))}" target="_blank" rel="noopener" title="${tooltip}">${stageIcon(job.detailedStatus.group)}${escapeHtml(job.name)}</a></li>`;
+    }).join("");
+    const tooltip = escapeHtml(`${stage.name} : ${stage.detailedStatus.label}`);
+    return `<li class="bp-stage"><div class="bp-stage-head" title="${tooltip}">${stageIcon(stage.detailedStatus.group)}${escapeHtml(stage.name)}</div><ul class="bp-jobs">${jobs}</ul></li>`;
+  }).join("");
+  section.innerHTML = `${title}<div class="bp-card"><div class="bp-head">${head}</div><ol class="bp-stages">${stages}</ol></div>`;
+}
+
+function stageIcon(group) {
+  const [icon, tone] = STAGE_ICONS[group] ?? STAGE_ICON_DEFAULT;
+  return `<span class="bp-icon ${tone}" aria-hidden="true">${icon}</span>`;
 }
 
 // ---------- Utilitaires ----------

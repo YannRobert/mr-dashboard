@@ -54,6 +54,7 @@ DEFAULT_GLAB_CONFIG = os.path.expanduser("~/.config/glab-cli/config.yml")
 DEFAULT_SONAR_JOB = "sonar"
 DEFAULT_PIT_JOB = "mutation_test"
 DEFAULT_PIT_MARKER = "<!-- mutation-report -->"
+DEFAULT_PIPELINE_BRANCH = "develop"
 # Content-Encoding : les réponses gzip sont relayées telles quelles, le navigateur les décompresse.
 FORWARDED_RESPONSE_HEADERS = ("Content-Encoding", "X-Total", "X-Total-Pages", "X-Next-Page", "X-Page", "X-Per-Page")
 UPSTREAM_TIMEOUT_S = 30
@@ -377,6 +378,7 @@ def main():
     parser.add_argument("--sonar-job", default=DEFAULT_SONAR_JOB, help="nom du job CI qui lance l'analyse Sonar")
     parser.add_argument("--pit-job", default=DEFAULT_PIT_JOB, help="nom du job CI qui publie la note de mutation")
     parser.add_argument("--pit-marker", default=DEFAULT_PIT_MARKER, help="début de la note de mutation publiée sur la MR")
+    parser.add_argument("--pipeline-branch", default=DEFAULT_PIPELINE_BRANCH, help="branche dont le dernier pipeline s'affiche sous le tableau des MR")
     parser.add_argument(
         "--repo-dir",
         type=Path,
@@ -405,6 +407,7 @@ def main():
             "sonarJob": args.sonar_job,
             "pitJob": args.pit_job,
             "pitMarker": args.pit_marker,
+            "pipelineBranch": args.pipeline_branch,
             "signalsCommand": signals_command(args),
             "orcaEnabled": orca is not None,
         },
