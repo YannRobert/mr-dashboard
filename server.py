@@ -15,14 +15,16 @@ relayé, et le serveur n'écoute que sur 127.0.0.1.
 Seule écriture : POST /orca/fix ouvre dans Orca une session Claude Code avec le prompt de correction
 d'une MR (cf. orca_launcher.py), quand le serveur tourne dans WSL et qu'Orca est installé.
 
-Usage :
-    python3 scripts/mr-dashboard/server.py            # puis http://localhost:8765
-    python3 scripts/mr-dashboard/server.py --port 9100
-    python3 scripts/mr-dashboard/server.py --gitlab-project <groupe/projet> --sonar-project <clé> \
-        --repo-dir <clone local du projet> --port 8766   # un autre projet GitLab
+Usage — d'ordinaire via scripts/mr-dashboard/start.sh, qui lit ces options dans un profil
+(scripts/mr-dashboard/profiles/<nom>.conf) :
+    python3 scripts/mr-dashboard/server.py --gitlab-project <groupe/projet> --pipeline-branch <branche> \
+        --sonar-project <clé> --sonar-job <job> --pit-job <job> --pit-marker <marqueur> \
+        --repo-dir <clone local du projet> --port 8766
+    python3 scripts/mr-dashboard/server.py --gitlab-project <groupe/projet> --pipeline-branch main \
+        --no-sonar --no-pit   # projet sans analyse Sonar ni mutation testing
 
-Le projet suivi n'est pas forcément ce dépôt : scripts/mr-dashboard/start.sh lit ces options dans un
-profil (scripts/mr-dashboard/profiles/<nom>.conf).
+Aucun défaut ne désigne un projet : une option oubliée arrête le serveur au lieu de lui faire suivre
+un autre dépôt que prévu.
 
 Prérequis (les mêmes que scripts/mr-ci-signals.py) :
     SONAR_TOKEN dans l'environnement — sans lui, les pastilles Sonar restent grises.
@@ -31,6 +33,7 @@ Prérequis (les mêmes que scripts/mr-ci-signals.py) :
 import argparse
 import base64
 import http.client
+import importlib.util
 import json
 import os
 import shlex
@@ -46,15 +49,9 @@ from orca_launcher import OrcaError, OrcaLauncher
 
 DEFAULT_PORT = 8765
 DEFAULT_SONAR_HOST = "https://sonarqube.example.com"
-DEFAULT_SONAR_PROJECT = "group-project"
 DEFAULT_GITLAB_HOST = "https://gitlab.example.com"
-DEFAULT_GITLAB_PROJECT = "group/project"
 DEFAULT_GITLAB_TOKEN_HOST = "gitlab.example.com"
 DEFAULT_GLAB_CONFIG = os.path.expanduser("~/.config/glab-cli/config.yml")
-DEFAULT_SONAR_JOB = "sonar"
-DEFAULT_PIT_JOB = "mutation_test"
-DEFAULT_PIT_MARKER = "<!-- mutation-report -->"
-DEFAULT_PIPELINE_BRANCH = "develop"
 # Content-Encoding : les réponses gzip sont relayées telles quelles, le navigateur les décompresse.
 FORWARDED_RESPONSE_HEADERS = ("Content-Encoding", "X-Total", "X-Total-Pages", "X-Next-Page", "X-Page", "X-Per-Page")
 UPSTREAM_TIMEOUT_S = 30
@@ -65,6 +62,7 @@ UPSTREAM_IDLE_S = 30
 UPSTREAM_MAX_IDLE_PER_HOST = 12
 STATIC_DIR = Path(__file__).resolve().parent
 SIGNALS_SCRIPT = STATIC_DIR.parent / "mr-ci-signals.py"
+REPO_ROOT = STATIC_DIR.parent.parent
 # Exigé sur le POST : un en-tête non standard impose au navigateur un preflight CORS, que ce serveur
 # ne satisfait jamais — une page tierce ne peut donc pas déclencher l'action.
 ACTION_HEADER = "X-MR-Dashboard"
@@ -356,33 +354,73 @@ def make_handler(
 def signals_command(args):
     """Commande de vérification citée par le prompt de correction, exécutée depuis --repo-dir.
 
-    Ce dépôt suivi : chemin relatif et options par défaut, pour un prompt lisible. Un autre projet :
-    chemin absolu de ce script, que son clone n'a pas, et options du projet suivi.
+    Depuis ce dépôt : chemin relatif, et seulement les options qui s'écartent des défauts du script,
+    pour un prompt lisible. Depuis un autre clone, qui n'a pas ce script : son chemin absolu.
     """
-    if args.gitlab_project == DEFAULT_GITLAB_PROJECT and args.sonar_project == DEFAULT_SONAR_PROJECT:
-        return "python3 scripts/mr-ci-signals.py"
-    return (
-        f"python3 {shlex.quote(str(SIGNALS_SCRIPT))}"
-        f" --gitlab-host {shlex.quote(args.gitlab_host)}"
-        f" --gitlab-project {shlex.quote(quote(args.gitlab_project, safe=''))}"
-        f" --sonar-host {shlex.quote(args.sonar_host)}"
-        f" --sonar-project {shlex.quote(args.sonar_project)}"
-    )
+    defaults = signals_script_defaults()
+    options = [
+        ("--gitlab-host", args.gitlab_host, defaults.DEFAULT_GITLAB_HOST),
+        ("--gitlab-project", quote(args.gitlab_project, safe=""), defaults.DEFAULT_GITLAB_PROJECT),
+    ]
+    if args.no_sonar:
+        options.append(("--no-sonar", None, None))
+    else:
+        options += [
+            ("--sonar-host", args.sonar_host, defaults.DEFAULT_SONAR_HOST),
+            ("--sonar-project", args.sonar_project, defaults.DEFAULT_SONAR_PROJECT),
+        ]
+    if args.no_pit:
+        options.append(("--no-pit", None, None))
+    else:
+        options.append(("--pit-marker", args.pit_marker, defaults.MUTATION_MARKER))
+    in_this_repo = args.repo_dir.resolve().is_relative_to(REPO_ROOT)
+    command = ["python3", "scripts/mr-ci-signals.py" if in_this_repo else shlex.quote(str(SIGNALS_SCRIPT))]
+    for name, value, default in options:
+        if value is None:
+            command.append(name)
+        elif not in_this_repo or value != default:
+            command += [name, shlex.quote(value)]
+    return " ".join(command)
+
+
+def signals_script_defaults():
+    spec = importlib.util.spec_from_file_location("mr_ci_signals", SIGNALS_SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def require_unless_disabled(
+        parser,
+        args,
+        switch,
+        names
+):
+    """Un indicateur suivi exige toutes ses options ; --no-<indicateur> déclare qu'il n'existe pas."""
+    if getattr(args, switch):
+        return
+    missing = [name for name in names if not getattr(args, name)]
+    if missing:
+        options = ", ".join("--" + name.replace("_", "-") for name in missing)
+        parser.error(f"{options} requis, ou --{switch.replace('_', '-')} si le projet n'a pas cet indicateur")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--sonar-host", default=DEFAULT_SONAR_HOST)
-    parser.add_argument("--sonar-project", default=DEFAULT_SONAR_PROJECT)
+    parser.add_argument("--sonar-project", help="clé du projet Sonar")
+    parser.add_argument("--no-sonar", action="store_true", help="projet sans analyse Sonar : colonnes et indicateurs masqués")
     parser.add_argument("--gitlab-host", default=DEFAULT_GITLAB_HOST)
-    parser.add_argument("--gitlab-project", default=DEFAULT_GITLAB_PROJECT, help="chemin du projet, non encodé")
+    parser.add_argument("--gitlab-project", required=True, help="chemin du projet, non encodé")
     parser.add_argument("--gitlab-token-host", default=DEFAULT_GITLAB_TOKEN_HOST)
     parser.add_argument("--glab-config", default=DEFAULT_GLAB_CONFIG)
-    parser.add_argument("--sonar-job", default=DEFAULT_SONAR_JOB, help="nom du job CI qui lance l'analyse Sonar")
-    parser.add_argument("--pit-job", default=DEFAULT_PIT_JOB, help="nom du job CI qui publie la note de mutation")
-    parser.add_argument("--pit-marker", default=DEFAULT_PIT_MARKER, help="début de la note de mutation publiée sur la MR")
-    parser.add_argument("--pipeline-branch", default=DEFAULT_PIPELINE_BRANCH, help="branche dont le dernier pipeline s'affiche sous le tableau des MR")
+    parser.add_argument("--sonar-job", help="nom du job CI qui lance l'analyse Sonar")
+    parser.add_argument("--pit-job", help="nom du job CI qui publie la note de mutation")
+    parser.add_argument("--pit-marker", help="début de la note de mutation publiée sur la MR")
+    parser.add_argument("--no-pit", action="store_true", help="projet sans mutation testing : colonne et indicateurs masqués")
+    parser.add_argument("--pipeline-branch", required=True, help="branche dont le dernier pipeline s'affiche sous le tableau des MR")
+    parser.add_argument("--target-branch", help="branche cible filtrée à l'ouverture de la page (défaut : --pipeline-branch)")
     parser.add_argument(
         "--repo-dir",
         type=Path,
@@ -391,10 +429,22 @@ def main():
     )
     parser.add_argument("--quiet", action="store_true", help="ne pas journaliser chaque requête")
     args = parser.parse_args()
+    require_unless_disabled(
+        parser,
+        args,
+        "no_sonar",
+        ("sonar_project", "sonar_job")
+    )
+    require_unless_disabled(
+        parser,
+        args,
+        "no_pit",
+        ("pit_job", "pit_marker")
+    )
 
     sonar_token = os.environ.get("SONAR_TOKEN")
     orca = OrcaLauncher.detect(args.repo_dir)
-    if not sonar_token:
+    if not sonar_token and not args.no_sonar:
         print("⚠️  SONAR_TOKEN absent : les pastilles Sonar resteront grises.")
     settings = {
         "gitlab_host": args.gitlab_host,
@@ -407,11 +457,14 @@ def main():
             "gitlabProject": args.gitlab_project,
             "sonarWeb": args.sonar_host,
             "sonarProject": args.sonar_project,
-            "sonarEnabled": bool(sonar_token),
+            "sonarTracked": not args.no_sonar,
+            "sonarEnabled": not args.no_sonar and bool(sonar_token),
             "sonarJob": args.sonar_job,
+            "pitTracked": not args.no_pit,
             "pitJob": args.pit_job,
             "pitMarker": args.pit_marker,
             "pipelineBranch": args.pipeline_branch,
+            "targetBranch": args.target_branch or args.pipeline_branch,
             "signalsCommand": signals_command(args),
             "orcaEnabled": orca is not None,
         },

@@ -32,18 +32,34 @@ if [[ ! -f "$profile_file" ]]; then
     exit 1
 fi
 
-PORT= GITLAB_PROJECT= SONAR_PROJECT= SONAR_JOB= PIT_JOB= PIT_MARKER= PIPELINE_BRANCH= REPO_DIR=
+PORT= GITLAB_PROJECT= SONAR_ENABLED= SONAR_PROJECT= SONAR_JOB= PIT_ENABLED= PIT_JOB= PIT_MARKER= PIPELINE_BRANCH= TARGET_BRANCH= REPO_DIR=
 # shellcheck source=profiles/back.conf
 source "$profile_file"
+
+for switch in SONAR_ENABLED PIT_ENABLED; do
+    if [[ "${!switch}" != true && "${!switch}" != false ]]; then
+        echo "$switch doit valoir true ou false dans $profile_file (valeur : '${!switch}')." >&2
+        exit 1
+    fi
+done
 
 args=()
 [[ -n "$PORT" ]] && args+=(--port "$PORT")
 [[ -n "$GITLAB_PROJECT" ]] && args+=(--gitlab-project "$GITLAB_PROJECT")
-[[ -n "$SONAR_PROJECT" ]] && args+=(--sonar-project "$SONAR_PROJECT")
-[[ -n "$SONAR_JOB" ]] && args+=(--sonar-job "$SONAR_JOB")
-[[ -n "$PIT_JOB" ]] && args+=(--pit-job "$PIT_JOB")
-[[ -n "$PIT_MARKER" ]] && args+=(--pit-marker "$PIT_MARKER")
+if [[ "$SONAR_ENABLED" == false ]]; then
+    args+=(--no-sonar)
+else
+    [[ -n "$SONAR_PROJECT" ]] && args+=(--sonar-project "$SONAR_PROJECT")
+    [[ -n "$SONAR_JOB" ]] && args+=(--sonar-job "$SONAR_JOB")
+fi
+if [[ "$PIT_ENABLED" == false ]]; then
+    args+=(--no-pit)
+else
+    [[ -n "$PIT_JOB" ]] && args+=(--pit-job "$PIT_JOB")
+    [[ -n "$PIT_MARKER" ]] && args+=(--pit-marker "$PIT_MARKER")
+fi
 [[ -n "$PIPELINE_BRANCH" ]] && args+=(--pipeline-branch "$PIPELINE_BRANCH")
+[[ -n "$TARGET_BRANCH" ]] && args+=(--target-branch "$TARGET_BRANCH")
 [[ -n "$REPO_DIR" ]] && args+=(--repo-dir "${REPO_DIR/#\~/$HOME}")
 args+=("$@")
 
@@ -70,7 +86,7 @@ if [[ -n "$(ss -Hltn "sport = :$port")" ]]; then
     exit 1
 fi
 
-if [[ -z "${SONAR_TOKEN:-}" ]]; then
+if [[ "$SONAR_ENABLED" == true && -z "${SONAR_TOKEN:-}" ]]; then
     echo "⚠️  SONAR_TOKEN absent : les pastilles Sonar resteront grises." >&2
 fi
 

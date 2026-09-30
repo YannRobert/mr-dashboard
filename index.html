@@ -627,8 +627,20 @@ const COLUMN_GROUPS = [
   { key: "target", columns: ["behind"] },
   { key: "time", columns: ["last_commit", "activity", "created"] },
 ];
+// Sonar et PIT ne sont suivis que si le profil les déclare : un projet qui n'en a pas n'en voit pas les
+// colonnes. Config pas encore lue, ou servie par un serveur antérieur à ces options : tout est suivi.
+const sonarTracked = () => state.config?.sonarTracked !== false;
+const pitTracked = () => state.config?.pitTracked !== false;
+const UNTRACKED_COLUMNS = { issues: () => !sonarTracked(), coverage: () => !sonarTracked(), pit: () => !pitTracked() };
+const shownColumns = () => COLUMNS.filter(c => !UNTRACKED_COLUMNS[c.key]?.());
+const shownGroups = () => {
+  const shown = new Set(shownColumns().map(c => c.key));
+  return COLUMN_GROUPS
+    .map(g => ({ ...g, columns: g.columns.filter(key => shown.has(key)) }))
+    .filter(g => g.columns.length);
+};
 const groupClass = key => {
-  const group = COLUMN_GROUPS.find(g => g.columns.includes(key));
+  const group = shownGroups().find(g => g.columns.includes(key));
   return group ? `g-${group.key}${group.columns[0] === key && group.key !== "mr" ? " g-first" : ""}` : "";
 };
 
@@ -1114,7 +1126,8 @@ function readFiltersFromUrl() {
   const p = new URLSearchParams(location.search);
   return {
     q: p.get("q") || "",
-    target: p.has("target") ? p.get("target") : "develop",
+    // null : branche cible par défaut du profil, connue une fois la config lue (cf. applyDefaultTarget).
+    target: p.has("target") ? p.get("target") : null,
     author: p.get("author") || "",
     reviewer: p.get("reviewer") || "",
     assignee: p.get("assignee") || "",
@@ -1126,11 +1139,18 @@ function readFiltersFromUrl() {
   };
 }
 
+// Serveur antérieur à --target-branch : la branche du pipeline affiché en tient lieu.
+const defaultTarget = () => state.config?.targetBranch ?? state.config?.pipelineBranch ?? null;
+
+function applyDefaultTarget() {
+  if (state.filters.target === null && defaultTarget() !== null) state.filters.target = defaultTarget();
+}
+
 function writeFiltersToUrl() {
   const f = state.filters;
   const p = new URLSearchParams();
   if (f.q) p.set("q", f.q);
-  if (f.target !== "develop") p.set("target", f.target);
+  if (f.target !== null && f.target !== defaultTarget()) p.set("target", f.target);
   if (f.author) p.set("author", f.author);
   if (f.reviewer) p.set("reviewer", f.reviewer);
   if (f.assignee) p.set("assignee", f.assignee);
@@ -1256,6 +1276,7 @@ async function refresh() {
       state.config = (await api("/config")).body;
       state.configLoaded = true;
     }
+    applyDefaultTarget();
     snapshot.config = state.config;
     refreshBuildHistoryIfStale();
     $("project").textContent = state.config.gitlabProject;
@@ -1309,6 +1330,7 @@ function applySnapshot(snapshot) {
   if (!state.configLoaded && snapshot.config) {
     state.config = snapshot.config;
     $("project").textContent = state.config.gitlabProject;
+    applyDefaultTarget();
   }
   state.mrs = snapshot.mrs;
   state.branchPipeline = snapshot.branchPipeline;
@@ -1555,7 +1577,7 @@ async function runLimited(items, limit, task) {
 async function loadSignals(mr) {
   const signals = {};
   const graphql = mr.graphql;
-  const pitNoteLoading = loadPitNote(mr);
+  const pitNoteLoading = pitTracked() ? loadPitNote(mr) : Promise.resolve(undefined);
   // Attendue plus bas : évite un rejet non traité si le détail échoue avant.
   pitNoteLoading.catch(() => {});
   const basics = Promise.all([
@@ -1580,8 +1602,8 @@ async function loadSignals(mr) {
     ]);
     signals.behind = behind;
     const job = name => jobs.filter(j => j.name === name).sort((a, b) => b.id - a.id)[0];
-    signals.pit = pitSignal(job(state.config.pitJob), pitNote, mr);
-    signals.sonar = await sonarSignal(job(state.config.sonarJob), mr);
+    if (pitTracked()) signals.pit = pitSignal(job(state.config.pitJob), pitNote, mr);
+    if (sonarTracked()) signals.sonar = await sonarSignal(job(state.config.sonarJob), mr);
   } catch (error) {
     signals.error = error.message;
   }
@@ -1981,7 +2003,7 @@ function problemsOf(mr) {
     if (sonar.coverage != null && sonar.coverage < 100) {
       add("sonar.coverage", Math.ceil(100 - sonar.coverage), t("problem.coverage", { value: formatPercent(sonar.coverage) }));
     }
-  } else {
+  } else if (sonarTracked()) {
     unknown.add("sonar");
   }
   const pit = s.pit;
@@ -1989,7 +2011,7 @@ function problemsOf(mr) {
     if (pit.survived > 0) add("pit.survived", pit.survived, t("problem.pitSurvived", { n: pit.survived }));
     if (pit.noCoverage > 0) add("pit.noCoverage", pit.noCoverage, t("problem.pitNoCoverage", { n: pit.noCoverage }));
     if (pit.errors > 0) add("pit.errors", pit.errors, t("problem.pitErrors", { n: pit.errors }));
-  } else {
+  } else if (pitTracked()) {
     unknown.add("pit");
   }
   if (!s.threads || s.threads.error) unknown.add("threads");
@@ -2236,7 +2258,8 @@ function render() {
   renderBranchPipeline();
   syncControlsFromState();
   renderHeaders();
-  const column = COLUMNS.find(c => c.key === state.filters.sort) ?? COLUMNS.find(c => c.key === DEFAULT_SORT.key);
+  const columns = shownColumns();
+  const column = columns.find(c => c.key === state.filters.sort) ?? COLUMNS.find(c => c.key === DEFAULT_SORT.key);
   const visible = state.mrs.filter(matches).sort(comparator(column, state.filters.dir));
   const withAlerts = state.mrs.filter(mr => alertScore(mr) > 0).length;
   const loading = [...state.signals.values()].filter(s => s.loading).length;
@@ -2246,7 +2269,7 @@ function render() {
     (loading ? `<span class="stat loading">${t("summary.loading", { n: loading })}</span>` : "");
   $("list").innerHTML = visible.length
     ? visible.map(renderRow).join("")
-    : `<tr><td class="empty" colspan="${COLUMNS.length}">${escapeHtml(t("empty"))}</td></tr>`;
+    : `<tr><td class="empty" colspan="${columns.length}">${escapeHtml(t("empty"))}</td></tr>`;
 }
 
 // Une valeur inconnue (signal en chargement, absent, en erreur) est toujours rangée en fin de liste,
@@ -2265,10 +2288,10 @@ function comparator(column, dir) {
 }
 
 function renderHeaders() {
-  const groups = COLUMN_GROUPS
+  const groups = shownGroups()
     .map(g => `<th colspan="${g.columns.length}" class="g-${g.key}${g.key !== "mr" ? " g-first" : ""}"><span>${g.key === "mr" ? "&nbsp;" : escapeHtml(t(`group.${g.key}`))}</span></th>`)
     .join("");
-  $("headers").innerHTML = `<tr class="groups">${groups}</tr><tr class="columns">` + COLUMNS.map(column => {
+  $("headers").innerHTML = `<tr class="groups">${groups}</tr><tr class="columns">` + shownColumns().map(column => {
     const active = state.filters.sort === column.key;
     const arrow = active ? (state.filters.dir === "asc" ? "▲" : "▼") : "";
     const ariaSort = active ? ` aria-sort="${state.filters.dir === "asc" ? "ascending" : "descending"}"` : "";
@@ -2279,7 +2302,7 @@ function renderHeaders() {
 }
 
 function renderRow(mr) {
-  return `<tr${isStalled(mr) ? ' class="stalled"' : ""}>${COLUMNS.map(c => `<td class="${c.cellClass ?? ""} ${groupClass(c.key)}">${c.render(mr)}</td>`).join("")}</tr>`;
+  return `<tr${isStalled(mr) ? ' class="stalled"' : ""}>${shownColumns().map(c => `<td class="${c.cellClass ?? ""} ${groupClass(c.key)}">${c.render(mr)}</td>`).join("")}</tr>`;
 }
 
 function authorCell(mr) {
@@ -2343,6 +2366,16 @@ function qualityDefects(s) {
   return defects;
 }
 
+// Seuls les indicateurs que le projet suivi produit : exiger un mutant de moins d'un projet sans PIT
+// lancerait le correcteur sur un objectif impossible.
+function perfectIndicators() {
+  return [
+    "pipeline vert",
+    ...(sonarTracked() ? ["0 issue Sonar", "Quality Gate OK", "100 % de couverture du nouveau code"] : []),
+    ...(pitTracked() ? ["aucun mutant survivant, non couvert ou en erreur"] : []),
+  ];
+}
+
 function aiFixPrompt(mr) {
   const s = signalsOf(mr);
   const defects = qualityDefects(s);
@@ -2376,8 +2409,7 @@ function aiFixPrompt(mr) {
   parts.push(
     "Une fois les modifications effectuées et poussées sur la branche de la MR, attends la fin du pipeline puis vérifie " +
     `l'état des indicateurs avec \`${state.config.signalsCommand} ${mr.iid}\`. Tant que les indicateurs ne sont pas ` +
-    "parfaits (pipeline vert, 0 issue Sonar, Quality Gate OK, 100 % de couverture du nouveau code, aucun mutant " +
-    "survivant, non couvert ou en erreur), effectue les corrections nécessaires."
+    `parfaits (${perfectIndicators().join(", ")}), effectue les corrections nécessaires."`
   );
   return parts.join("\n\n");
 }
@@ -2510,7 +2542,8 @@ function activityOf(
   const byDate = (a, b) => a.date - b.date;
   const isMerge = c => (c.parent_ids?.length ?? 1) > 1;
   // La note de mutation est un rapport d'outil, même quand elle est publiée sous un compte personnel.
-  const isToolReport = n => BOT_USERNAME.test(n.author.username) || n.body?.startsWith(state.config.pitMarker);
+  const pitMarker = pitTracked() ? state.config.pitMarker : "";
+  const isToolReport = n => BOT_USERNAME.test(n.author.username) || Boolean(pitMarker && n.body?.startsWith(pitMarker));
   const comments = notes
     .filter(n => !n.system && !isToolReport(n))
     .map(n => ({ date: new Date(n.created_at).getTime(), author: n.author.name, mine: n.author.username === mr.author.username }))
