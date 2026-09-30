@@ -2276,8 +2276,13 @@ function stageIcon(group) {
 // « - 4 heures » plutôt que « il y a 4 heures » : la colonne se lit plus vite sans le préfixe répété.
 const durationFormat = unit => new Intl.NumberFormat(locale(), { style: "unit", unit, unitDisplay: "long" });
 
+// Entre 1 h et 3 h, « 2h59 » : l'heure arrondie de Intl (« 3 heures ») y écrase une précision encore utile.
 function relative(iso) {
   const seconds = (new Date(iso) - Date.now()) / 1000;
+  const minutes = Math.floor(Math.abs(seconds) / 60);
+  if (minutes >= 60 && minutes < 180) {
+    return `${seconds < 0 ? "- " : ""}${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, "0")}`;
+  }
   const steps = [[60, "second"], [60, "minute"], [24, "hour"], [Infinity, "day"]];
   let value = seconds;
   for (const [size, unit] of steps) {
