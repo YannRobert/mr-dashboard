@@ -266,8 +266,8 @@
   .mr-cell .labels { margin-top: 0.35rem; }
 
   .author { display: inline-flex; align-items: center; gap: 0.5em; white-space: nowrap; }
-  /* Prénom et nom sur deux lignes, coupés au premier espace : la colonne n'a que la largeur du plus long. */
-  .author .author-name { display: flex; flex-direction: column; line-height: 1.2; }
+  /* Prénom et nom sur deux lignes, coupés au premier espace : la colonne n'a que la largeur du plus long, le plus court centré sur lui. */
+  .author .author-name { display: flex; flex-direction: column; align-items: center; text-align: center; line-height: 1.2; }
   .avatar {
     width: 1.8em; height: 1.8em; border-radius: 50%; flex: none;
     display: grid; place-items: center; font-size: 0.78rem; font-weight: 700; color: #fff;
