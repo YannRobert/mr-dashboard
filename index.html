@@ -614,7 +614,7 @@ const I18N = {
     "dialog.orca.failed": p => `Échec : ${p.message}`,
     "error.load": p => `Chargement des MR impossible : ${p.message}`,
     "error.sonar": p => `Sonar injoignable : ${p.message}`,
-    "error.diffStats": p => `Taille des MR indisponible : ${p.message}`,
+    "error.graphql": p => `Taille, commits, approbations et threads des MR indisponibles (GraphQL) : ${p.message}`,
     "error.behindCount": "nombre de commits de retard non fourni par GitLab",
     "group.review": "Revue",
     "group.quality": "Qualité",
@@ -771,7 +771,7 @@ const I18N = {
     "dialog.orca.failed": p => `Failed: ${p.message}`,
     "error.load": p => `Could not load the MRs: ${p.message}`,
     "error.sonar": p => `Sonar unreachable: ${p.message}`,
-    "error.diffStats": p => `MR sizes unavailable: ${p.message}`,
+    "error.graphql": p => `MR sizes, commits, approvals and threads unavailable (GraphQL): ${p.message}`,
     "error.behindCount": "number of commits behind not provided by GitLab",
     "group.review": "Review",
     "group.quality": "Quality",
@@ -1013,12 +1013,15 @@ async function refresh() {
   try {
     state.config ??= (await api("/config")).body;
     $("project").textContent = state.config.gitlabProject;
-    const [mrs, diffStats] = await Promise.all([
+    const [mrs, graphqlNodes] = await Promise.all([
       gitlabAll(`${projectPath()}/merge_requests?state=opened`),
-      loadDiffStats(report),
+      loadGraphqlMergeRequests(report),
       loadSonarPullRequests(report),
     ]);
-    for (const mr of mrs) mr.diffStats = diffStats.get(String(mr.iid));
+    for (const mr of mrs) {
+      mr.graphql = graphqlNodes.get(String(mr.iid));
+      mr.diffStats = mr.graphql?.diffStatsSummary;
+    }
     snapshot.mrs = mrs;
     snapshot.signals = new Map(mrs.map(mr => [mr.iid, { loading: true }]));
     if (initial) {
@@ -1168,15 +1171,26 @@ function renderFreshness() {
   ).join("");
 }
 
-// Taille de chaque MR ouverte : l'API REST ne donne que le nombre de fichiers, GraphQL donne aussi
-// les lignes ajoutées et supprimées, pour toutes les MR en une requête par page de 100.
-async function loadDiffStats(report) {
-  const stats = new Map();
+// Une seule requête GraphQL, par page de 100, pour toutes les MR ouvertes : la taille (l'API REST ne
+// donne que le nombre de fichiers), les commits, les approbations, les compteurs de threads et les jobs
+// du pipeline de tête — autant de requêtes REST en moins pour chaque MR.
+const GRAPHQL_MR_FIELDS = `
+  iid
+  diffStatsSummary { additions deletions fileCount }
+  commitCount
+  commits(first: 1) { nodes { committedDate } }
+  approvedBy { nodes { name } }
+  resolvableDiscussionsCount
+  resolvedDiscussionsCount
+  headPipeline { id jobs(retried: false) { nodes { id name status startedAt finishedAt webPath } } }`;
+
+async function loadGraphqlMergeRequests(report) {
+  const nodes = new Map();
   const query = `query($project: ID!, $after: String) {
     project(fullPath: $project) {
       mergeRequests(state: opened, first: 100, after: $after) {
         pageInfo { hasNextPage endCursor }
-        nodes { iid diffStatsSummary { additions deletions fileCount } }
+        nodes { ${GRAPHQL_MR_FIELDS} }
       }
     }
   }`;
@@ -1187,13 +1201,13 @@ async function loadDiffStats(report) {
       const { body } = await api(`/graphql?query=${encodeURIComponent(query)}&variables=${encodeURIComponent(variables)}`);
       if (body.errors?.length) throw new Error(body.errors.map(e => e.message).join(", "));
       const page = body.data.project.mergeRequests;
-      for (const mr of page.nodes) stats.set(mr.iid, mr.diffStatsSummary);
+      for (const mr of page.nodes) nodes.set(mr.iid, mr);
       after = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
     } while (after);
   } catch (error) {
-    report(t("error.diffStats", { message: error.message }));
+    report(t("error.graphql", { message: error.message }));
   }
-  return stats;
+  return nodes;
 }
 
 async function loadSonarPullRequests(report) {
@@ -1217,20 +1231,34 @@ async function runLimited(items, limit, task) {
   await Promise.all(workers);
 }
 
+// Tout part en parallèle : le détail de la MR n'attend ni la note PIT ni les commits, et la chaîne
+// détail → retard sur la cible → Sonar fixe seule la durée. Sans données GraphQL (requête en échec),
+// commits, approbations et jobs retombent sur l'API REST ; les threads, eux, sont indisponibles.
 async function loadSignals(mr) {
   const signals = {};
-  // Les discussions portent toutes les notes : elles servent aux threads et à la note PIT.
-  const discussions = gitlabAll(`${projectPath()}/merge_requests/${mr.iid}/discussions`);
-  [signals.commits, signals.threads, signals.approvals] = await Promise.all([loadCommits(mr), loadThreads(discussions), loadApprovals(mr)]);
+  const graphql = mr.graphql;
+  const pitNoteLoading = loadPitNote(mr);
+  // Attendue plus bas : évite un rejet non traité si le détail échoue avant.
+  pitNoteLoading.catch(() => {});
+  const basics = Promise.all([
+    graphql ? graphqlCommits(graphql) : loadCommits(mr),
+    graphqlThreads(graphql),
+    graphql ? graphqlApprovals(graphql) : loadApprovals(mr),
+  ]);
   try {
     const detail = (await api(`/gitlab/${projectPath()}/merge_requests/${mr.iid}?include_diverged_commits_count=true`)).body;
     signals.pipeline = detail.head_pipeline;
+    // Jobs GraphQL retenus seulement s'ils sont bien ceux du pipeline de tête lu à l'instant.
+    const graphqlJobs = signals.pipeline && graphql?.headPipeline?.id === `gid://gitlab/Ci::Pipeline/${signals.pipeline.id}`
+      ? graphql.headPipeline.jobs.nodes.map(restJob)
+      : null;
     const [behind, jobs, pitNote] = await Promise.all([
       loadBehind(mr, detail.diverged_commits_count),
-      signals.pipeline
+      graphqlJobs ? Promise.resolve(graphqlJobs)
+      : signals.pipeline
         ? gitlabAll(`${projectPath()}/pipelines/${signals.pipeline.id}/jobs?include_retried=false`)
         : Promise.resolve([]),
-      discussions.then(latestPitNote),
+      pitNoteLoading,
     ]);
     signals.behind = behind;
     const job = name => jobs.filter(j => j.name === name).sort((a, b) => b.id - a.id)[0];
@@ -1239,30 +1267,30 @@ async function loadSignals(mr) {
   } catch (error) {
     signals.error = error.message;
   }
+  [signals.commits, signals.threads, signals.approvals] = await basics;
   return signals;
 }
 
-// Date du dernier commit = committed_date le plus récent, et non l'updated_at de la MR, que GitLab
-// bouge aussi sur un commentaire, un label ou une approbation.
-// Un thread = une discussion résoluble (commentaire de revue, diff note) ; les notes système et
-// les commentaires simples non résolubles ne comptent pas, comme dans le compteur de GitLab.
-async function loadThreads(discussionsLoading) {
-  try {
-    const discussions = await discussionsLoading;
-    const resolvable = discussions.filter(d => d.notes.some(n => n.resolvable));
-    const unresolved = resolvable.filter(d => d.notes.some(n => n.resolvable && !n.resolved));
-    return { total: resolvable.length, unresolved: unresolved.length };
-  } catch (error) {
-    return { error: error.message };
-  }
+// Un thread = une discussion résoluble (commentaire de revue, diff note) : les compteurs de GitLab,
+// qui ignorent notes système et commentaires simples, sans charger les discussions.
+function graphqlThreads(node) {
+  if (!node) return { error: t("error.graphql", { message: "—" }) };
+  return { total: node.resolvableDiscussionsCount, unresolved: node.resolvableDiscussionsCount - node.resolvedDiscussionsCount };
 }
 
-// Note PIT la plus récemment mise à jour, comme le faisait la lecture des notes triées par updated_at.
-function latestPitNote(discussions) {
-  return discussions
-    .flatMap(d => d.notes)
-    .filter(n => n.body.startsWith(state.config.pitMarker))
-    .sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0];
+// Note PIT sans charger toutes les discussions : notes les plus récemment mises à jour d'abord, lues
+// page par page jusqu'à la première qui porte le marqueur.
+async function loadPitNote(mr) {
+  let page = "1";
+  while (page) {
+    const { body, headers } = await api(
+      `/gitlab/${projectPath()}/merge_requests/${mr.iid}/notes?sort=desc&order_by=updated_at&per_page=20&page=${page}`
+    );
+    const note = body.find(n => n.body.startsWith(state.config.pitMarker));
+    if (note) return note;
+    page = headers.get("X-Next-Page");
+  }
+  return undefined;
 }
 
 // Le retard court depuis que la cible a bougé après le dernier commit commun : c'est la date de son
@@ -1294,6 +1322,29 @@ async function loadApprovals(mr) {
   } catch (error) {
     return { error: error.message };
   }
+}
+
+// Date du dernier commit = committed_date le plus récent, et non l'updated_at de la MR, que GitLab
+// bouge aussi sur un commentaire, un label ou une approbation. Le premier commit renvoyé par GraphQL
+// est la tête de la branche, dont la date de commit est la plus récente.
+function graphqlCommits(node) {
+  return { count: node.commitCount, lastDate: node.commits.nodes[0]?.committedDate ?? null };
+}
+
+function graphqlApprovals(node) {
+  return { names: node.approvedBy.nodes.map(a => a.name) };
+}
+
+// Job GraphQL remis dans la forme de l'API REST, que lisent pitSignal et sonarSignal.
+function restJob(job) {
+  return {
+    id: Number(job.id.split("/").pop()),
+    name: job.name,
+    status: job.status.toLowerCase(),
+    started_at: job.startedAt,
+    finished_at: job.finishedAt,
+    web_url: state.config.gitlabWeb + job.webPath,
+  };
 }
 
 async function loadCommits(mr) {
