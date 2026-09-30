@@ -213,7 +213,14 @@
   }
   /* Deux lignes d'en-tête collantes : la seconde se colle sous la première, de hauteur fixe. */
   table.mrs thead tr.groups th { top: 0; height: 2rem; padding-top: 0.35rem; padding-bottom: 0.1rem; border-bottom: 0; }
-  table.mrs thead tr.columns th { top: 2rem; }
+  /* Libellés centrés, sur deux lignes à coupure fixe (\n dans la traduction) pour les plus longs :
+     la colonne n'est plus élargie par son en-tête. Padding réduit pour que la ligne d'en-tête ne
+     grandisse que d'une demi-ligne. */
+  table.mrs thead tr.columns th { top: 2rem; text-align: center; padding-top: 0.4rem; padding-bottom: 0.4rem; line-height: 1.2; }
+  table.mrs thead tr.columns th button { justify-content: center; }
+  /* Pendant de la place réservée à la flèche de tri, à droite : le libellé reste au centre exact. */
+  table.mrs thead tr.columns th button::before { content: ""; font-size: 0.8em; min-width: 0.8em; }
+  table.mrs thead tr.columns th .col-label { text-align: center; }
   table.mrs thead tr.groups th:first-child { border-top-left-radius: 0.8rem; }
   table.mrs thead tr.groups th:last-child { border-top-right-radius: 0.8rem; }
   table.mrs thead tr.groups th span {
@@ -615,11 +622,11 @@ const I18N = {
     "col.author": "Auteur",
     "col.commits": "Commits",
     "col.comments": "Commentaires",
-    "col.threads": "Threads non résolus",
+    "col.threads": "Threads\nnon résolus",
     "col.pipeline": "Pipeline",
-    "col.issues": "Issues Sonar",
+    "col.issues": "Issues\nSonar",
     "col.coverage": "Couverture",
-    "col.pit": "Mutants restants",
+    "col.pit": "Mutants\nrestants",
     "col.behind": "Commits",
     "col.last_commit": "Dernier commit",
     "col.activity": "Activité",
@@ -772,11 +779,11 @@ const I18N = {
     "col.author": "Author",
     "col.commits": "Commits",
     "col.comments": "Comments",
-    "col.threads": "Unresolved threads",
+    "col.threads": "Unresolved\nthreads",
     "col.pipeline": "Pipeline",
-    "col.issues": "Sonar issues",
+    "col.issues": "Sonar\nissues",
     "col.coverage": "Coverage",
-    "col.pit": "Remaining mutants",
+    "col.pit": "Remaining\nmutants",
     "col.behind": "Commits",
     "col.last_commit": "Last commit",
     "col.activity": "Activity",
@@ -1874,7 +1881,7 @@ function renderHeaders() {
     const ariaSort = active ? ` aria-sort="${state.filters.dir === "asc" ? "ascending" : "descending"}"` : "";
     const help = has(`help.${column.key}`) ? t(`help.${column.key}`) : "";
     return `<th class="${column.num ? "num" : ""} ${groupClass(column.key)}"${ariaSort} title="${escapeHtml(help)}">` +
-      `<button type="button" data-sort="${column.key}">${escapeHtml(t(`col.${column.key}`))}<span class="arrow">${arrow}</span></button></th>`;
+      `<button type="button" data-sort="${column.key}"><span class="col-label">${escapeHtml(t(`col.${column.key}`)).replace(/\n/g, "<br>")}</span><span class="arrow">${arrow}</span></button></th>`;
   }).join("") + "</tr>";
 }
 
