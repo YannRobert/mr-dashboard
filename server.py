@@ -320,6 +320,10 @@ def make_handler(
             for name in FORWARDED_RESPONSE_HEADERS:
                 if upstream_headers.get(name) is not None:
                     self.send_header(name, upstream_headers[name])
+            # Heure du serveur amont, sous un autre nom : send_response vient d'écrire le Date de ce
+            # serveur-ci, c'est-à-dire l'heure du PC, dont la page cherche justement l'écart.
+            if upstream_headers.get("Date") is not None:
+                self.send_header("X-Upstream-Date", upstream_headers["Date"])
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)

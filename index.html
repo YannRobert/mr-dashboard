@@ -619,6 +619,8 @@ const state = {
   notifier: false,
   me: null,
   notifications: new Map(),
+  // Encadrement de l'écart entre l'horloge de GitLab et celle du PC, en ms (cf. observeGitlabClock).
+  gitlabClock: { min: -Infinity, max: Infinity },
 };
 
 const $ = id => document.getElementById(id);
@@ -638,6 +640,7 @@ const I18N = {
     "refresh": "Rafraîchir",
     "refreshed.time": p => `mis à jour à ${p.time}`,
     "refreshed.date": p => `le ${p.date} (il y a ${p.age})`,
+    "clock.offset": p => `Horloge du PC ${p.ahead ? "en avance" : "en retard"} de ${p.seconds} s sur GitLab (± ${p.margin} s), compensée dans les âges affichés`,
     "progress": p => `mise à jour… ${p.done}/${p.total}`,
     "failed": p => `échec de la mise à jour à ${p.time}`,
     "autoRefresh": "Actualisation auto",
@@ -806,6 +809,7 @@ const I18N = {
     "refresh": "Refresh",
     "refreshed.time": p => `updated at ${p.time}`,
     "refreshed.date": p => `on ${p.date} (${p.age} ago)`,
+    "clock.offset": p => `PC clock ${p.seconds} s ${p.ahead ? "ahead of" : "behind"} GitLab (± ${p.margin} s), compensated in the displayed ages`,
     "progress": p => `updating… ${p.done}/${p.total}`,
     "failed": p => `update failed at ${p.time}`,
     "autoRefresh": "Auto-refresh",
@@ -1007,7 +1011,7 @@ function renderStatus() {
     // Deux lignes à coupure fixe : laissé au retour à la ligne automatique, le texte se coupait à un
     // endroit différent selon la largeur de l'en-tête.
     parts.push(`<span>${escapeHtml(t("refreshed.time", { time: time(at) }))}</span>`);
-    parts.push(`<span>${escapeHtml(t("refreshed.date", { date: at.toLocaleDateString(locale()), age: compactDuration(Date.now() - at) }))}</span>`);
+    parts.push(`<span title="${escapeHtml(clockTitle())}">${escapeHtml(t("refreshed.date", { date: at.toLocaleDateString(locale()), age: compactDuration(Date.now() - at) }))}</span>`);
   }
   // Progression et échec partagent la troisième ligne : l'échec précédent est remplacé par la
   // progression le temps de la nouvelle tentative, qui dira s'il persiste.
@@ -1070,10 +1074,18 @@ async function api(
   path,
   init
 ) {
+  const sentAt = Date.now();
   const response = await fetch(
     path,
     init
   );
+  if (path.startsWith("/gitlab/") || path.startsWith("/graphql?")) {
+    observeGitlabClock(
+      sentAt,
+      Date.now(),
+      response.headers.get("X-Upstream-Date")
+    );
+  }
   if (!response.ok) {
     let message = response.statusText;
     try {
@@ -1086,6 +1098,54 @@ async function api(
   }
   return { body: await response.json(), headers: response.headers };
 }
+
+// Les dates de GitLab (commits, pipelines…) sont à son heure : comparées à l'horloge du PC, un écart
+// entre les deux vieillirait ou rajeunirait chaque âge affiché — jusqu'à un commit « dans le futur ».
+// GitLab a daté sa réponse entre l'envoi et la réception de la requête, à la seconde près (en-tête
+// Date tronqué) : chaque réponse encadre donc l'écart, et l'intersection des encadrements le cerne
+// bien mieux que la seconde au fil des requêtes d'une actualisation.
+function observeGitlabClock(
+  sentAt,
+  receivedAt,
+  header
+) {
+  const date = header ? Date.parse(header) : NaN;
+  if (Number.isNaN(date)) return;
+  const low = date - receivedAt;
+  const high = date + 1000 - sentAt;
+  const clock = state.gitlabClock;
+  // Encadrements disjoints : l'horloge du PC a sauté (veille, resynchronisation) — seule la dernière
+  // mesure vaut encore.
+  if (Math.max(clock.min, low) > Math.min(clock.max, high)) {
+    clock.min = low;
+    clock.max = high;
+  } else {
+    clock.min = Math.max(clock.min, low);
+    clock.max = Math.min(clock.max, high);
+  }
+}
+
+// 0 tant qu'aucune réponse de GitLab n'est arrivée : l'heure du PC, faute de mieux.
+function gitlabClockOffset() {
+  const clock = state.gitlabClock;
+  return Number.isFinite(clock.min) ? (clock.min + clock.max) / 2 : 0;
+}
+
+function clockTitle() {
+  const clock = state.gitlabClock;
+  if (!Number.isFinite(clock.min)) return "";
+  const offset = gitlabClockOffset();
+  return t("clock.offset", {
+    ahead: offset < 0,
+    seconds: (Math.abs(offset) / 1000).toFixed(1),
+    margin: ((clock.max - clock.min) / 2000).toFixed(1),
+  });
+}
+
+// Heure de GitLab, à laquelle comparer toute date qu'il fournit. Les minuteries propres à la page
+// (cycle d'actualisation, caches, notifications) restent sur Date.now() : elles ne comparent l'heure
+// du PC qu'à elle-même.
+const gitlabNow = () => Date.now() + gitlabClockOffset();
 
 async function gitlabAll(path) {
   const results = [];
@@ -1570,7 +1630,7 @@ function missingSonarAnalysis(job, mr) {
     return { state: "pending", reason: "pending", info: { status: job.status }, link: job.web_url };
   }
   const retentionMs = state.sonarRetentionDays * 24 * 3600 * 1000;
-  if (job.status === "success" && job.finished_at && Date.now() - new Date(job.finished_at) > retentionMs) {
+  if (job.status === "success" && job.finished_at && gitlabNow() - new Date(job.finished_at) > retentionMs) {
     return { state: "absent", reason: "expired", info: { days: state.sonarRetentionDays }, link: job.web_url };
   }
   return { state: "absent", reason: "notFound", info: { status: job.status }, link: job.web_url };
@@ -1728,7 +1788,7 @@ function lastCommitDate(mr) {
 
 function commitAgeHours(mr) {
   const iso = lastCommitDate(mr);
-  return iso ? (Date.now() - new Date(iso)) / 3600000 : null;
+  return iso ? (gitlabNow() - new Date(iso)) / 3600000 : null;
 }
 
 function lastCommitCell(mr) {
@@ -1828,12 +1888,12 @@ function problemsOf(mr) {
   if (behind?.count == null) {
     unknown.add("behind");
   } else if (behind.count > 0 && behind.since) {
-    const hours = (Date.now() - new Date(behind.since)) / 3600000;
+    const hours = (gitlabNow() - new Date(behind.since)) / 3600000;
     if (hours > BEHIND_ORANGE_HOURS) {
       add("behind", hours > BEHIND_RED_HOURS ? 2 : 1, t("problem.behind", {
         n: behind.count,
         target: mr.target_branch,
-        duration: compactDuration(Date.now() - new Date(behind.since)),
+        duration: compactDuration(gitlabNow() - new Date(behind.since)),
       }));
     }
   }
@@ -2288,10 +2348,10 @@ function behindCell(mr) {
   if (!behind || behind.count == null) return `<span class="muted" title="${escapeHtml(behind?.error ?? s.error ?? "")}">?</span>`;
   if (behind.count === 0) return `<span class="ok good" title="${escapeHtml(t("behind.upToDate", { target: mr.target_branch }))}">${escapeHtml(t("behind.none"))}</span>`;
   const count = `<div title="${escapeHtml(t("behind.count", { n: behind.count, target: mr.target_branch }))}">${escapeHtml(t("behind.late", { n: behind.count }))}</div>`;
-  const hours = behind.since ? (Date.now() - new Date(behind.since)) / 3600000 : 0;
+  const hours = behind.since ? (gitlabNow() - new Date(behind.since)) / 3600000 : 0;
   const tone = hours > BEHIND_RED_HOURS ? "late-red" : hours > BEHIND_ORANGE_HOURS ? "late-orange" : "muted";
   const since = behind.since
-    ? `<div class="${tone}" title="${escapeHtml(t("behind.since", { date: formatDate(behind.since), next: behind.next, base: behind.base }))}">(${compactDuration(Date.now() - new Date(behind.since))})</div>`
+    ? `<div class="${tone}" title="${escapeHtml(t("behind.since", { date: formatDate(behind.since), next: behind.next, base: behind.base }))}">(${compactDuration(gitlabNow() - new Date(behind.since))})</div>`
     : `<div class="muted" title="${escapeHtml(behind.error ?? "")}">(?)</div>`;
   return count + since;
 }
@@ -2480,7 +2540,7 @@ function pipelineCard(
   const status = p.detailedStatus;
   let duration = null;
   if (p.duration) duration = compactDuration(p.duration * 1000);
-  else if (p.startedAt) duration = t("branchPipeline.running", { duration: compactDuration(Date.now() - new Date(p.startedAt)) });
+  else if (p.startedAt) duration = t("branchPipeline.running", { duration: compactDuration(gitlabNow() - new Date(p.startedAt)) });
   const head = [
     label,
     pill(PIPELINE_TONE[status.group] ?? "grey", status.text, t("pipeline.title", { id, label: status.label }), web(p.path)),
@@ -2489,7 +2549,7 @@ function pipelineCard(
     `<code>${escapeHtml(p.sha)}</code>`,
     p.user ? `<span class="muted">${escapeHtml(p.user.name)}</span>` : "",
     duration ? `<span class="muted" title="${escapeHtml(t("branchPipeline.durationTitle"))}">⏱ ${escapeHtml(duration)}</span>` : "",
-    `<span class="muted" title="${escapeHtml(formatDate(p.createdAt))}">${escapeHtml(t("branchPipeline.ago", { age: compactDuration(Date.now() - new Date(p.createdAt)) }))}</span>`,
+    `<span class="muted" title="${escapeHtml(formatDate(p.createdAt))}">${escapeHtml(t("branchPipeline.ago", { age: compactDuration(gitlabNow() - new Date(p.createdAt)) }))}</span>`,
   ].filter(Boolean).join("");
   const stages = p.stages.nodes.map(stage => {
     const jobs = stage.jobs.nodes.map(job => {
@@ -2531,7 +2591,7 @@ const durationFormat = unit => new Intl.NumberFormat(locale(), { style: "unit", 
 
 // Entre 1 h et 3 h, « 2h59 » : l'heure arrondie de Intl (« 3 heures ») y écrase une précision encore utile.
 function relative(iso) {
-  const seconds = (new Date(iso) - Date.now()) / 1000;
+  const seconds = (new Date(iso) - gitlabNow()) / 1000;
   const minutes = Math.floor(Math.abs(seconds) / 60);
   if (minutes >= 60 && minutes < 180) {
     return `${seconds < 0 ? "- " : ""}${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, "0")}`;
