@@ -355,6 +355,7 @@
   .bp-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.8rem; }
   .bp-head .bp-commit { font-weight: 600; color: var(--text); }
   .bp-head .muted, .bp-head code { color: var(--muted); }
+  .bp-builds { margin-top: 0.5rem; color: var(--muted); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
   .bp-stages { display: flex; list-style: none; margin: 0.9rem 0 0; padding: 0; }
   .bp-stage { min-width: 8.5rem; padding-right: 1.2rem; }
   .bp-stage-head { display: flex; align-items: center; gap: 0.4em; font-weight: 600; margin-bottom: 0.4rem; }
@@ -703,6 +704,10 @@ const I18N = {
     "branchPipeline.running": p => `en cours depuis ${p.duration}`,
     "branchPipeline.durationTitle": "Durée du pipeline",
     "branchPipeline.ago": p => `il y a ${p.age}`,
+    "branchPipeline.builds": p => `Durée d'un build sur ${p.branch} : ${p.range}`,
+    "branchPipeline.buildsRange": p => `entre ${p.min} et ${p.max}`,
+    "branchPipeline.buildsSame": p => p.duration,
+    "branchPipeline.buildsTitle": p => `${p.count} derniers pipelines réussis : ${p.durations}`,
     "pipeline.title": p => `Pipeline #${p.id} : ${p.label}`,
     "reason.notApplicable": "Non applicable",
     "reason.pending": "En cours",
@@ -865,6 +870,10 @@ const I18N = {
     "branchPipeline.running": p => `running for ${p.duration}`,
     "branchPipeline.durationTitle": "Pipeline duration",
     "branchPipeline.ago": p => `${p.age} ago`,
+    "branchPipeline.builds": p => `Build time on ${p.branch}: ${p.range}`,
+    "branchPipeline.buildsRange": p => `between ${p.min} and ${p.max}`,
+    "branchPipeline.buildsSame": p => p.duration,
+    "branchPipeline.buildsTitle": p => `Last ${p.count} successful pipelines: ${p.durations}`,
     "pipeline.title": p => `Pipeline #${p.id}: ${p.label}`,
     "reason.notApplicable": "Not applicable",
     "reason.pending": "Running",
@@ -1249,8 +1258,13 @@ const GRAPHQL_MR_FIELDS = `
   resolvableDiscussionsCount
   resolvedDiscussionsCount
   headPipeline { id jobs(retried: false) { nodes { id name status startedAt finishedAt webPath } } }`;
-// Dernier pipeline de la branche suivie, demandé avec la première page seulement.
+// Dernier pipeline de la branche suivie, et durées de ses derniers pipelines réussis (les échecs,
+// interrompus en cours de route, fausseraient la fourchette) ; demandés avec la première page seulement.
+const SUCCESSFUL_BUILDS_SAMPLE = 5;
 const GRAPHQL_BRANCH_PIPELINE = `
+  successfulPipelines: pipelines(ref: $branch, status: SUCCESS, first: ${SUCCESSFUL_BUILDS_SAMPLE}) @include(if: $first) {
+    nodes { duration }
+  }
   pipelines(ref: $branch, first: 1) @include(if: $first) {
     nodes {
       id path duration createdAt startedAt
@@ -1291,7 +1305,7 @@ async function loadGraphqlMergeRequests(report) {
       });
       const { body } = await api(`/graphql?query=${encodeURIComponent(query)}&variables=${encodeURIComponent(variables)}`);
       if (body.errors?.length) throw new Error(body.errors.map(e => e.message).join(", "));
-      if (!after) branchPipeline = body.data.project.pipelines?.nodes[0] ?? null;
+      if (!after) branchPipeline = withBuildDurations(body.data.project);
       const page = body.data.project.mergeRequests;
       for (const mr of page.nodes) nodes.set(mr.iid, mr);
       after = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
@@ -2223,6 +2237,13 @@ function behindCell(mr) {
 
 // ---------- Pipeline de la branche suivie ----------
 
+function withBuildDurations(project) {
+  const pipeline = project.pipelines?.nodes[0];
+  if (!pipeline) return null;
+  const buildDurations = (project.successfulPipelines?.nodes ?? []).map(node => node.duration).filter(Boolean);
+  return { ...pipeline, buildDurations };
+}
+
 function renderBranchPipeline() {
   const section = $("branch-pipeline");
   const branch = state.config?.pipelineBranch;
@@ -2263,7 +2284,23 @@ function renderBranchPipeline() {
     const tooltip = escapeHtml(`${stage.name} : ${stage.detailedStatus.label}`);
     return `<li class="bp-stage"><div class="bp-stage-head" title="${tooltip}">${stageIcon(stage.detailedStatus.group)}${escapeHtml(stage.name)}</div><ul class="bp-jobs">${jobs}</ul></li>`;
   }).join("");
-  section.innerHTML = `${title}<div class="bp-card"><div class="bp-head">${head}</div><ol class="bp-stages">${stages}</ol></div>`;
+  section.innerHTML = `${title}<div class="bp-card"><div class="bp-head">${head}</div>${buildDurationsLine(p.buildDurations)}<ol class="bp-stages">${stages}</ol></div>`;
+}
+
+function buildDurationsLine(durations) {
+  if (!durations?.length) return "";
+  const min = Math.min(...durations);
+  const max = Math.max(...durations);
+  const range = min === max
+    ? t("branchPipeline.buildsSame", { duration: minutesSeconds(min) })
+    : t("branchPipeline.buildsRange", { min: minutesSeconds(min), max: minutesSeconds(max) });
+  const tooltip = t("branchPipeline.buildsTitle", { count: durations.length, durations: durations.map(minutesSeconds).join(", ") });
+  return `<div class="bp-builds" title="${escapeHtml(tooltip)}">${escapeHtml(t("branchPipeline.builds", { branch: state.config.pipelineBranch, range }))}</div>`;
+}
+
+// 612 s ⇒ « 10'12" ».
+function minutesSeconds(seconds) {
+  return `${Math.floor(seconds / 60)}'${String(Math.round(seconds % 60)).padStart(2, "0")}"`;
 }
 
 function stageIcon(group) {
