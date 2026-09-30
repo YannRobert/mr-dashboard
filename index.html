@@ -352,6 +352,8 @@
     <div class="freshness" id="freshness" hidden aria-hidden="true"></div>
   </div>
   <span class="divider" aria-hidden="true"></span>
+  <label class="auto" id="notify-control" data-i18n-title="notify.title"><input type="checkbox" id="notify" autocomplete="off"> <span data-i18n="notify">Notifications</span></label>
+  <span class="divider" aria-hidden="true"></span>
   <div class="lang-switch" role="group" aria-label="Langue" data-i18n-aria-label="lang.group">
     <button type="button" data-lang="fr" lang="fr" title="Français">FR</button>
     <button type="button" data-lang="en" lang="en" title="English">EN</button>
@@ -433,6 +435,15 @@ const SNAPSHOT_VERSION = 1;
 // Verrou partagé entre onglets : une seule mise à jour automatique à la fois pour tout le navigateur.
 const REFRESH_LOCK = "mr-dashboard.refresh";
 
+// Notifications système. Un problème nouveau (ou qui s'aggrave) est notifié une fois ; sur une MR dont on
+// est l'auteur, la notification reste affichée et revient toutes les OWN_REMINDER_MS tant que le problème
+// n'est pas traité. Un seul onglet notifie : celui qui détient NOTIFIER_LOCK.
+const NOTIFY_KEY = "mr-dashboard.notify";
+const NOTIFIED_KEY = "mr-dashboard.notified";
+const NOTIFIER_LOCK = "mr-dashboard.notifier";
+const OWN_REMINDER_MS = 15 * 60 * 1000;
+const REMINDER_CHECK_MS = 60 * 1000;
+
 const LANGS = ["fr", "en"];
 const LOCALES = { fr: "fr-FR", en: "en-GB" };
 
@@ -510,6 +521,10 @@ const state = {
   autoRefresh: readAutoRefresh(),
   autoRefreshTimer: null,
   cycleStart: null,
+  notify: false,
+  notifier: false,
+  me: null,
+  notifications: new Map(),
 };
 
 const $ = id => document.getElementById(id);
@@ -532,6 +547,26 @@ const I18N = {
     "failed": p => `échec de la mise à jour à ${p.time}`,
     "autoRefresh": "Actualisation auto",
     "autoRefresh.title": () => `Recharge les données toutes les ${AUTO_REFRESH_MS / 60000} minutes`,
+    "notify": "Notifications",
+    "notify.title": () => `Notifie les problèmes des MR ; sur tes MR, la notification reste affichée et revient toutes les ${OWN_REMINDER_MS / 60000} minutes tant que le problème n'est pas traité`,
+    "notify.denied": "Notifications refusées par le navigateur : autorise-les pour ce site puis recoche la case.",
+    "notify.enabled": "🔔 Notifications MisteR Dashboard activées",
+    "notify.enabledBody": "Si tu vois ce message, les notifications arrivent bien jusqu'au bureau.",
+    "notify.me": p => `Impossible d'identifier l'utilisateur GitLab courant : ${p.message}`,
+    "notify.own": p => `🔴 Ta MR !${p.iid} a ${p.n} problème${plural(p.n)} à traiter`,
+    "notify.other": p => `🟠 MR !${p.iid} de ${p.author}`,
+    "notify.others": p => `🟠 ${p.n} MR d'autres développeurs ont des problèmes`,
+    "notify.othersBody": "Les prochains problèmes seront notifiés MR par MR.",
+    "problem.conflicts": "Conflits avec la branche cible",
+    "problem.pipeline": p => `Pipeline #${p.id} en échec`,
+    "problem.sonarIssues": p => `${p.n} issue${plural(p.n)} Sonar`,
+    "problem.gate": p => `Quality Gate Sonar ${p.gate}`,
+    "problem.coverage": p => `Couverture du nouveau code à ${p.value}`,
+    "problem.pitSurvived": p => `${p.n} mutant${plural(p.n)} PIT survivant${plural(p.n)}`,
+    "problem.pitNoCoverage": p => `${p.n} mutant${plural(p.n)} PIT non couvert${plural(p.n)}`,
+    "problem.pitErrors": p => `${p.n} mutant${plural(p.n)} PIT en erreur`,
+    "problem.threads": p => `${p.n} thread${plural(p.n)} non résolu${plural(p.n)}`,
+    "problem.behind": p => `${p.n} commit${plural(p.n)} de retard sur ${p.target} depuis ${p.duration}`,
     "search.placeholder": "Rechercher : titre, !iid, branche, ticket…",
     "search.aria": "Recherche",
     "filter.target": "Branche cible",
@@ -665,6 +700,26 @@ const I18N = {
     "failed": p => `update failed at ${p.time}`,
     "autoRefresh": "Auto-refresh",
     "autoRefresh.title": () => `Reloads the data every ${AUTO_REFRESH_MS / 60000} minutes`,
+    "notify": "Notifications",
+    "notify.title": () => `Notifies MR problems; on your own MRs, the notification stays on screen and comes back every ${OWN_REMINDER_MS / 60000} minutes until the problem is dealt with`,
+    "notify.denied": "Notifications blocked by the browser: allow them for this site, then tick the box again.",
+    "notify.enabled": "🔔 MisteR Dashboard notifications enabled",
+    "notify.enabledBody": "If you can see this, notifications do reach the desktop.",
+    "notify.me": p => `Unable to identify the current GitLab user: ${p.message}`,
+    "notify.own": p => `🔴 Your MR !${p.iid} has ${p.n} problem${pluralEn(p.n)} to fix`,
+    "notify.other": p => `🟠 MR !${p.iid} by ${p.author}`,
+    "notify.others": p => `🟠 ${p.n} MRs from other developers have problems`,
+    "notify.othersBody": "Further problems will be notified MR by MR.",
+    "problem.conflicts": "Conflicts with the target branch",
+    "problem.pipeline": p => `Pipeline #${p.id} failed`,
+    "problem.sonarIssues": p => `${p.n} Sonar issue${pluralEn(p.n)}`,
+    "problem.gate": p => `Sonar Quality Gate ${p.gate}`,
+    "problem.coverage": p => `New code coverage at ${p.value}`,
+    "problem.pitSurvived": p => `${p.n} surviving PIT mutant${pluralEn(p.n)}`,
+    "problem.pitNoCoverage": p => `${p.n} uncovered PIT mutant${pluralEn(p.n)}`,
+    "problem.pitErrors": p => `${p.n} PIT mutant${pluralEn(p.n)} in error`,
+    "problem.threads": p => `${p.n} unresolved thread${pluralEn(p.n)}`,
+    "problem.behind": p => `${p.n} commit${pluralEn(p.n)} behind ${p.target} for ${p.duration}`,
     "search.placeholder": "Search: title, !iid, branch, ticket…",
     "search.aria": "Search",
     "filter.target": "Target branch",
@@ -979,6 +1034,7 @@ function applySnapshot(snapshot) {
   populateFilterOptions();
   render();
   renderStatus();
+  notifyProblems();
 }
 
 // Sauvegarde best effort : stockage plein ou bloqué ⇒ on retire l'ancienne plutôt que de rejouer plus tard
@@ -1460,6 +1516,216 @@ function alertScore(mr) {
   return score;
 }
 
+// ---------- Notifications ----------
+
+// Problèmes d'une MR, chacun avec une gravité : il est « nouveau » s'il n'était pas notifié ou si sa gravité
+// a augmenté. Un signal inconnu (en erreur, pas encore analysé) garde les problèmes déjà notifiés pour sa
+// catégorie, pour ne pas les renotifier quand il redevient lisible.
+function problemsOf(mr) {
+  const s = signalsOf(mr);
+  const problems = [];
+  const unknown = new Set();
+  const add = (key, severity, text) => problems.push({ key, severity, text });
+  if (mr.has_conflicts) add("conflicts", 1, t("problem.conflicts"));
+  if (s.pipeline?.status === "failed") add("pipeline", 1, t("problem.pipeline", { id: s.pipeline.id }));
+  if (sonarUsable(s.sonar)) {
+    const sonar = s.sonar;
+    if (sonar.issues > 0) add("sonar.issues", sonar.issues, t("problem.sonarIssues", { n: sonar.issues }));
+    if (sonar.gate && sonar.gate !== "OK") add("sonar.gate", 1, t("problem.gate", { gate: sonar.gate }));
+    if (sonar.coverage != null && sonar.coverage < 100) {
+      add("sonar.coverage", Math.ceil(100 - sonar.coverage), t("problem.coverage", { value: formatPercent(sonar.coverage) }));
+    }
+  } else {
+    unknown.add("sonar");
+  }
+  const pit = s.pit;
+  if (pit?.state === "ok") {
+    if (pit.survived > 0) add("pit.survived", pit.survived, t("problem.pitSurvived", { n: pit.survived }));
+    if (pit.noCoverage > 0) add("pit.noCoverage", pit.noCoverage, t("problem.pitNoCoverage", { n: pit.noCoverage }));
+    if (pit.errors > 0) add("pit.errors", pit.errors, t("problem.pitErrors", { n: pit.errors }));
+  } else {
+    unknown.add("pit");
+  }
+  if (!s.threads || s.threads.error) unknown.add("threads");
+  else if (s.threads.unresolved > 0) add("threads", s.threads.unresolved, t("problem.threads", { n: s.threads.unresolved }));
+  // Retard signalé comme dans la colonne : dès qu'il passe en orange.
+  const behind = s.behind;
+  if (behind?.count == null) {
+    unknown.add("behind");
+  } else if (behind.count > 0 && behind.since) {
+    const hours = (Date.now() - new Date(behind.since)) / 3600000;
+    if (hours > BEHIND_ORANGE_HOURS) {
+      add("behind", hours > BEHIND_RED_HOURS ? 2 : 1, t("problem.behind", {
+        n: behind.count,
+        target: mr.target_branch,
+        duration: compactDuration(Date.now() - new Date(behind.since)),
+      }));
+    }
+  }
+  return { problems, unknown };
+}
+
+// Appelée à chaque nouvelles données et toutes les REMINDER_CHECK_MS, pour les rappels sur ses propres MR.
+// Le premier passage (rien de notifié jusque-là) notifie ses propres MR une par une et résume celles des
+// autres en une seule notification, plutôt qu'une rafale.
+function notifyProblems() {
+  if (!state.notify || !state.notifier || !state.me || Notification.permission !== "granted") return;
+  // Pas de données complètes encore : l'état notifié serait réécrit à vide, et tout renotifié ensuite.
+  if (!state.refreshedAt) return;
+  const notified = readNotified();
+  const first = notified == null;
+  const next = {};
+  const now = Date.now();
+  let othersWithProblems = 0;
+  for (const mr of state.mrs) {
+    const before = notified?.[mr.iid];
+    if (signalsOf(mr).loading) {
+      if (before) next[mr.iid] = before;
+      continue;
+    }
+    const { problems, unknown } = problemsOf(mr);
+    const severities = Object.fromEntries(problems.map(p => [p.key, p.severity]));
+    for (const [key, severity] of Object.entries(before?.problems ?? {})) {
+      if (unknown.has(key.split(".")[0])) severities[key] ??= severity;
+    }
+    if (!Object.keys(severities).length) {
+      closeNotification(mr.iid);
+      continue;
+    }
+    const own = mr.author?.username === state.me;
+    const fresh = problems.some(p => !(p.severity <= (before?.problems?.[p.key] ?? 0)));
+    const reminderDue = own && problems.length > 0 && (!before || now - before.at >= OWN_REMINDER_MS);
+    const show = own ? fresh || reminderDue : fresh && !first;
+    if (!own && fresh && first) othersWithProblems++;
+    next[mr.iid] = { problems: severities, at: show ? now : before?.at ?? now };
+    if (show) showNotification(
+      mr,
+      problems,
+      own
+    );
+  }
+  for (const iid of state.notifications.keys()) {
+    if (!(iid in next)) closeNotification(iid);
+  }
+  saveNotified(next);
+  if (othersWithProblems) {
+    new Notification(t("notify.others", { n: othersWithProblems }), { body: t("notify.othersBody"), tag: "mr-others" });
+  }
+}
+
+// Même tag par MR : une nouvelle notification remplace la précédente au lieu de s'empiler, et renotify la
+// fait réapparaître. Celles de ses propres MR restent affichées jusqu'à ce qu'on les ferme.
+function showNotification(
+  mr,
+  problems,
+  own
+) {
+  const title = own
+    ? t("notify.own", { iid: mr.iid, n: problems.length })
+    : t("notify.other", { iid: mr.iid, author: mr.author?.name ?? "?" });
+  const notification = new Notification(title, {
+    body: [mr.title, ...problems.map(p => `• ${p.text}`)].join("\n"),
+    tag: `mr-${mr.iid}`,
+    renotify: true,
+    requireInteraction: own,
+  });
+  notification.onclick = () => {
+    window.open(mr.web_url, "_blank", "noopener");
+    notification.close();
+  };
+  state.notifications.set(mr.iid, notification);
+}
+
+function closeNotification(iid) {
+  state.notifications.get(iid)?.close();
+  state.notifications.delete(iid);
+}
+
+function readNotified() {
+  try {
+    return JSON.parse(localStorage.getItem(NOTIFIED_KEY));
+  } catch (ignored) {
+    return null;
+  }
+}
+
+function saveNotified(notified) {
+  try {
+    localStorage.setItem(NOTIFIED_KEY, JSON.stringify(notified));
+  } catch (ignored) { /* stockage indisponible : les problèmes seront renotifiés au prochain chargement */ }
+}
+
+function forgetNotified() {
+  try {
+    localStorage.removeItem(NOTIFIED_KEY);
+  } catch (ignored) { /* stockage indisponible : rien à oublier */ }
+}
+
+function readNotify() {
+  try {
+    return localStorage.getItem(NOTIFY_KEY) === "true";
+  } catch (ignored) {
+    return false;
+  }
+}
+
+function saveNotify(enabled) {
+  try {
+    localStorage.setItem(NOTIFY_KEY, String(enabled));
+  } catch (ignored) { /* stockage indisponible : la préférence vaut pour la session */ }
+}
+
+// announce : la case vient d'être cochée. Notification de confirmation, pour vérifier tout de suite que le
+// navigateur et le système laissent passer les notifications, et oubli de ce qui a déjà été notifié, pour
+// que tous les problèmes en cours soient renotifiés — y compris par l'onglet notifiant s'il en est un autre.
+// L'oubli précède saveNotify : l'onglet notifiant relit l'état sur l'événement storage qu'elle déclenche.
+async function setNotify(
+  enabled,
+  announce = false
+) {
+  if (enabled && Notification.permission !== "granted" && await Notification.requestPermission() !== "granted") {
+    showError(t("notify.denied"));
+    enabled = false;
+  }
+  state.notify = enabled;
+  $("notify").checked = enabled;
+  if (enabled && announce) forgetNotified();
+  saveNotify(enabled);
+  if (!enabled) {
+    [...state.notifications.keys()].forEach(closeNotification);
+    return;
+  }
+  if (announce) new Notification(t("notify.enabled"), { body: t("notify.enabledBody"), tag: "mr-enabled" });
+  await loadMe();
+  notifyProblems();
+}
+
+async function loadMe() {
+  if (state.me) return;
+  try {
+    state.me = (await api("/gitlab/user")).body.username;
+  } catch (error) {
+    showError(t("notify.me", { message: error.message }));
+  }
+}
+
+// Élection d'un onglet notifiant : le verrou est gardé tant que l'onglet vit, puis passe au suivant.
+// Sans Web Locks, chaque onglet notifie.
+function electNotifier() {
+  const lead = () => {
+    state.notifier = true;
+    notifyProblems();
+  };
+  if (!navigator.locks) {
+    lead();
+    return;
+  }
+  navigator.locks.request(NOTIFIER_LOCK, () => {
+    lead();
+    return new Promise(() => { /* gardé jusqu'à la fermeture de l'onglet */ });
+  });
+}
+
 // ---------- Filtres ----------
 
 function populateFilterOptions() {
@@ -1834,6 +2100,13 @@ $("autoRefresh").addEventListener("change", e => {
 // N'est émis que dans les autres onglets : celui qui a sauvegardé affiche déjà ces données.
 window.addEventListener("storage", e => {
   if (e.key === SNAPSHOT_KEY) adoptNewerSnapshot();
+  // Suit la case cochée dans un autre onglet, sans resauvegarder ni redemander l'autorisation.
+  if (e.key === NOTIFY_KEY && "Notification" in window) {
+    state.notify = e.newValue === "true" && Notification.permission === "granted";
+    $("notify").checked = state.notify;
+    if (state.notify) loadMe().then(notifyProblems);
+    else [...state.notifications.keys()].forEach(closeNotification);
+  }
 });
 setInterval(renderStatus, 30 * 1000);
 $("ai-copy").addEventListener("click", copyAiPrompt);
@@ -1843,6 +2116,19 @@ $("ai-close").addEventListener("click", () => $("ai-dialog").close());
 applyStaticTexts();
 $("autoRefresh").checked = state.autoRefresh;
 scheduleAutoRefresh();
+if ("Notification" in window) {
+  $("notify").addEventListener("change", e => setNotify(
+    e.target.checked,
+    true
+  ));
+  if (readNotify() && Notification.permission === "granted") setNotify(true);
+  else if (readNotify()) showError(t("notify.denied"));
+  electNotifier();
+  setInterval(notifyProblems, REMINDER_CHECK_MS);
+} else {
+  $("notify-control").previousElementSibling.remove();
+  $("notify-control").remove();
+}
 // Données sauvegardées : affichées tout de suite avec leur âge, puis remplacées d'un bloc par la mise à
 // jour lancée derrière. Sans elles, premier chargement au fil de l'eau.
 const saved = readSnapshot();
