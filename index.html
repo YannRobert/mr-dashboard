@@ -2487,8 +2487,19 @@ if ("Notification" in window) {
 }
 // Données sauvegardées : affichées tout de suite avec leur âge, puis remplacées d'un bloc par la mise à
 // jour lancée derrière. Sans elles, premier chargement au fil de l'eau.
+// Une sauvegarde illisible par cette version de la page (forme d'une version antérieure, données
+// inattendues) est jetée : elle ne doit jamais empêcher la mise à jour de partir.
 const saved = readSnapshot();
-if (saved) applySnapshot(saved);
+if (saved) {
+  try {
+    applySnapshot(saved);
+  } catch (error) {
+    console.error("Sauvegarde du dashboard illisible, ignorée :", error);
+    forgetSnapshot();
+    Object.assign(state, { mrs: [], signals: new Map(), branchPipeline: undefined, refreshedAt: null });
+    if (!state.configLoaded) state.config = null;
+  }
+}
 sharedRefresh();
 </script>
 </body>
