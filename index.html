@@ -101,8 +101,10 @@
   /* Trois zones distinctes, séparées par un filet : état des données, commandes d'actualisation, langue. */
   header .divider { width: 1px; align-self: stretch; background: var(--border); }
   header .status { display: flex; align-items: center; gap: 0.8rem; }
-  header .meta { color: var(--muted); font-size: 0.9rem; text-align: right; line-height: 1.35; }
-  header .meta > span { display: block; }
+  /* Hauteur réservée pour trois lignes (heure, date, progression ou échec) : sans elle, la ligne de
+     progression apparue au rafraîchissement agrandissait l'en-tête et décalait toute la page. */
+  header .meta { color: var(--muted); font-size: 0.9rem; text-align: right; line-height: 1.35; min-height: calc(3 * 1.35em); }
+  header .meta > span { display: block; white-space: nowrap; }
   header .meta .progress { color: var(--accent); }
   header .meta .failed { color: var(--orange-fg); font-weight: 600; }
   header .refresh-controls {
@@ -542,7 +544,8 @@ const I18N = {
     "lang.group": "Langue",
     "refresh.group": "Actualisation",
     "refresh": "Rafraîchir",
-    "refreshed": p => `mis à jour à ${p.time} le ${p.date} (il y a ${p.age})`,
+    "refreshed.time": p => `mis à jour à ${p.time}`,
+    "refreshed.date": p => `le ${p.date} (il y a ${p.age})`,
     "progress": p => `mise à jour… ${p.done}/${p.total}`,
     "failed": p => `échec de la mise à jour à ${p.time}`,
     "autoRefresh": "Actualisation auto",
@@ -695,7 +698,8 @@ const I18N = {
     "lang.group": "Language",
     "refresh.group": "Refresh",
     "refresh": "Refresh",
-    "refreshed": p => `updated at ${p.time} on ${p.date} (${p.age} ago)`,
+    "refreshed.time": p => `updated at ${p.time}`,
+    "refreshed.date": p => `on ${p.date} (${p.age} ago)`,
     "progress": p => `updating… ${p.done}/${p.total}`,
     "failed": p => `update failed at ${p.time}`,
     "autoRefresh": "Auto-refresh",
@@ -880,10 +884,15 @@ function renderStatus() {
   const parts = [];
   const at = state.refreshedAt;
   if (at) {
-    parts.push(`<span>${escapeHtml(t("refreshed", { time: time(at), date: at.toLocaleDateString(locale()), age: compactDuration(Date.now() - at) }))}</span>`);
+    // Deux lignes à coupure fixe : laissé au retour à la ligne automatique, le texte se coupait à un
+    // endroit différent selon la largeur de l'en-tête.
+    parts.push(`<span>${escapeHtml(t("refreshed.time", { time: time(at) }))}</span>`);
+    parts.push(`<span>${escapeHtml(t("refreshed.date", { date: at.toLocaleDateString(locale()), age: compactDuration(Date.now() - at) }))}</span>`);
   }
+  // Progression et échec partagent la troisième ligne : l'échec précédent est remplacé par la
+  // progression le temps de la nouvelle tentative, qui dira s'il persiste.
   if (state.progress) parts.push(`<span class="progress">${escapeHtml(t("progress", state.progress))}</span>`);
-  if (state.lastFailure) {
+  else if (state.lastFailure) {
     parts.push(`<span class="failed" title="${escapeHtml(state.lastFailure.message)}">${escapeHtml(t("failed", { time: time(state.lastFailure.at) }))}</span>`);
   }
   $("refreshed").innerHTML = parts.join("");
