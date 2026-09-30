@@ -253,6 +253,9 @@
     font-size: 0.8rem; background: var(--surface-2); border: 1px solid var(--border);
     border-radius: 4px; padding: 0 5px;
   }
+  .mr-cell .sub .diffstat { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .mr-cell .sub .diffstat .add { color: var(--green-fg); font-weight: 600; }
+  .mr-cell .sub .diffstat .del { color: var(--red-fg); font-weight: 600; }
   .mr-cell .labels { margin-top: 0.35rem; }
 
   .author { display: inline-flex; align-items: center; gap: 0.5em; white-space: nowrap; }
@@ -602,6 +605,7 @@ const I18N = {
     "dialog.orca.failed": p => `Échec : ${p.message}`,
     "error.load": p => `Chargement des MR impossible : ${p.message}`,
     "error.sonar": p => `Sonar injoignable : ${p.message}`,
+    "error.diffStats": p => `Taille des MR indisponible : ${p.message}`,
     "error.behindCount": "nombre de commits de retard non fourni par GitLab",
     "group.review": "Revue",
     "group.quality": "Qualité",
@@ -678,6 +682,8 @@ const I18N = {
     "refreshing.title": p => `Job ${p.job} : ${p.status} — valeurs du run précédent (${p.date}), susceptibles de changer à la fin du job`,
     "conflicts": "Conflits",
     "conflicts.title": "La MR est en conflit avec sa branche cible",
+    "diff.files": p => `${p.n} fichier${plural(p.n)}`,
+    "diff.title": p => `${p.files} fichier${plural(p.files)} modifié${plural(p.files)}, ${p.additions} ligne${plural(p.additions)} ajoutée${plural(p.additions)}, ${p.deletions} supprimée${plural(p.deletions)}`,
     "aiFix": "Correct with IA",
     "aiFix.title": "Afficher un prompt Claude Code pour corriger cette MR",
     "threads.title": p => `${p.n} thread${plural(p.n)} non résolu${plural(p.n)} sur ${p.total}`,
@@ -756,6 +762,7 @@ const I18N = {
     "dialog.orca.failed": p => `Failed: ${p.message}`,
     "error.load": p => `Could not load the MRs: ${p.message}`,
     "error.sonar": p => `Sonar unreachable: ${p.message}`,
+    "error.diffStats": p => `MR sizes unavailable: ${p.message}`,
     "error.behindCount": "number of commits behind not provided by GitLab",
     "group.review": "Review",
     "group.quality": "Quality",
@@ -832,6 +839,8 @@ const I18N = {
     "refreshing.title": p => `${p.job} job: ${p.status} — values from the previous run (${p.date}), may change when the job ends`,
     "conflicts": "Conflicts",
     "conflicts.title": "The MR conflicts with its target branch",
+    "diff.files": p => `${p.n} file${pluralEn(p.n)}`,
+    "diff.title": p => `${p.files} file${pluralEn(p.files)} changed, ${p.additions} line${pluralEn(p.additions)} added, ${p.deletions} deleted`,
     "aiFix": "Fix with AI",
     "aiFix.title": "Show a Claude Code prompt to fix this MR",
     "threads.title": p => `${p.n} unresolved thread${pluralEn(p.n)} out of ${p.total}`,
@@ -995,10 +1004,12 @@ async function refresh() {
   try {
     state.config ??= (await api("/config")).body;
     $("project").textContent = state.config.gitlabProject;
-    const [mrs] = await Promise.all([
+    const [mrs, diffStats] = await Promise.all([
       gitlabAll(`${projectPath()}/merge_requests?state=opened`),
+      loadDiffStats(report),
       loadSonarPullRequests(report),
     ]);
+    for (const mr of mrs) mr.diffStats = diffStats.get(String(mr.iid));
     snapshot.mrs = mrs;
     snapshot.signals = new Map(mrs.map(mr => [mr.iid, { loading: true }]));
     if (initial) {
@@ -1146,6 +1157,34 @@ function renderFreshness() {
     { length: FRESHNESS_SEGMENTS },
     (_, i) => `<i style="--off:${AUTO_REFRESH_MS * (FRESHNESS_SEGMENTS - i) / FRESHNESS_SEGMENTS}ms"></i>`
   ).join("");
+}
+
+// Taille de chaque MR ouverte : l'API REST ne donne que le nombre de fichiers, GraphQL donne aussi
+// les lignes ajoutées et supprimées, pour toutes les MR en une requête par page de 100.
+async function loadDiffStats(report) {
+  const stats = new Map();
+  const query = `query($project: ID!, $after: String) {
+    project(fullPath: $project) {
+      mergeRequests(state: opened, first: 100, after: $after) {
+        pageInfo { hasNextPage endCursor }
+        nodes { iid diffStatsSummary { additions deletions fileCount } }
+      }
+    }
+  }`;
+  try {
+    let after = null;
+    do {
+      const variables = JSON.stringify({ project: state.config.gitlabProject, after });
+      const { body } = await api(`/graphql?query=${encodeURIComponent(query)}&variables=${encodeURIComponent(variables)}`);
+      if (body.errors?.length) throw new Error(body.errors.map(e => e.message).join(", "));
+      const page = body.data.project.mergeRequests;
+      for (const mr of page.nodes) stats.set(mr.iid, mr.diffStatsSummary);
+      after = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
+    } while (after);
+  } catch (error) {
+    report(t("error.diffStats", { message: error.message }));
+  }
+  return stats;
 }
 
 async function loadSonarPullRequests(report) {
@@ -1856,8 +1895,18 @@ function mrCell(mr) {
     .join("");
   const conflicts = mr.has_conflicts ? " " + pill("red", t("conflicts"), t("conflicts.title"), mr.web_url) : "";
   return `<div class="title-row"><div class="title">${mr.draft ? '<span class="draft">Draft</span>' : ""}<a href="${escapeHtml(mr.web_url)}" target="_blank" rel="noopener">${escapeHtml(mr.title.replace(/^Draft:\s*/i, ""))}</a>${conflicts}</div><div class="title-actions">${stalledPill(mr)}${approvalPill(mr)}${aiFixButton(mr)}</div></div>
-    <div class="sub"><span class="iid">!${mr.iid}</span> · <code>${escapeHtml(mr.source_branch)}</code> → <code>${escapeHtml(mr.target_branch)}</code></div>
+    <div class="sub"><span class="iid">!${mr.iid}</span> · <code>${escapeHtml(mr.source_branch)}</code> → <code>${escapeHtml(mr.target_branch)}</code>${diffStat(mr)}</div>
     ${labels ? `<div class="labels">${labels}</div>` : ""}`;
+}
+
+// Dans la sous-ligne du titre plutôt qu'en colonne : la taille de la MR n'ajoute aucune largeur au tableau.
+function diffStat(mr) {
+  const d = mr.diffStats;
+  if (!d) return "";
+  const n = value => value.toLocaleString(locale());
+  const title = t("diff.title", { files: d.fileCount, additions: d.additions, deletions: d.deletions });
+  return ` · <span class="diffstat" title="${escapeHtml(title)}">${escapeHtml(t("diff.files", { n: d.fileCount }))} ` +
+    `<span class="add">+${n(d.additions)}</span> <span class="del">−${n(d.deletions)}</span></span>`;
 }
 
 // ---------- Prompt de correction ----------

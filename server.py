@@ -6,6 +6,7 @@ Tableau de bord local des MR ouvertes, avec les signaux CI (pipeline, PIT, Sonar
 La page (index.html) ne parle qu'à ce serveur, qui relaie deux préfixes :
     /gitlab/<chemin>  →  <gitlab>/api/v4/<chemin>   (token glab, en-tête PRIVATE-TOKEN)
     /sonar/<chemin>   →  <sonar>/api/<chemin>       (SONAR_TOKEN, en-tête Bearer)
+    /graphql?query=…  →  <gitlab>/api/graphql?…     (token glab ; en GET, GitLab refuse les mutations)
 
 Le relais est nécessaire pour Sonar, qui ne renvoie aucun en-tête CORS : un navigateur ne peut pas
 l'interroger directement. Il sert aussi à garder les deux tokens hors du navigateur. Seul GET est
@@ -221,6 +222,11 @@ def make_handler(
             elif self.path.startswith("/gitlab/"):
                 self.relay(
                     settings["gitlab_host"] + "/api/v4/" + self.path[len("/gitlab/"):],
+                    {"PRIVATE-TOKEN": settings["gitlab_token"]}
+                )
+            elif self.path.startswith("/graphql?"):
+                self.relay(
+                    settings["gitlab_host"] + "/api" + self.path,
                     {"PRIVATE-TOKEN": settings["gitlab_token"]}
                 )
             elif self.path.startswith("/sonar/"):
