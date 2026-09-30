@@ -398,6 +398,9 @@
   .bp-icon.orange { color: var(--orange-dot); }
   .bp-icon.red { color: var(--red-dot); }
   .bp-icon.blue { color: var(--link); }
+  .bp-icon.running { animation: bp-running-pulse 1.6s ease-in-out infinite; }
+  @keyframes bp-running-pulse { 50% { opacity: 0.35; } }
+  @media (prefers-reduced-motion: reduce) { .bp-icon.running { animation: none; } }
   .bp-icon.grey { color: var(--grey-dot); }
   @media (max-width: 720px) {
     header h1 .tagline { display: none; }
@@ -486,9 +489,11 @@ const DEFAULT_SONAR_RETENTION_DAYS = 5;
 // Clés = detailed_status.group de GitLab ; un groupe absent reste gris.
 const PIPELINE_TONE = { success: "green", "success-with-warnings": "orange", failed: "red" };
 // Pipeline de la branche suivie : icône et teinte de chaque job ou stage, par groupe de statut GitLab.
+// En cours : un disque à demi plein qui pulse, comme GitLab — une flèche circulaire se lisait comme un
+// bouton « relancer ».
 const STAGE_ICONS = {
   success: ["✓", "green"], "success-with-warnings": ["!", "orange"], failed: ["✕", "red"],
-  running: ["↻", "blue"], canceled: ["⊘", "grey"], skipped: ["»", "grey"], manual: ["⚙", "grey"],
+  running: ["◐", "blue running"], canceled: ["⊘", "grey"], skipped: ["»", "grey"], manual: ["⚙", "grey"],
   scheduled: ["◷", "grey"],
 };
 const STAGE_ICON_DEFAULT = ["…", "grey"];
