@@ -179,6 +179,7 @@
   .active-labels .label::after { content: " ×"; }
 
   .summary { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; padding: 0.9rem 1.5rem 0.6rem; }
+  .summary .gitlab-list { margin-left: auto; font-size: 0.9rem; }
   .stat {
     display: inline-flex; align-items: baseline; gap: 0.4em;
     font-size: 0.9rem; color: var(--muted);
@@ -836,6 +837,9 @@ const I18N = {
     "date.created": p => `Créée le : ${p.date}`,
     "summary.shown": p => `<b>${p.n}</b> affichée${plural(p.n)} sur ${p.total} ouvertes`,
     "summary.alerts": p => `<b>${p.n}</b> avec alertes`,
+    "gitlabList": "Ouvrir dans GitLab",
+    "gitlabList.opened.title": "Liste des MR ouvertes du projet dans GitLab, sans les filtres du dashboard",
+    "gitlabList.merged.title": "Liste des MR mergées du projet dans GitLab, sans les filtres du dashboard",
     "summary.loading": p => `<b>${p.n}</b> en chargement…`,
     "empty": "Aucune MR ne correspond aux filtres.",
     "unavailable": "Indisponible",
@@ -1056,6 +1060,9 @@ const I18N = {
     "date.created": p => `Created on: ${p.date}`,
     "summary.shown": p => `<b>${p.n}</b> shown out of ${p.total} open`,
     "summary.alerts": p => `<b>${p.n}</b> with alerts`,
+    "gitlabList": "Open in GitLab",
+    "gitlabList.opened.title": "The project's open MRs in GitLab, without the dashboard filters",
+    "gitlabList.merged.title": "The project's merged MRs in GitLab, without the dashboard filters",
     "summary.loading": p => `<b>${p.n}</b> loading…`,
     "empty": "No MR matches the filters.",
     "unavailable": "Unavailable",
@@ -2582,6 +2589,7 @@ function render() {
     ? `<span class="stat">${t("summary.merged", { n: visible.length, loaded: mrs.length, total: merged.total ?? mrs.length })}</span>` +
       (mergedLoading ? `<span class="stat loading">${escapeHtml(loadingText)}</span>` : "")
     : openSummary(visible, mrs);
+  $("summary").insertAdjacentHTML("beforeend", gitlabListLink());
   const more = $("merged-more");
   more.hidden = !mergedView() || (!merged.hasMore && !merged.loading) || Boolean(merged.error);
   more.textContent = merged.loading ? loadingText : t("merged.more", { n: MERGED_PAGE_SIZE });
@@ -2602,6 +2610,14 @@ function openSummary(
 }
 
 const viewMrs = () => (mergedView() ? state.merged.mrs : state.mrs);
+
+// Liste des MR de la vue courante dans GitLab, sans les filtres du dashboard.
+function gitlabListLink() {
+  if (!state.config) return "";
+  const view = mergedView() ? "merged" : "opened";
+  const url = `${state.config.gitlabWeb}/${state.config.gitlabProject}/-/merge_requests?state=${view}`;
+  return `<a class="gitlab-list" href="${escapeHtml(url)}" target="_blank" rel="noopener" title="${escapeHtml(t(`gitlabList.${view}.title`))}">${escapeHtml(t("gitlabList"))} ↗</a>`;
+}
 
 // Une valeur inconnue (signal en chargement, absent, en erreur) est toujours rangée en fin de liste,
 // quel que soit le sens du tri : elle ne doit ni masquer ni passer pour un bon résultat.
