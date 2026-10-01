@@ -316,6 +316,7 @@
   dialog.ai-prompt .actions button[hidden] { display: none; }
   /* Fermer à gauche, à l'écart des actions sur le prompt, regroupées à droite. */
   dialog.ai-prompt .actions .dismiss { margin-right: auto; }
+  button.icon-button { padding-inline: 0.55em; line-height: 1; }
   button.with-icon { display: inline-flex; align-items: center; gap: 0.45em; }
   button.with-icon .orca-logo { height: 0.95em; width: auto; flex: none; }
   dialog.ai-prompt .actions { display: flex; justify-content: flex-end; align-items: center; gap: 0.6rem; margin-top: 0.8rem; }
@@ -472,6 +473,8 @@
     <button type="button" data-lang="fr" lang="fr" title="Français">FR</button>
     <button type="button" data-lang="en" lang="en" title="English">EN</button>
   </div>
+  <span class="divider" aria-hidden="true"></span>
+  <button type="button" id="clear-storage" class="icon-button" aria-label="Effacer les données locales" data-i18n-aria-label="clearStorage" data-i18n-title="clearStorage.title"><span aria-hidden="true">🧹</span></button>
 </header>
 
 <div class="filters">
@@ -582,6 +585,8 @@ const REFRESH_LOCK = "mr-dashboard.refresh";
 // n'est pas traité. Un seul onglet notifie : celui qui détient NOTIFIER_LOCK.
 const NOTIFY_KEY = "mr-dashboard.notify";
 const NOTIFIED_KEY = "mr-dashboard.notified";
+// Préfixe commun à toutes les clés ci-dessus : le bouton balai efface tout ce qui le porte, et seulement ça.
+const STORAGE_PREFIX = "mr-dashboard.";
 const NOTIFIER_LOCK = "mr-dashboard.notifier";
 const OWN_REMINDER_MS = 15 * 60 * 1000;
 const REMINDER_CHECK_MS = 60 * 1000;
@@ -732,6 +737,9 @@ const I18N = {
     "page.title": "MisteR Dashboard : le dashboard des Merge Requests",
     "tagline": "Le dashboard très rapide des Merge Requests",
     "lang.group": "Langue",
+    "clearStorage": "Effacer les données locales",
+    "clearStorage.title": "Efface tout ce que le dashboard a enregistré dans ce navigateur (dernières données affichées, historique des builds, notifications déjà envoyées, préférences), puis recharge la page",
+    "clearStorage.confirm": "Effacer toutes les données enregistrées par le dashboard dans ce navigateur ? Les notifications seront désactivées et la page rechargée.",
     "refresh.group": "Actualisation",
     "refresh": "Rafraîchir",
     "refreshed.time": p => `mis à jour à ${p.time}`,
@@ -949,6 +957,9 @@ const I18N = {
     "page.title": "MisteR Dashboard: the Merge Requests dashboard",
     "tagline": "Very Fast Merge Requests Dashboard",
     "lang.group": "Language",
+    "clearStorage": "Clear local data",
+    "clearStorage.title": "Clears everything the dashboard saved in this browser (last displayed data, build history, notifications already sent, preferences), then reloads the page",
+    "clearStorage.confirm": "Clear all data saved by the dashboard in this browser? Notifications will be turned off and the page reloaded.",
     "refresh.group": "Refresh",
     "refresh": "Refresh",
     "refreshed.time": p => `updated at ${p.time}`,
@@ -2412,6 +2423,16 @@ function forgetNotified() {
   } catch (ignored) { /* stockage indisponible : rien à oublier */ }
 }
 
+// Tout ce que le dashboard a écrit dans le localStorage de cette origine (donc de ce profil : chaque
+// port est une origine à part), puis rechargement : l'état en mémoire le réécrirait sinon aussitôt.
+function clearStorage() {
+  if (!confirm(t("clearStorage.confirm"))) return;
+  try {
+    Object.keys(localStorage).filter(key => key.startsWith(STORAGE_PREFIX)).forEach(key => localStorage.removeItem(key));
+  } catch (ignored) { /* stockage indisponible : il n'y a rien à effacer */ }
+  location.reload();
+}
+
 function readNotify() {
   try {
     return localStorage.getItem(NOTIFY_KEY) === "true";
@@ -3526,6 +3547,7 @@ document.addEventListener("keydown", e => {
 });
 window.addEventListener("scroll", maybeLoadMoreMerged, { passive: true });
 window.addEventListener("resize", maybeLoadMoreMerged);
+$("clear-storage").addEventListener("click", clearStorage);
 $("refresh").addEventListener("click", () => (mergedView() ? loadMerged({ force: true }) : refresh()));
 $("autoRefresh").addEventListener("change", e => {
   state.autoRefresh = e.target.checked;
