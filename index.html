@@ -669,6 +669,8 @@ const DEFAULT_MERGED_PERIOD = "30";
 const MERGED_PAGE_SIZE = 50;
 // Le paquet suivant part quand le bas du tableau arrive à cette distance de la fenêtre, en pixels.
 const MERGED_PREFETCH_PX = 600;
+// Ce que Page suiv. garde visible de l'écran précédent, pour ne pas perdre le fil de la lecture.
+const PAGE_SCROLL_OVERLAP_PX = 40;
 // Sonar et PIT ne sont suivis que si le profil les déclare : un projet qui n'en a pas n'en voit pas les
 // colonnes. Config pas encore lue, ou servie par un serveur antérieur à ces options : tout est suivi.
 const sonarTracked = () => state.config?.sonarTracked !== false;
@@ -3477,6 +3479,17 @@ document.addEventListener("click", e => {
 });
 document.addEventListener("keydown", e => {
   if (e.key === "Escape" && commitActivity.anchor) closeCommitActivity();
+});
+// Page préc. / Page suiv. faites ici plutôt que par le navigateur : le focus reste sur le dernier
+// filtre touché, et une liste déroulante y change de valeur au lieu de faire défiler. Le pas
+// retranche aussi les en-têtes collants, sous lesquels le navigateur ferait passer des lignes.
+document.addEventListener("keydown", e => {
+  if (e.key !== "PageDown" && e.key !== "PageUp") return;
+  if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+  if (e.target.closest?.("textarea, [contenteditable], #commit-activity")) return;
+  e.preventDefault();
+  const step = innerHeight - document.querySelector("table.mrs").tHead.offsetHeight - PAGE_SCROLL_OVERLAP_PX;
+  scrollBy({ top: e.key === "PageDown" ? step : -step });
 });
 window.addEventListener("scroll", maybeLoadMoreMerged, { passive: true });
 window.addEventListener("resize", maybeLoadMoreMerged);
