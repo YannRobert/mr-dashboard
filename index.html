@@ -345,6 +345,7 @@
   .ca-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
   .ca-area { fill: color-mix(in srgb, var(--accent) 7%, transparent); }
   .ca-area.office { fill: color-mix(in srgb, var(--accent) 26%, transparent); }
+  .ca-weekend { fill: color-mix(in srgb, var(--muted) 16%, transparent); }
   .ca-others { fill: var(--red-dot); stroke: var(--surface); stroke-width: 1.5; }
   .ca-mine { fill: var(--green-dot); stroke: var(--surface); stroke-width: 1.5; }
   .ca-others:hover, .ca-mine:hover { stroke: var(--text); }
@@ -916,6 +917,7 @@ const I18N = {
     "ca.empty": "Aucun commit hors merges",
     "ca.legend.commits": "Commits cumulés",
     "ca.legend.office": p => `Plus foncé : heures de bureau (${p.from} h – ${p.to} h)`,
+    "ca.legend.weekend": "Grisé : week-end",
     "ca.legend.others": "Commentaires des autres",
     "ca.legend.mine": "Commentaires de l'auteur",
     "ca.legend.merge": "Merge (non compté)",
@@ -1139,6 +1141,7 @@ const I18N = {
     "ca.empty": "No commit besides merges",
     "ca.legend.commits": "Cumulative commits",
     "ca.legend.office": p => `Darker: office hours (${p.from}:00 – ${p.to}:00)`,
+    "ca.legend.weekend": "Grey: weekend",
     "ca.legend.others": "Comments by others",
     "ca.legend.mine": "Comments by the author",
     "ca.legend.merge": "Merge (not counted)",
@@ -3078,7 +3081,20 @@ function cumulativeChart(
   return `<svg class="ca-chart" viewBox="0 0 ${CA_W} ${CA_H}" role="img" aria-labelledby="ca-title">` +
     `<text x="${CA_MARGIN.left - 5}" y="${top + 4}" text-anchor="end">${commits.length}</text>` +
     `<text x="${CA_MARGIN.left - 5}" y="${base}" text-anchor="end">0</text>` +
-    caOfficeHoursClip(start, end, x, top, base) +
+    caOfficeHoursClip(
+      start,
+      end,
+      x,
+      top,
+      base
+    ) +
+    caWeekendBands(
+      start,
+      end,
+      x,
+      top,
+      base
+    ) +
     `<path class="ca-area" d="${d}V${base}Z"/>` +
     `<path class="ca-area office" d="${d}V${base}Z" clip-path="url(#ca-office-hours)"/>` +
     `<path class="ca-line" d="${d}"/>` +
@@ -3132,6 +3148,7 @@ function caOfficeHoursClip(
   const day = new Date(start);
   day.setHours(0, 0, 0, 0);
   for (; day.getTime() < end; day.setDate(day.getDate() + 1)) {
+    if (isWeekend(day)) continue;
     const from = new Date(day).setHours(OFFICE_START_HOUR);
     const to = new Date(day).setHours(OFFICE_END_HOUR);
     const x0 = x(Math.max(from, start));
@@ -3140,6 +3157,31 @@ function caOfficeHoursClip(
   }
   return `<defs><clipPath id="ca-office-hours">${rects.join("")}</clipPath></defs>`;
 }
+
+// Samedis et dimanches grisés sur toute la hauteur, sous la courbe : une longue période sans commit
+// s'explique d'un coup d'œil quand elle tombe sur un week-end. Ces jours-là n'ont pas d'heures de bureau.
+function caWeekendBands(
+  start,
+  end,
+  x,
+  top,
+  base
+) {
+  const rects = [];
+  const day = new Date(start);
+  day.setHours(0, 0, 0, 0);
+  for (; day.getTime() < end; day.setDate(day.getDate() + 1)) {
+    if (!isWeekend(day)) continue;
+    const next = new Date(day);
+    next.setDate(next.getDate() + 1);
+    const x0 = x(Math.max(day.getTime(), start));
+    const x1 = x(Math.min(next.getTime(), end));
+    if (x1 > x0) rects.push(`<rect class="ca-weekend" x="${x0}" y="${top}" width="${x1 - x0}" height="${base - top}"/>`);
+  }
+  return rects.join("");
+}
+
+const isWeekend = date => date.getDay() === 0 || date.getDay() === 6;
 
 // Deux camps, deux formes en plus des deux couleurs : rouge et vert se confondent pour un daltonien.
 function caLegend(
@@ -3158,6 +3200,7 @@ function caLegend(
       "ca.legend.office",
       { from: OFFICE_START_HOUR, to: OFFICE_END_HOUR }
     ) +
+    item(`<rect class="ca-weekend" x="0" y="1" width="16" height="10"/>`, "ca.legend.weekend") +
     item(`<circle class="ca-others" cx="8" cy="6" r="4"/>`, "ca.legend.others") +
     item(`<path class="ca-mine" d="${caDiamond(8, 6, 5)}"/>`, "ca.legend.mine") +
     (withMerges ? item(`<path class="ca-line" d="M1,6H15"/><line class="ca-merge" x1="8" x2="8" y1="1" y2="11"/>`, "ca.legend.merge") : "") +
