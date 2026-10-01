@@ -891,6 +891,8 @@ const I18N = {
     "threads.title": p => `${p.n} thread${plural(p.n)} non résolu${plural(p.n)} sur ${p.total}`,
     "approved": p => (p.n > 1 ? `Approuvée ×${p.n}` : "Approuvée"),
     "approved.title": p => `Approuvée par ${p.names}`,
+    "changesRequested": p => (p.n > 1 ? `Changements demandés ×${p.n}` : "Changements demandés"),
+    "changesRequested.title": p => `Changements demandés par ${p.names}`,
     "commits.title": "Commits de la MR",
     "ca.title": p => `Activité des commits de !${p.iid}`,
     "ca.summary": p => `${p.n} commit${plural(p.n)}${p.merges ? ` (+ ${p.merges} merge${plural(p.merges)})` : ""} sur ${p.span} — dernier il y a ${p.last}`,
@@ -1106,6 +1108,8 @@ const I18N = {
     "threads.title": p => `${p.n} unresolved thread${pluralEn(p.n)} out of ${p.total}`,
     "approved": p => (p.n > 1 ? `Approved ×${p.n}` : "Approved"),
     "approved.title": p => `Approved by ${p.names}`,
+    "changesRequested": p => (p.n > 1 ? `Changes requested ×${p.n}` : "Changes requested"),
+    "changesRequested.title": p => `Changes requested by ${p.names}`,
     "commits.title": "MR commits",
     "ca.title": p => `Commit activity of !${p.iid}`,
     "ca.summary": p => `${p.n} commit${pluralEn(p.n)}${p.merges ? ` (+ ${p.merges} merge${pluralEn(p.merges)})` : ""} over ${p.span} — last one ${p.last} ago`,
@@ -1697,6 +1701,7 @@ const GRAPHQL_MR_FIELDS = `
   commits(first: 1) { nodes { committedDate } }
   mergeRequestDiffs(first: 1) { nodes { createdAt } }
   approvedBy { nodes { name } }
+  reviewers { nodes { name mergeRequestInteraction { reviewState } } }
   resolvableDiscussionsCount
   resolvedDiscussionsCount`;
 const GRAPHQL_OPEN_MR_FIELDS = `${GRAPHQL_MR_FIELDS}
@@ -1889,8 +1894,14 @@ async function loadBehind(mr, count) {
 // même sans approbateur. Seule la liste des approbateurs dit si quelqu'un a réellement approuvé.
 async function loadApprovals(mr) {
   try {
-    const approvals = (await api(`/gitlab/${projectPath()}/merge_requests/${mr.iid}/approvals`)).body;
-    return { names: approvals.approved_by.map(a => a.user.name) };
+    const [approvals, reviewers] = await Promise.all([
+      api(`/gitlab/${projectPath()}/merge_requests/${mr.iid}/approvals`),
+      api(`/gitlab/${projectPath()}/merge_requests/${mr.iid}/reviewers`),
+    ]);
+    return {
+      names: approvals.body.approved_by.map(a => a.user.name),
+      changesRequested: reviewers.body.filter(r => r.state === "requested_changes").map(r => r.user.name),
+    };
   } catch (error) {
     return { error: error.message };
   }
@@ -1907,8 +1918,15 @@ function graphqlCommits(node) {
   };
 }
 
+// changesRequested : reviewers dont la revue en cours demande des changements, état que GitLab garde
+// jusqu'à leur prochaine revue (approbation ou nouvelle revue).
 function graphqlApprovals(node) {
-  return { names: node.approvedBy.nodes.map(a => a.name) };
+  return {
+    names: node.approvedBy.nodes.map(a => a.name),
+    changesRequested: node.reviewers.nodes
+      .filter(r => r.mergeRequestInteraction?.reviewState === "REQUESTED_CHANGES")
+      .map(r => r.name),
+  };
 }
 
 // Job GraphQL remis dans la forme de l'API REST, que lisent pitSignal et sonarSignal.
@@ -2611,7 +2629,7 @@ function mrCell(mr) {
     .map(l => `<button type="button" class="label" data-add-label="${escapeHtml(l)}" title="${escapeHtml(t("label.add"))}">${escapeHtml(l)}</button>`)
     .join("");
   const conflicts = mr.has_conflicts && mr.state !== "merged" ? " " + pill("red", t("conflicts"), t("conflicts.title"), mr.web_url) : "";
-  return `<div class="title-row"><div class="title">${mr.draft ? '<span class="draft">Draft</span>' : ""}<a href="${escapeHtml(mr.web_url)}" target="_blank" rel="noopener">${escapeHtml(mr.title.replace(/^Draft:\s*/i, ""))}</a>${conflicts}</div><div class="title-actions">${stalledPill(mr)}${approvalPill(mr)}${aiFixButton(mr)}</div></div>
+  return `<div class="title-row"><div class="title">${mr.draft ? '<span class="draft">Draft</span>' : ""}<a href="${escapeHtml(mr.web_url)}" target="_blank" rel="noopener">${escapeHtml(mr.title.replace(/^Draft:\s*/i, ""))}</a>${conflicts}</div><div class="title-actions">${stalledPill(mr)}${changesRequestedPill(mr)}${approvalPill(mr)}${aiFixButton(mr)}</div></div>
     <div class="sub"><span class="iid">!${mr.iid}</span> · <code>${escapeHtml(mr.source_branch)}</code> → <code>${escapeHtml(mr.target_branch)}</code>${diffStat(mr)}</div>
     ${labels ? `<div class="labels">${labels}</div>` : ""}`;
 }
@@ -2767,6 +2785,13 @@ function approvalPill(mr) {
   if (!names?.length) return "";
   const count = names.length;
   return pill("green", t("approved", { n: count }), t("approved.title", { names: names.join(", ") }), mr.web_url);
+}
+
+// En rouge : un reviewer bloque la MR tant qu'il n'a pas relu les changements demandés.
+function changesRequestedPill(mr) {
+  const names = signalsOf(mr).approvals?.changesRequested;
+  if (!names?.length) return "";
+  return pill("red", t("changesRequested", { n: names.length }), t("changesRequested.title", { names: names.join(", ") }), mr.web_url);
 }
 
 function commitsCell(mr) {
