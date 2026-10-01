@@ -285,7 +285,6 @@
   .ok.good { color: var(--green-fg); font-weight: 600; }
   .muted { color: var(--muted); }
   .late-orange { color: var(--orange-fg); font-weight: 600; }
-  .late-red { color: var(--red-fg); font-weight: 600; }
   .labels { display: flex; flex-wrap: wrap; gap: 4px; }
   .label {
     font-size: 0.8rem; font-weight: 500; border-radius: 999px; padding: 0.1em 0.65em;
@@ -547,9 +546,9 @@ const STAGE_ICONS = {
 };
 const STAGE_ICON_DEFAULT = ["…", "grey"];
 
-// Retard sur la cible au-delà duquel la durée passe en orange, puis en rouge.
+// Retard sur la cible au-delà duquel la durée passe en orange. Jamais en rouge, réservé aux problèmes
+// bloquants : seul le développeur sait si sa MR doit suivre la cible (par exemple, une migration à renuméroter).
 const BEHIND_ORANGE_HOURS = 12;
-const BEHIND_RED_HOURS = 24;
 
 // Âge du dernier commit : actif en deçà, endormi au-delà ; une alerte laissée sans commit au-delà de
 // STALLED_ALERT_HOURS met la ligne en rouge.
@@ -748,8 +747,8 @@ const I18N = {
     "notify.enabled": "🔔 Notifications MisteR Dashboard activées",
     "notify.enabledBody": "Si tu vois ce message, les notifications arrivent bien jusqu'au bureau.",
     "notify.me": p => `Impossible d'identifier l'utilisateur GitLab courant : ${p.message}`,
-    "notify.own": p => `🔴 Ta MR !${p.iid} a ${p.n} problème${plural(p.n)} à traiter`,
-    "notify.other": p => `🟠 MR !${p.iid} de ${p.author}`,
+    "notify.own": p => `${p.tone} Ta MR !${p.iid} a ${p.n} problème${plural(p.n)} à traiter`,
+    "notify.other": p => `${p.tone} MR !${p.iid} de ${p.author}`,
     "notify.others": p => `🟠 ${p.n} MR d'autres développeurs ont des problèmes`,
     "notify.othersBody": "Les prochains problèmes seront notifiés MR par MR.",
     "problem.conflicts": "Conflits avec la branche cible",
@@ -963,8 +962,8 @@ const I18N = {
     "notify.enabled": "🔔 MisteR Dashboard notifications enabled",
     "notify.enabledBody": "If you can see this, notifications do reach the desktop.",
     "notify.me": p => `Unable to identify the current GitLab user: ${p.message}`,
-    "notify.own": p => `🔴 Your MR !${p.iid} has ${p.n} problem${pluralEn(p.n)} to fix`,
-    "notify.other": p => `🟠 MR !${p.iid} by ${p.author}`,
+    "notify.own": p => `${p.tone} Your MR !${p.iid} has ${p.n} problem${pluralEn(p.n)} to fix`,
+    "notify.other": p => `${p.tone} MR !${p.iid} by ${p.author}`,
     "notify.others": p => `🟠 ${p.n} MRs from other developers have problems`,
     "notify.othersBody": "Further problems will be notified MR by MR.",
     "problem.conflicts": "Conflicts with the target branch",
@@ -2250,13 +2249,20 @@ function problemsOf(mr) {
   const s = signalsOf(mr);
   const problems = [];
   const unknown = new Set();
-  const add = (key, severity, text) => problems.push({ key, severity, text });
-  if (mr.has_conflicts) add("conflicts", 1, t("problem.conflicts"));
-  if (s.pipeline?.status === "failed") add("pipeline", 1, t("problem.pipeline", { id: s.pipeline.id }));
+  // blocking : problème en rouge dans le tableau, qui empêche le merge ou le rend risqué ; les autres
+  // sont en orange, à traiter sans urgence.
+  const add = (
+    key,
+    severity,
+    text,
+    blocking = false
+  ) => problems.push({ key, severity, text, blocking });
+  if (mr.has_conflicts) add("conflicts", 1, t("problem.conflicts"), true);
+  if (s.pipeline?.status === "failed") add("pipeline", 1, t("problem.pipeline", { id: s.pipeline.id }), true);
   if (sonarUsable(s.sonar)) {
     const sonar = s.sonar;
-    if (sonar.issues > 0) add("sonar.issues", sonar.issues, t("problem.sonarIssues", { n: sonar.issues }));
-    if (sonar.gate && sonar.gate !== "OK") add("sonar.gate", 1, t("problem.gate", { gate: sonar.gate }));
+    if (sonar.issues > 0) add("sonar.issues", sonar.issues, t("problem.sonarIssues", { n: sonar.issues }), true);
+    if (sonar.gate && sonar.gate !== "OK") add("sonar.gate", 1, t("problem.gate", { gate: sonar.gate }), true);
     if (sonar.coverage != null && sonar.coverage < 100) {
       add("sonar.coverage", Math.ceil(100 - sonar.coverage), t("problem.coverage", { value: formatPercent(sonar.coverage) }));
     }
@@ -2265,7 +2271,7 @@ function problemsOf(mr) {
   }
   const pit = s.pit;
   if (pit?.state === "ok") {
-    if (pit.survived > 0) add("pit.survived", pit.survived, t("problem.pitSurvived", { n: pit.survived }));
+    if (pit.survived > 0) add("pit.survived", pit.survived, t("problem.pitSurvived", { n: pit.survived }), true);
     if (pit.noCoverage > 0) add("pit.noCoverage", pit.noCoverage, t("problem.pitNoCoverage", { n: pit.noCoverage }));
     if (pit.errors > 0) add("pit.errors", pit.errors, t("problem.pitErrors", { n: pit.errors }));
   } else if (pitTracked()) {
@@ -2280,7 +2286,7 @@ function problemsOf(mr) {
   } else if (behind.count > 0 && behind.since) {
     const hours = (gitlabNow() - new Date(behind.since)) / 3600000;
     if (hours > BEHIND_ORANGE_HOURS) {
-      add("behind", hours > BEHIND_RED_HOURS ? 2 : 1, t("problem.behind", {
+      add("behind", 1, t("problem.behind", {
         n: behind.count,
         target: mr.target_branch,
         duration: compactDuration(gitlabNow() - new Date(behind.since)),
@@ -2345,11 +2351,13 @@ function showNotification(
   problems,
   own
 ) {
+  const tone = mark => (mark ? "🔴" : "🟠");
+  const blocking = problems.some(p => p.blocking);
   const title = own
-    ? t("notify.own", { iid: mr.iid, n: problems.length })
-    : t("notify.other", { iid: mr.iid, author: mr.author?.name ?? "?" });
+    ? t("notify.own", { iid: mr.iid, n: problems.length, tone: tone(blocking) })
+    : t("notify.other", { iid: mr.iid, author: mr.author?.name ?? "?", tone: tone(blocking) });
   const notification = new Notification(title, {
-    body: [mr.title, ...problems.map(p => `• ${p.text}`)].join("\n"),
+    body: [mr.title, ...problems.map(p => `${tone(p.blocking)} ${p.text}`)].join("\n"),
     tag: `mr-${mr.iid}`,
     renotify: true,
     requireInteraction: own,
@@ -3115,7 +3123,7 @@ function behindCell(mr) {
   if (behind.count === 0) return `<span class="ok good" title="${escapeHtml(t("behind.upToDate", { target: mr.target_branch }))}">${escapeHtml(t("behind.none"))}</span>`;
   const count = `<div title="${escapeHtml(t("behind.count", { n: behind.count, target: mr.target_branch }))}">${escapeHtml(t("behind.late", { n: behind.count }))}</div>`;
   const hours = behind.since ? (gitlabNow() - new Date(behind.since)) / 3600000 : 0;
-  const tone = hours > BEHIND_RED_HOURS ? "late-red" : hours > BEHIND_ORANGE_HOURS ? "late-orange" : "muted";
+  const tone = hours > BEHIND_ORANGE_HOURS ? "late-orange" : "muted";
   const since = behind.since
     ? `<div class="${tone}" title="${escapeHtml(t("behind.since", { date: formatDate(behind.since), next: behind.next, base: behind.base }))}">(${compactDuration(gitlabNow() - new Date(behind.since))})</div>`
     : `<div class="muted" title="${escapeHtml(behind.error ?? "")}">(?)</div>`;
