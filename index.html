@@ -191,6 +191,8 @@
   /* Pas d'overflow ici : il ferait du conteneur l'ancêtre de défilement des en-têtes collants, qui
      défileraient alors avec la page. Un tableau plus large que la fenêtre fait défiler la page. */
   .table-wrap { padding: 0 1.5rem 2rem; }
+  .merged-more { margin: -1rem 1.5rem 2rem; text-align: center; font-size: 0.9rem; }
+  .merged-more[hidden] { display: none; }
   table.mrs {
     width: 100%; border-collapse: separate; border-spacing: 0;
     background: var(--surface); border: 1px solid var(--border); border-radius: 0.8rem;
@@ -523,6 +525,7 @@
     <tbody id="list"></tbody>
   </table>
 </div>
+<div class="merged-more muted" id="merged-more" hidden></div>
 <section class="branch-pipeline" id="branch-pipeline" hidden aria-labelledby="branch-pipeline-title"></section>
 
 <script>
@@ -663,6 +666,9 @@ const COLUMN_GROUPS = {
 // Période de la vue des MR mergées, en jours de merge ; « all » : toutes.
 const MERGED_PERIODS = ["7", "30", "90", "all"];
 const DEFAULT_MERGED_PERIOD = "30";
+const MERGED_PAGE_SIZE = 50;
+// Le paquet suivant part quand le bas du tableau arrive à cette distance de la fenêtre, en pixels.
+const MERGED_PREFETCH_PX = 600;
 // Sonar et PIT ne sont suivis que si le profil les déclare : un projet qui n'en a pas n'en voit pas les
 // colonnes. Config pas encore lue, ou servie par un serveur antérieur à ces options : tout est suivi.
 const sonarTracked = () => state.config?.sonarTracked !== false;
@@ -692,7 +698,7 @@ const state = {
   signals: new Map(),
   // Vue des MR mergées : chargée à la demande, jamais sauvegardée ni actualisée automatiquement.
   // seq écarte le résultat d'un chargement dépassé par un autre (période changée entre-temps).
-  merged: { mrs: [], signals: new Map(), period: null, loading: false, loadedAt: null, seq: 0 },
+  merged: { mrs: [], signals: new Map(), period: null, cursor: null, hasMore: false, total: null, error: null, loading: false, loadedAt: null, seq: 0 },
   sonarPullRequests: new Map(),
   sonarRetentionDays: DEFAULT_SONAR_RETENTION_DAYS,
   filters: readFiltersFromUrl(),
@@ -927,8 +933,10 @@ const I18N = {
     "help.stabilisation": "Du dernier push au merge, en temps calendaire : le temps passé en revue et en attente sans nouveau commit",
     "date.merged": p => `Mergée le : ${p.date}`,
     "duration.title": p => `Du ${p.from} au ${p.to}`,
-    "summary.merged": p => `<b>${p.n}</b> affichée${plural(p.n)} sur ${p.total} mergées`,
+    "summary.merged": p => `<b>${p.n}</b> affichée${plural(p.n)} sur ${p.loaded < p.total ? `${p.loaded} chargées sur ` : ""}${p.total} mergées`,
     "summary.mergedLoading": "Chargement des MR mergées…",
+    "summary.mergedLoadingAll": "Chargement de toute la période, pour trier sur cette colonne…",
+    "merged.more": p => `Défiler pour charger les ${p.n} suivantes`,
     "error.merged": p => `Chargement des MR mergées impossible : ${p.message}`,
     "ca.summary.merged": p => `${p.n} commit${plural(p.n)}${p.merges ? ` (+ ${p.merges} merge${plural(p.merges)})` : ""} sur ${p.span} — mergée ${p.last} après le dernier`,
     "ca.merged": p => `MR mergée le ${p.date}`,
@@ -1140,8 +1148,10 @@ const I18N = {
     "help.stabilisation": "From the last push to the merge, in calendar time: time spent in review and waiting without a new commit",
     "date.merged": p => `Merged on: ${p.date}`,
     "duration.title": p => `From ${p.from} to ${p.to}`,
-    "summary.merged": p => `<b>${p.n}</b> shown out of ${p.total} merged`,
+    "summary.merged": p => `<b>${p.n}</b> shown out of ${p.loaded < p.total ? `${p.loaded} loaded of ` : ""}${p.total} merged`,
     "summary.mergedLoading": "Loading merged MRs…",
+    "summary.mergedLoadingAll": "Loading the whole period, to sort on this column…",
+    "merged.more": p => `Scroll to load the next ${p.n}`,
     "error.merged": p => `Could not load merged MRs: ${p.message}`,
     "ca.summary.merged": p => `${p.n} commit${pluralEn(p.n)}${p.merges ? ` (+ ${p.merges} merge${pluralEn(p.merges)})` : ""} over ${p.span} — merged ${p.last} after the last one`,
     "ca.merged": p => `MR merged on ${p.date}`,
@@ -1371,10 +1381,7 @@ async function refresh() {
     refreshBuildHistoryIfStale();
     const [mrs, graphqlNodes, branchPipeline] = await Promise.all([
       gitlabAll(`${projectPath()}/merge_requests?state=opened`),
-      loadGraphqlMergeRequests(
-        report,
-        GRAPHQL_OPEN_MRS
-      ),
+      loadGraphqlMergeRequests(report),
       loadBranchPipeline(),
       loadSonarPullRequests(report),
     ]);
@@ -1432,40 +1439,62 @@ function syncRefreshButton() {
   $("refresh").disabled = mergedView() ? state.merged.loading : state.refreshing;
 }
 
-// Deux requêtes pour toute la période : la liste REST (auteur, reviewers, labels, dates) et, en GraphQL,
-// commits, dernier push, approbations et threads. Rien par MR : l'activité détaillée n'est lue qu'au
-// survol du nombre de commits. L'API REST ignore merged_after : updated_after, que tout merge fait
-// bouger, borne la liste, et la date de merge la filtre ensuite.
+// Par paquets de MERGED_PAGE_SIZE, du merge le plus récent au plus ancien, au fil du défilement : la
+// page GraphQL (commits, dernier push, approbations, threads, et le total de la période), puis le
+// détail REST de ses MR en une requête. Rien par MR : l'activité détaillée n'est lue qu'au survol du
+// nombre de commits.
 async function loadMerged({ force = false } = {}) {
   const merged = state.merged;
   const period = state.filters.period;
   if (!force && merged.period === period && (merged.loading || merged.loadedAt)) return;
-  const seq = ++merged.seq;
-  Object.assign(merged, { period, loading: true });
+  Object.assign(merged, {
+    mrs: [],
+    signals: new Map(),
+    period,
+    cursor: null,
+    hasMore: true,
+    total: null,
+    error: null,
+    loadedAt: null,
+    seq: merged.seq + 1,
+  });
+  await loadMergedPage();
+}
+
+async function loadMergedPage() {
+  const merged = state.merged;
+  const seq = merged.seq;
+  merged.loading = true;
   syncRefreshButton();
   renderStatus();
   render();
-  const since = mergedSince(period);
   try {
     await ensureConfig();
-    const [mrs, nodes] = await Promise.all([
-      gitlabAll(`${projectPath()}/merge_requests?state=merged&order_by=updated_at${since ? `&updated_after=${encodeURIComponent(since)}` : ""}`),
-      loadGraphqlMergeRequests(
-        showError,
-        GRAPHQL_MERGED_MRS,
-        { mergedAfter: since }
-      ),
-    ]);
+    const page = await fetchMergedPage(
+      merged.cursor,
+      mergedSince(merged.period)
+    );
+    const iids = page.nodes.map(node => node.iid).filter(iid => !merged.signals.has(Number(iid)));
+    const mrs = iids.length
+      ? await gitlabAll(`${projectPath()}/merge_requests?state=merged&${iids.map(iid => `iids%5B%5D=${iid}`).join("&")}`)
+      : [];
     if (seq !== merged.seq) return;
-    merged.mrs = mrs.filter(mr => !since || (mr.merged_at && new Date(mr.merged_at) >= new Date(since)));
-    merged.signals = new Map(merged.mrs.map(mr => {
+    const nodes = new Map(page.nodes.map(node => [node.iid, node]));
+    for (const mr of mrs) {
       const node = nodes.get(String(mr.iid));
       mr.diffStats = node?.diffStatsSummary;
-      return [mr.iid, mergedSignals(node)];
-    }));
-    merged.loadedAt = new Date();
+      merged.signals.set(mr.iid, mergedSignals(node));
+    }
+    merged.mrs.push(...mrs);
+    merged.total = page.count;
+    merged.cursor = page.pageInfo.endCursor;
+    merged.hasMore = page.pageInfo.hasNextPage;
+    merged.loadedAt ??= new Date();
   } catch (error) {
-    if (seq === merged.seq) showError(t("error.merged", { message: error.message }));
+    if (seq !== merged.seq) return;
+    // Plus de chargement automatique jusqu'au prochain « Rafraîchir » : il échouerait en boucle.
+    merged.error = error.message;
+    showError(t("error.merged", { message: error.message }));
   } finally {
     if (seq === merged.seq) {
       merged.loading = false;
@@ -1473,9 +1502,41 @@ async function loadMerged({ force = false } = {}) {
       renderStatus();
       populateFilterOptions();
       render();
+      maybeLoadMoreMerged();
     }
   }
 }
+
+async function fetchMergedPage(
+  after,
+  mergedAfter
+) {
+  const query = `query($project: ID!, $after: String, $mergedAfter: Time) {
+    project(fullPath: $project) {
+      mergeRequests(state: merged, mergedAfter: $mergedAfter, sort: MERGED_AT_DESC, first: ${MERGED_PAGE_SIZE}, after: $after) {
+        count
+        pageInfo { hasNextPage endCursor }
+        nodes { ${GRAPHQL_MERGED_MR_FIELDS} }
+      }
+    }
+  }`;
+  const variables = JSON.stringify({ project: state.config.gitlabProject, after, mergedAfter });
+  const { body } = await api(`/graphql?query=${encodeURIComponent(query)}&variables=${encodeURIComponent(variables)}`);
+  if (body.errors?.length) throw new Error(body.errors.map(e => e.message).join(", "));
+  return body.data.project.mergeRequests;
+}
+
+// Paquet suivant quand le bas du tableau approche. Un tri autre que le merge le plus récent d'abord
+// porte sur toute la période : la suite se charge alors d'elle-même jusqu'au bout. Un filtre, lui,
+// n'en a pas besoin — appliqué à des MR arrivées par date de merge, il donne déjà les premières qui
+// lui correspondent.
+function maybeLoadMoreMerged() {
+  const merged = state.merged;
+  if (!mergedView() || merged.loading || !merged.hasMore || merged.error || merged.period === null) return;
+  if (mergedNeedsAll() || $("merged-more").getBoundingClientRect().top < innerHeight + MERGED_PREFETCH_PX) loadMergedPage();
+}
+
+const mergedNeedsAll = () => state.filters.sort !== "merged" || state.filters.dir !== "desc";
 
 function mergedSince(period) {
   return period === "all" ? null : new Date(Date.now() - Number(period) * 86400000).toISOString();
@@ -1637,20 +1698,11 @@ const GRAPHQL_MR_FIELDS = `
   approvedBy { nodes { name } }
   resolvableDiscussionsCount
   resolvedDiscussionsCount`;
-// Sélection des MR, champs et variables propres à chaque vue. Une MR mergée n'a plus de pipeline à
-// suivre ; son plus ancien commit date le début du développement.
-const GRAPHQL_OPEN_MRS = {
-  variables: "",
-  filter: "state: opened",
-  fields: `${GRAPHQL_MR_FIELDS}
-  headPipeline { id jobs(retried: false) { nodes { id name status startedAt finishedAt webPath } } }`,
-};
-const GRAPHQL_MERGED_MRS = {
-  variables: ", $mergedAfter: Time",
-  filter: "state: merged, mergedAfter: $mergedAfter",
-  fields: `${GRAPHQL_MR_FIELDS}
-  firstCommit: commits(last: 1) { nodes { authoredDate } }`,
-};
+const GRAPHQL_OPEN_MR_FIELDS = `${GRAPHQL_MR_FIELDS}
+  headPipeline { id jobs(retried: false) { nodes { id name status startedAt finishedAt webPath } } }`;
+// Une MR mergée n'a plus de pipeline à suivre ; son plus ancien commit date le début du développement.
+const GRAPHQL_MERGED_MR_FIELDS = `${GRAPHQL_MR_FIELDS}
+  firstCommit: commits(last: 1) { nodes { authoredDate } }`;
 // Dernier pipeline de la branche suivie, et durées de ses derniers pipelines réussis (les échecs,
 // interrompus en cours de route, fausseraient la fourchette). Requête à part de celle des MR : GitLab
 // plafonne la complexité d'une requête à 250, et ses trois pipelines détaillés en pèsent une bonne part.
@@ -1683,24 +1735,20 @@ const GRAPHQL_BRANCH_PIPELINE = `
   lastSuccess: pipelines(ref: $branch, status: SUCCESS, first: 1) { ${GRAPHQL_PIPELINE_DETAIL} }
   lastFailure: pipelines(ref: $branch, status: FAILED, first: 1) { ${GRAPHQL_PIPELINE_DETAIL} }`;
 
-async function loadGraphqlMergeRequests(
-  report,
-  selection,
-  extraVariables = {}
-) {
+async function loadGraphqlMergeRequests(report) {
   const nodes = new Map();
-  const query = `query($project: ID!, $after: String${selection.variables}) {
+  const query = `query($project: ID!, $after: String) {
     project(fullPath: $project) {
-      mergeRequests(${selection.filter}, first: 100, after: $after) {
+      mergeRequests(state: opened, first: 100, after: $after) {
         pageInfo { hasNextPage endCursor }
-        nodes { ${selection.fields} }
+        nodes { ${GRAPHQL_OPEN_MR_FIELDS} }
       }
     }
   }`;
   try {
     let after = null;
     do {
-      const variables = JSON.stringify({ ...extraVariables, project: state.config.gitlabProject, after });
+      const variables = JSON.stringify({ project: state.config.gitlabProject, after });
       const { body } = await api(`/graphql?query=${encodeURIComponent(query)}&variables=${encodeURIComponent(variables)}`);
       if (body.errors?.length) throw new Error(body.errors.map(e => e.message).join(", "));
       const page = body.data.project.mergeRequests;
@@ -2478,11 +2526,16 @@ function render() {
   const column = columns.find(c => c.key === state.filters.sort) ?? columns.find(c => c.key === defaultSort().key);
   const mrs = viewMrs();
   const visible = mrs.filter(matches).sort(comparator(column, state.filters.dir));
-  const mergedLoading = mergedView() && state.merged.loading;
+  const merged = state.merged;
+  const mergedLoading = mergedView() && merged.loading;
+  const loadingText = t(mergedNeedsAll() ? "summary.mergedLoadingAll" : "summary.mergedLoading");
   $("summary").innerHTML = mergedView()
-    ? `<span class="stat">${t("summary.merged", { n: visible.length, total: mrs.length })}</span>` +
-      (mergedLoading ? `<span class="stat loading">${escapeHtml(t("summary.mergedLoading"))}</span>` : "")
+    ? `<span class="stat">${t("summary.merged", { n: visible.length, loaded: mrs.length, total: merged.total ?? mrs.length })}</span>` +
+      (mergedLoading ? `<span class="stat loading">${escapeHtml(loadingText)}</span>` : "")
     : openSummary(visible, mrs);
+  const more = $("merged-more");
+  more.hidden = !mergedView() || (!merged.hasMore && !merged.loading) || Boolean(merged.error);
+  more.textContent = merged.loading ? loadingText : t("merged.more", { n: MERGED_PAGE_SIZE });
   $("list").innerHTML = visible.length
     ? visible.map(renderRow).join("")
     : `<tr><td class="empty" colspan="${columns.length}">${escapeHtml(t(mergedLoading ? "summary.mergedLoading" : "empty"))}</td></tr>`;
@@ -3358,6 +3411,7 @@ function updateFilters(change) {
   writeFiltersToUrl();
   if ("labels" in change) populateFilterOptions();
   render();
+  maybeLoadMoreMerged();
 }
 
 $("q").addEventListener("input", e => updateFilters({ q: e.target.value }));
@@ -3424,6 +3478,8 @@ document.addEventListener("click", e => {
 document.addEventListener("keydown", e => {
   if (e.key === "Escape" && commitActivity.anchor) closeCommitActivity();
 });
+window.addEventListener("scroll", maybeLoadMoreMerged, { passive: true });
+window.addEventListener("resize", maybeLoadMoreMerged);
 $("refresh").addEventListener("click", () => (mergedView() ? loadMerged({ force: true }) : refresh()));
 $("autoRefresh").addEventListener("change", e => {
   state.autoRefresh = e.target.checked;

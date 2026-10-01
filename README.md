@@ -70,8 +70,9 @@ ensemble — puis `start.sh <nom>`.
   MR fermées sur une période de merge (7, 30 — par défaut —, 90 jours ou toutes), pour comprendre
   après coup pourquoi certaines ont duré. Ni pipeline, ni qualité, ni retard : durée totale,
   développement (premier commit → dernier push) et stabilisation (dernier push → merge), en temps
-  calendaire. Le volet d'activité des commits s'y arrête au merge. Chargée à la demande, elle n'est
-  ni sauvegardée, ni actualisée automatiquement, ni notifiée.
+  calendaire. Le volet d'activité des commits s'y arrête au merge. Chargée à la demande, par paquets
+  de 50 au fil du défilement — toute la période dès qu'on trie sur une autre colonne que la date de
+  merge —, elle n'est ni sauvegardée, ni actualisée automatiquement, ni notifiée.
 
 ### Aucune notification ne s'affiche
 
