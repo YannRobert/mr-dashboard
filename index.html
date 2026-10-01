@@ -188,7 +188,9 @@
   .stat.alert b { color: var(--orange-fg); }
   .stat.loading { border-style: dashed; }
 
-  .table-wrap { padding: 0 1.5rem 2rem; overflow-x: auto; }
+  /* Pas d'overflow ici : il ferait du conteneur l'ancêtre de défilement des en-têtes collants, qui
+     défileraient alors avec la page. Un tableau plus large que la fenêtre fait défiler la page. */
+  .table-wrap { padding: 0 1.5rem 2rem; }
   table.mrs {
     width: 100%; border-collapse: separate; border-spacing: 0;
     background: var(--surface); border: 1px solid var(--border); border-radius: 0.8rem;
