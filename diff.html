@@ -33,7 +33,7 @@
     --accent: #4f46e5;
     --accent-2: #7c3aed;
     --accent-fg: #ffffff;
-    --red-bg: #fdecec; --red-fg: #b42318;
+    --red-bg: #fdecec; --red-fg: #b42318; --red-line: #d92d20;
     color-scheme: light;
   }
   :root[data-theme="dark"] {
@@ -48,7 +48,7 @@
     --accent: #818cf8;
     --accent-2: #a78bfa;
     --accent-fg: #0f1020;
-    --red-bg: #3d1a1a; --red-fg: #ffb4ab;
+    --red-bg: #3d1a1a; --red-fg: #ffb4ab; --red-line: #f97066;
   }
   /* Taille du texte : celle du dashboard (même base, même réglage A− / A+), multipliée par celle de la page, réglée
      par ses propres A− / A+ — 125 % par défaut, le code se lisant de plus près qu'un tableau. Sans le zoom du
@@ -171,6 +171,9 @@
     background: var(--surface); font: 0.8rem/1.4 "Inter", system-ui, sans-serif; white-space: normal; text-align: left;
   }
   .note-thread.resolved { border-left-color: var(--muted); }
+  /* Non résolue : tout le cadre en rouge, visible où qu'on en soit dans une longue discussion. */
+  .note-thread.unresolved { border: 2px solid var(--red-line); border-left-width: 4px; }
+  .note-thread.unresolved .badge { color: var(--red-fg); background: var(--red-bg); }
   /* Commenter : un clic sur un numéro de ligne, Maj+clic pour une plage. */
   #diff-files.can-comment td.d2h-code-side-linenumber, #diff-files.can-comment td.d2h-code-linenumber { cursor: pointer; }
   #diff-files.can-comment td.d2h-code-side-linenumber:hover, #diff-files.can-comment td.d2h-code-linenumber:hover { color: var(--accent); }
@@ -313,6 +316,7 @@
       outOfRange: "hors de la plage de commits affichée",
       notShown: "ligne absente du diff affiché",
       resolved: "Résolu",
+      unresolved: "Non résolu",
       lines: p => p.first === p.last ? `ligne ${p.last}` : `lignes ${p.first} à ${p.last}`,
       replies: n => `${n} réponse${n > 1 ? "s" : ""}`,
       openInGitlab: "GitLab",
@@ -369,6 +373,7 @@
       outOfRange: "outside the displayed range of commits",
       notShown: "line not in the displayed diff",
       resolved: "Resolved",
+      unresolved: "Unresolved",
       lines: p => p.first === p.last ? `line ${p.last}` : `lines ${p.first} to ${p.last}`,
       replies: n => `${n} repl${n > 1 ? "ies" : "y"}`,
       openInGitlab: "GitLab",
@@ -763,7 +768,9 @@
   function threadHtml(discussion, where) {
     const [first, ...replies] = discussion.notes.filter(n => !n.system);
     if (!first) return "";
-    const resolved = discussion.notes.some(n => n.resolvable) && discussion.notes.every(n => !n.resolvable || n.resolved);
+    const resolvable = discussion.notes.some(n => n.resolvable);
+    const resolved = resolvable && discussion.notes.every(n => !n.resolvable || n.resolved);
+    const state = resolved ? "resolved" : resolvable ? "unresolved" : "";
     const label = texts.lines(notePlace(first.position));
     const link = /^https:\/\//.test(mr.url)
       ? `<a href="${escapeHtml(`${mr.url}#note_${first.id}`)}" target="_blank" rel="noopener">${escapeHtml(texts.openInGitlab)}</a>` : "";
@@ -772,8 +779,8 @@
       + (notesHtml.has(n.id)
         ? `<div class="gl-body">${GitlabNotes.render(notesHtml.get(n.id), gitlabWeb)}</div></div>`
         : `<div class="note-body">${markdown(n.body)}</div></div>`);
-    return `<details class="note-thread${resolved ? " resolved" : ""}"${resolved ? "" : " open"}>`
-      + `<summary>${resolved ? `<span class="badge">${escapeHtml(texts.resolved)}</span>` : ""}`
+    return `<details class="note-thread${state ? ` ${state}` : ""}"${resolved ? "" : " open"}>`
+      + `<summary>${state ? `<span class="badge">${escapeHtml(texts[state])}</span>` : ""}`
       + `<span>${escapeHtml(label)}${replies.length ? ` · ${escapeHtml(texts.replies(replies.length))}` : ""}</span>${link}</summary>`
       + (where ? `<div class="note-where">${escapeHtml(where)}</div>` : "")
       + [first, ...replies].map(note).join("") + `</details>`;

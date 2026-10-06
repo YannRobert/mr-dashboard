@@ -28,7 +28,7 @@
     --link: #2356c7;
     --accent: #4f46e5;
     --accent-fg: #ffffff;
-    --red-bg: #fdecec; --red-fg: #b42318;
+    --red-bg: #fdecec; --red-fg: #b42318; --red-line: #d92d20;
     color-scheme: light;
   }
   :root[data-theme="dark"] {
@@ -42,7 +42,7 @@
     --link: #86a9f7;
     --accent: #818cf8;
     --accent-fg: #0f1020;
-    --red-bg: #3d1a1a; --red-fg: #ffb4ab;
+    --red-bg: #3d1a1a; --red-fg: #ffb4ab; --red-line: #f97066;
   }
   /* Taille du texte du dashboard (même base, même réglage A− / A+), un peu plus grande : on lit de la prose. */
   html { font-size: calc(clamp(13px, 0.75vw, 28px) * var(--text-scale, 1) * 1.15); }
@@ -74,6 +74,9 @@
     border-radius: 0.5rem; overflow: hidden;
   }
   .thread.resolved { border-left-color: var(--muted); }
+  /* Non résolu : tout le cadre en rouge, visible où qu'on en soit dans un long commentaire. */
+  .thread.unresolved { border: 2px solid var(--red-line); border-left-width: 4px; }
+  .thread.unresolved .badge { color: var(--red-fg); background: var(--red-bg); }
   .thread > summary {
     display: flex; flex-wrap: wrap; gap: 0.2rem 0.6rem; align-items: baseline; padding: 0.45rem 0.8rem;
     cursor: pointer; font-size: 0.85rem; color: var(--muted); border-bottom: 1px solid var(--border);
@@ -196,7 +199,8 @@
       + (i ? `<div class="note-meta"><strong>${escapeHtml(n.author?.name ?? "?")}</strong> · ${when(n)}</div>` : "")
       + `<div class="gl-body">${GitlabNotes.render(n.bodyHtml, gitlabWeb)}</div></div>`;
     const badge = discussion.resolvable ? `<span class="badge">${escapeHtml(resolved ? texts.resolved : texts.unresolved)}</span>` : "";
-    return `<details class="thread${resolved ? " resolved" : ""}"${resolved ? "" : " open"}>`
+    const state = resolved ? " resolved" : discussion.resolvable ? " unresolved" : "";
+    return `<details class="thread${state}"${resolved ? "" : " open"}>`
       + `<summary><strong>${escapeHtml(first.author?.name ?? "?")}</strong>`
       + `<span>${escapeHtml(new Date(first.createdAt).toLocaleString(lang, { dateStyle: "short", timeStyle: "short" }))} · ${when(first)}</span>`
       + badge + (replies.length ? `<span>${escapeHtml(texts.replies(replies.length))}</span>` : "")
