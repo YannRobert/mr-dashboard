@@ -58,8 +58,9 @@ DEFAULT_GIT_FETCH_INTERVAL_S = 300
 # Les commits de la MR, et le commit de la cible d'où elle part pour situer la divergence.
 # Ouvert sur les commits de la branche de la MR, extraite dans le worktree où il est lancé.
 DEFAULT_GIT_VIEWER = "lazygit log"
-# Onglet Windows Terminal, où WSL lance la visionneuse sans shell, dans le worktree de la branche.
-DEFAULT_GIT_TERMINAL = "wt.exe -w 0 new-tab wsl.exe -d {distro} --cd {repo} --exec"
+# Onglet d'une fenêtre Windows Terminal dédiée, agrandie au maximum à sa création, où WSL lance la
+# visionneuse sans shell, dans le worktree de la branche.
+DEFAULT_GIT_TERMINAL = "wt.exe --maximized -w mr-dashboard new-tab wsl.exe -d {distro} --cd {repo} --exec"
 DEFAULT_SONAR_HOST = "https://sonarqube.example.com"
 DEFAULT_GITLAB_HOST = "https://gitlab.example.com"
 DEFAULT_GITLAB_TOKEN_HOST = "gitlab.example.com"

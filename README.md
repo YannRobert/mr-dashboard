@@ -106,8 +106,9 @@ Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut
   dernier commit poussé à chaque ouverture tant qu'il est détaché et sans modification. Le worktree
   principal n'est jamais touché, et aucun worktree n'est supprimé.
 - Une visionneuse qui s'utilise dans un terminal s'ouvre par `GIT_TERMINAL` : par défaut un onglet
-  Windows Terminal, où WSL la lance sans shell
-  (`wt.exe -w 0 new-tab wsl.exe -d {distro} --cd {repo} --exec`) ; `GIT_TERMINAL=none` pour une
+  Windows Terminal, dans une fenêtre réservée aux MR et agrandie au maximum à sa création, où
+  WSL la lance sans shell
+  (`wt.exe --maximized -w mr-dashboard new-tab wsl.exe -d {distro} --cd {repo} --exec`) ; `GIT_TERMINAL=none` pour une
   visionneuse graphique comme `gitk --boundary origin/{target}..origin/{branch}`. `{branch}`,
   `{target}` et `{repo}` sont remplacés par les branches source et cible et le worktree. Une branche
   absente en local est d'abord fetchée. La visionneuse est cherchée dans le `PATH`, puis dans
