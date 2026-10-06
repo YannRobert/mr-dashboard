@@ -50,7 +50,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import quote, unquote, urlsplit
 
-from git_actions import GitActions, GitError
+from git_actions import GitActions, GitError, resolve
 from orca_launcher import OrcaError, OrcaLauncher
 
 DEFAULT_PORT = 8765
@@ -58,9 +58,14 @@ DEFAULT_GIT_FETCH_INTERVAL_S = 300
 # Les commits de la MR, et le commit de la cible d'où elle part pour situer la divergence.
 # Ouvert sur les commits de la branche de la MR, extraite dans le worktree où il est lancé.
 DEFAULT_GIT_VIEWER = "lazygit log"
-# Onglet d'une fenêtre Windows Terminal dédiée, agrandie au maximum à sa création, où WSL lance la
-# visionneuse sans shell, dans le worktree de la branche.
-DEFAULT_GIT_TERMINAL = "wt.exe --maximized -w mr-dashboard new-tab wsl.exe -d {distro} --cd {repo} --exec"
+# Terminaux essayés dans l'ordre, le premier présent sur le poste l'emporte : onglet WezTerm, dans son
+# domaine par défaut qui doit être WSL (--domain y lancerait la visionneuse deux fois), ou
+# onglet d'une fenêtre Windows Terminal réservée aux MR, agrandie au maximum à sa création, où WSL lance la
+# visionneuse sans shell. Tous deux s'ouvrent dans le worktree de la branche.
+DEFAULT_GIT_TERMINALS = (
+    "wezterm.exe start --new-tab --cwd {repo} --",
+    "wt.exe --maximized -w mr-dashboard new-tab wsl.exe -d {distro} --cd {repo} --exec",
+)
 DEFAULT_SONAR_HOST = "https://sonarqube.example.com"
 DEFAULT_GITLAB_HOST = "https://gitlab.example.com"
 DEFAULT_GITLAB_TOKEN_HOST = "gitlab.example.com"
@@ -461,6 +466,15 @@ def require_unless_disabled(
         parser.error(f"{options} requis, ou --{switch.replace('_', '-')} si le projet n'a pas cet indicateur")
 
 
+def git_terminal(option):
+    if option == "none":
+        return ""
+    if option:
+        return option
+    # Aucun terminal présent : None, et pas de bouton.
+    return next((terminal for terminal in DEFAULT_GIT_TERMINALS if resolve(shlex.split(terminal))), None)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
@@ -496,8 +510,8 @@ def main():
     )
     parser.add_argument(
         "--git-terminal",
-        default=DEFAULT_GIT_TERMINAL,
-        help=f"terminal qui ouvre la visionneuse, suivi de sa commande ; none pour une visionneuse graphique (défaut : {DEFAULT_GIT_TERMINAL})"
+        help="terminal qui ouvre la visionneuse, suivi de sa commande ; none pour une visionneuse graphique "
+             f"(défaut : le premier présent parmi {' | '.join(DEFAULT_GIT_TERMINALS)})"
     )
     parser.add_argument("--quiet", action="store_true", help="ne pas journaliser chaque requête")
     args = parser.parse_args()
@@ -519,7 +533,7 @@ def main():
     git = GitActions.detect(
         args.repo_dir,
         args.git_viewer,
-        "" if args.git_terminal == "none" else args.git_terminal,
+        git_terminal(args.git_terminal),
         args.git_fetch_interval
     )
     if not sonar_token and not args.no_sonar:

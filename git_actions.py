@@ -61,7 +61,8 @@ class GitActions:
             terminal,
             fetch_interval_s
     ):
-        """terminal, vide pour une visionneuse graphique, ouvre celle qui s'utilise dans un terminal."""
+        """terminal, vide pour une visionneuse graphique, ouvre celle qui s'utilise dans un terminal ;
+        None quand il en faudrait un et qu'aucun n'est présent."""
         common_dir = subprocess.run(
             ["git", "-C", str(repo_dir), "rev-parse", "--path-format=absolute", "--git-common-dir"],
             capture_output=True,
@@ -69,9 +70,9 @@ class GitActions:
             check=True
         ).stdout.strip()
         viewer_args = resolve(shlex.split(viewer))
-        terminal_args = shlex.split(terminal)
+        terminal_args = shlex.split(terminal or "")
         # Visionneuse ou terminal absent du poste : le bouton n'est pas proposé.
-        if terminal_args and not resolve(terminal_args):
+        if terminal is None or (terminal_args and not resolve(terminal_args)):
             viewer_args = None
         return cls(
             Path(common_dir).parent,
@@ -166,7 +167,7 @@ class GitActions:
                 raise GitError(f"nom de branche invalide : {name}")
         # Le terminal Windows découpe sa ligne de commande sur « ; » : une branche qui en contient
         # pourrait y glisser une commande à lui.
-        if self._terminal and any(";" in name for name in (branch, target)):
+        if self._terminal and Path(self._terminal[0]).name == "wt.exe" and any(";" in name for name in (branch, target)):
             raise GitError("nom de branche non pris en charge par le terminal : « ; »")
         # Branche poussée depuis le dernier fetch : on va la chercher, elle seule.
         missing = [name for name in (branch, target) if not self._has_remote_branch(name)]

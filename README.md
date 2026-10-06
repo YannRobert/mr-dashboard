@@ -105,14 +105,19 @@ Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut
   pour une revue (cf. `GIT.md`) : créé au besoin, détaché sur `origin/<branche>`, et ramené sur le
   dernier commit poussé à chaque ouverture tant qu'il est détaché et sans modification. Le worktree
   principal n'est jamais touché, et aucun worktree n'est supprimé.
-- Une visionneuse qui s'utilise dans un terminal s'ouvre par `GIT_TERMINAL` : par défaut un onglet
-  Windows Terminal, dans une fenêtre réservée aux MR et agrandie au maximum à sa création, où
-  WSL la lance sans shell
-  (`wt.exe --maximized -w mr-dashboard new-tab wsl.exe -d {distro} --cd {repo} --exec`) ; `GIT_TERMINAL=none` pour une
-  visionneuse graphique comme `gitk --boundary origin/{target}..origin/{branch}`. `{branch}`,
+- Une visionneuse qui s'utilise dans un terminal s'ouvre par `GIT_TERMINAL`. Par défaut, le premier
+  présent sur le poste : un onglet WezTerm, dans son domaine par défaut, qui doit donc être WSL
+  (`config.default_domain = 'WSL:Ubuntu-24.04'` dans `.wezterm.lua` ; `--domain` y lancerait la
+  visionneuse deux fois)
+  (`wezterm.exe start --new-tab --cwd {repo} --`), sinon un onglet d'une fenêtre
+  Windows Terminal réservée aux MR et agrandie au maximum à sa création, où WSL la lance sans shell
+  (`wt.exe --maximized -w mr-dashboard new-tab wsl.exe -d {distro} --cd {repo} --exec`).
+  `GIT_TERMINAL=none` pour une visionneuse graphique comme
+  `gitk --boundary origin/{target}..origin/{branch}`. `{branch}`,
   `{target}` et `{repo}` sont remplacés par les branches source et cible et le worktree. Une branche
-  absente en local est d'abord fetchée. La visionneuse est cherchée dans le `PATH`, puis dans
-  `~/go/bin` et `~/.local/bin` ; introuvable, ou terminal introuvable : pas de bouton.
+  absente en local est d'abord fetchée. La visionneuse et le terminal sont cherchés dans le
+  `PATH`, puis dans `~/go/bin` et `~/.local/bin` — un WezTerm portable s'y relie
+  (`ln -s /mnt/c/…/wezterm.exe ~/.local/bin/wezterm.exe`) ; introuvable, ou terminal introuvable : pas de bouton.
 - **Relire une MR fichier par fichier dans lazygit** : panneau *Branches* (`3`), onglet *Remotes*
   (`]`), `Entrée` sur `origin` ; sur la branche cible (`origin/develop`), `W` puis *Diff* la prend
   pour base ; sur la branche de la MR, `Entrée` liste ses fichiers modifiés, à parcourir un par un,
