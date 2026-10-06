@@ -332,15 +332,9 @@
   .mr-cell .title-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-top: 0.4rem; }
   .mr-cell .title-actions:empty { display: none; }
   .mr-cell .title-actions .pill { font-size: 0.85rem; }
-  .ai-fix {
-    flex: none; white-space: nowrap; font-size: 0.9rem; font-weight: 600; border-radius: 0.5rem; padding: 0.35em 0.9em;
-    color: var(--accent-fg); border: 0; background: linear-gradient(135deg, var(--accent), var(--accent-2));
-    box-shadow: 0 2px 8px -2px color-mix(in srgb, var(--accent) 55%, transparent);
-  }
-  .ai-fix:hover { filter: brightness(1.08); }
-  .git-view { flex: none; white-space: nowrap; font-size: 0.85rem; font-weight: 600; padding: 0.3em 0.7em; color: var(--muted); }
-  .git-view:hover { color: var(--text); border-color: var(--faint); }
-  .git-view:disabled { cursor: progress; opacity: 0.6; }
+  /* Actions sur la MR (diff, correction) : boutons discrets, les signaux restent ce qui attire l'œil. */
+  .mr-action { flex: none; white-space: nowrap; font-size: 0.85rem; font-weight: 600; padding: 0.3em 0.7em; color: var(--muted); }
+  .mr-action:hover { color: var(--text); border-color: var(--faint); }
   dialog.ai-prompt {
     width: min(1200px, calc(100vw - 32px)); padding: 1.2rem; border: 1px solid var(--border);
     border-radius: 0.8rem; background: var(--surface); color: var(--text); box-shadow: var(--shadow);
@@ -987,8 +981,6 @@ const I18N = {
     "gitFetch.failedTitle": p => `${p.message}\nDernier fetch réussi : ${p.success}`,
     "gitFetch.noSuccess": "aucun",
     "gitDiff.title": p => `Afficher dans un onglet le diff de ${p.branch}, comparée à ${p.target}, calculé sur le dépôt local`,
-    "gitView.title": p => `Ouvrir ${p.viewer} sur ${p.branch}, comparée à ${p.target}`,
-    "gitView.failed": p => `Ouverture de ${p.viewer} impossible : ${p.message}`,
     "threads.title": p => `${p.n} thread${plural(p.n)} non résolu${plural(p.n)} sur ${p.total}`,
     "approved": p => (p.n > 1 ? `Approuvée ×${p.n}` : "Approuvée"),
     "approved.title": p => `Approuvée par ${p.names}`,
@@ -1231,8 +1223,6 @@ const I18N = {
     "gitFetch.failedTitle": p => `${p.message}\nLast successful fetch: ${p.success}`,
     "gitFetch.noSuccess": "none",
     "gitDiff.title": p => `Show in a tab the diff of ${p.branch} compared with ${p.target}, computed on the local repository`,
-    "gitView.title": p => `Open ${p.viewer} on ${p.branch}, compared with ${p.target}`,
-    "gitView.failed": p => `Could not open ${p.viewer}: ${p.message}`,
     "threads.title": p => `${p.n} unresolved thread${pluralEn(p.n)} out of ${p.total}`,
     "approved": p => (p.n > 1 ? `Approved ×${p.n}` : "Approved"),
     "approved.title": p => `Approved by ${p.names}`,
@@ -2878,7 +2868,7 @@ function mrCell(mr) {
   const conflicts = mr.has_conflicts && mr.state !== "merged" ? " " + pill("red", t("conflicts"), t("conflicts.title"), mr.web_url) : "";
   return `<div class="title">${mr.draft ? '<span class="draft">Draft</span>' : ""}<a href="${escapeHtml(mr.web_url)}" target="_blank" rel="noopener">${escapeHtml(mr.title.replace(/^Draft:\s*/i, ""))}</a>${conflicts}</div>
     <div class="sub"><span class="iid">!${mr.iid}</span> · <code>${escapeHtml(mr.source_branch)}</code> → <code>${escapeHtml(mr.target_branch)}</code>${diffStat(mr)}</div>
-    <div class="title-actions">${stalledPill(mr)}${changesRequestedPill(mr)}${approvalPill(mr)}${gitViewButton(mr)}${aiFixButton(mr)}</div>
+    <div class="title-actions">${stalledPill(mr)}${changesRequestedPill(mr)}${approvalPill(mr)}${gitDiffButton(mr)}${aiFixButton(mr)}</div>
     ${labels ? `<div class="labels">${labels}</div>` : ""}`;
 }
 
@@ -2892,17 +2882,9 @@ function diffStat(mr) {
     `<span class="add">+${n(d.additions)}</span> <span class="del">−${n(d.deletions)}</span></span>`;
 }
 
-// ---------- Prompt de correction ----------
-
-// Le bouton n'apparaît que s'il y a quelque chose à corriger : une branche en retard ou en conflit, un
-// indicateur qualité imparfait ou un thread non résolu. Le prompt ne cite que ce qui l'est, avec les
-// valeurs affichées dans le tableau.
-function gitViewButton(mr) {
+function gitDiffButton(mr) {
   if (mr.state === "merged") return "";
-  const diff = `<button type="button" class="git-view" data-git-diff="${mr.iid}" title="${escapeHtml(t("gitDiff.title", { branch: mr.source_branch, target: mr.target_branch }))}">diff</button>`;
-  return diff + (state.config?.gitViewers ?? [])
-    .map(viewer => `<button type="button" class="git-view" data-git-view="${mr.iid}" data-git-viewer="${escapeHtml(viewer)}" title="${escapeHtml(t("gitView.title", { viewer, branch: mr.source_branch, target: mr.target_branch }))}">${escapeHtml(viewer)}</button>`)
-    .join("");
+  return `<button type="button" class="mr-action" data-git-diff="${mr.iid}" title="${escapeHtml(t("gitDiff.title", { branch: mr.source_branch, target: mr.target_branch }))}">diff</button>`;
 }
 
 function openGitDiff(mr) {
@@ -2915,24 +2897,6 @@ function openGitDiff(mr) {
     lang: state.lang,
   });
   window.open(`diff.html?${query}`, "_blank", "noopener");
-}
-
-async function openGitViewer(button, viewer, mr) {
-  button.disabled = true;
-  try {
-    await api(
-      "/git/view",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-MR-Dashboard": "1" },
-        body: JSON.stringify({ viewer, iid: mr.iid, branch: mr.source_branch, target: mr.target_branch }),
-      }
-    );
-  } catch (error) {
-    alert(t("gitView.failed", { viewer, message: error.message }));
-  } finally {
-    button.disabled = false;
-  }
 }
 
 // ---------- Fetch du dépôt local ----------
@@ -3043,12 +3007,17 @@ function renderGitFetchFreshness() {
   );
 }
 
+// ---------- Prompt de correction ----------
+
+// Le bouton n'apparaît que s'il y a quelque chose à corriger : une branche en retard ou en conflit, un
+// indicateur qualité imparfait ou un thread non résolu. Le prompt ne cite que ce qui l'est, avec les
+// valeurs affichées dans le tableau.
 function aiFixButton(mr) {
   const s = signalsOf(mr);
   if (s.loading || mr.state === "merged") return "";
   const outdated = mr.has_conflicts || s.behind?.count > 0;
   if (!outdated && !qualityDefects(s).length && !(s.threads?.unresolved > 0)) return "";
-  return `<button type="button" class="ai-fix" data-ai-fix="${mr.iid}" title="${escapeHtml(t("aiFix.title"))}">${escapeHtml(t("aiFix"))}</button>`;
+  return `<button type="button" class="mr-action" data-ai-fix="${mr.iid}" title="${escapeHtml(t("aiFix.title"))}">${escapeHtml(t("aiFix"))}</button>`;
 }
 
 // Alimente le prompt seul : en français quelle que soit la langue de l'interface, comme aiFixPrompt.
@@ -3929,11 +3898,6 @@ document.addEventListener("click", e => {
   const gitDiff = e.target.closest("[data-git-diff]");
   if (gitDiff) {
     openGitDiff(state.mrs.find(mr => String(mr.iid) === gitDiff.dataset.gitDiff));
-    return;
-  }
-  const gitView = e.target.closest("[data-git-view]");
-  if (gitView) {
-    openGitViewer(gitView, gitView.dataset.gitViewer, state.mrs.find(mr => String(mr.iid) === gitView.dataset.gitView));
     return;
   }
   const aiFix = e.target.closest("[data-ai-fix]");

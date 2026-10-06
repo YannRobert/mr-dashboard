@@ -87,7 +87,7 @@ c'est le navigateur ou Windows qui bloque, pas le dashboard :
    *Ne pas déranger* (ou l'*Assistant de concentration*) désactivé ;
 3. décocher puis recocher la case pour renvoyer la notification de test.
 
-## Dépôt local : fetch et visionneuses
+## Dépôt local : fetch et diff
 
 Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut), toujours dans son
 **worktree principal**, d'où qu'il soit lancé.
@@ -111,36 +111,10 @@ Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut
   A− / A+ de celui-ci compris, plus 25 % par défaut, ajustable de 80 à 300 % par ses propres **A− / A+**
   (retenu dans le navigateur) : le zoom du navigateur vaut pour tout `localhost:8765` et
   agrandirait aussi le dashboard. Lecture seule : les commentaires se font dans GitLab, à un clic. Au-delà de 5 Mo
-  de diff, la page renvoie vers meld. L'affichage vient de
+  de diff, la page renvoie vers GitLab. L'affichage vient de
   [diff2html](https://github.com/rtfpessoa/diff2html) (MIT), copié dans `vendor/diff2html/` pour
   marcher sans réseau ; pour le mettre à jour, y remplacer `diff2html-ui-slim.min.js` et
   `diff2html.min.css` par ceux de `https://cdn.jsdelivr.net/npm/diff2html@<version>/bundles/`.
-- **Visionneuses** : chaque MR ouverte a un bouton par visionneuse de `GIT_VIEWERS` présente sur le
-  poste — par défaut `meld,tig diff,tig`. Une branche absente en local est d'abord fetchée.
-  - **meld** : les fichiers modifiés par la MR depuis le point où elle part de sa cible
-    (`git difftool --dir-diff --tool=meld origin/<cible>...origin/<branche>`, comme l'onglet
-    *Changes* de GitLab), à parcourir un par un, diff côte à côte. Installation :
-    `sudo apt install meld`.
-  - **tig** : les commits de la MR absents de sa cible (`tig origin/<cible>..origin/<branche>`) ;
-    `Entrée` sur un commit affiche son diff, `q` revient en arrière. Installation : `sudo apt install tig`.
-  - **tig diff** : le diff cumulé de la MR depuis le point où elle part de sa cible
-    (`git diff --stat -p origin/<cible>...origin/<branche> | tig`), d'un seul tenant : la liste des
-    fichiers en tête, `Entrée` sur l'un d'eux saute à son diff, `@` au bloc de modifications suivant.
-  - **lazygit** et **gitk** restent disponibles. lazygit s'ouvre sur la branche extraite : dans le
-    worktree où elle l'est s'il y en a un (on peut y corriger et pousser), sinon dans son worktree de
-    revue `<clone>-MR<iid>`, à côté du worktree principal, comme pour une revue (cf. `GIT.md`) : créé
-    au besoin, détaché sur `origin/<branche>`, et ramené sur le dernier commit poussé à chaque
-    ouverture tant qu'il est détaché et sans modification. Les autres comparent des références depuis
-    le worktree principal, qui n'est jamais modifié ; aucun worktree n'est supprimé.
-- Les visionneuses en mode texte (tig diff, tig, lazygit) s'ouvrent par `GIT_TERMINAL`. Par défaut, le premier
-  présent sur le poste : un onglet WezTerm, dans son domaine par défaut, qui doit donc être WSL
-  (`config.default_domain = 'WSL:Ubuntu-24.04'` dans `.wezterm.lua` ; `--domain` y lancerait la
-  visionneuse deux fois) (`wezterm.exe start --new-tab --cwd {repo} --`), sinon un onglet d'une
-  fenêtre Windows Terminal réservée aux MR et agrandie au maximum à sa création, où WSL la lance sans
-  shell (`wt.exe --maximized -w mr-dashboard new-tab wsl.exe -d {distro} --cd {repo} --exec`).
-  Visionneuses et terminal sont cherchés dans le `PATH`, puis dans `~/go/bin` et `~/.local/bin` — un
-  WezTerm portable s'y relie (`ln -s /mnt/c/…/wezterm.exe ~/.local/bin/wezterm.exe`) ; visionneuse
-  introuvable, ou terminal introuvable pour une visionneuse en mode texte : pas de bouton.
 - Un `git fetch` ou `git pull` lancé à la main pendant un fetch automatique peut répondre
   « cannot lock ref » : le relancer.
 

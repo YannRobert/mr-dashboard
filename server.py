@@ -20,14 +20,12 @@ Actions locales, en POST :
     /git/auto   active ou suspend le fetch automatique : {"enabled": true|false}
     /git/diff   GET ?branch=&target= : diff d'une MR depuis le point où elle part de sa cible, affiché
                 par diff.html
-    /git/view   ouvre une MR dans l'une des visionneuses --git-viewers : {"viewer", "iid", "branch", "target"} ;
-                celles en mode texte s'ouvrent dans le terminal --git-terminal
 
 Usage — d'ordinaire via scripts/mr-dashboard/start.sh, qui lit ces options dans un profil
 (scripts/mr-dashboard/profiles/<nom>.conf) :
     python3 scripts/mr-dashboard/server.py --gitlab-project <groupe/projet> --pipeline-branch <branche> \
         --sonar-project <clé> --sonar-job <job> --pit-job <job> --pit-marker <marqueur> \
-        --repo-dir <clone local du projet> --git-fetch-interval 300 --git-viewers meld,gitk --port 8766
+        --repo-dir <clone local du projet> --git-fetch-interval 300 --port 8766
     python3 scripts/mr-dashboard/server.py --gitlab-project <groupe/projet> --pipeline-branch main \
         --no-sonar --no-pit   # projet sans analyse Sonar ni mutation testing
 
@@ -53,21 +51,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlsplit
 
-from git_actions import VIEWERS, GitActions, GitError, resolve
+from git_actions import GitActions, GitError
 from orca_launcher import OrcaError, OrcaLauncher
 
 DEFAULT_PORT = 8765
 DEFAULT_GIT_FETCH_INTERVAL_S = 300
-# Un bouton par visionneuse présente sur le poste, dans cet ordre ; les commandes sont dans git_actions.VIEWERS.
-DEFAULT_GIT_VIEWERS = "meld,tig diff,tig"
-# Terminaux essayés dans l'ordre, le premier présent sur le poste l'emporte : onglet WezTerm, dans son
-# domaine par défaut qui doit être WSL (--domain y lancerait la visionneuse deux fois), ou
-# onglet d'une fenêtre Windows Terminal réservée aux MR, agrandie au maximum à sa création, où WSL lance la
-# visionneuse sans shell. Tous deux s'ouvrent dans le répertoire où tourne la visionneuse.
-DEFAULT_GIT_TERMINALS = (
-    "wezterm.exe start --new-tab --cwd {repo} --",
-    "wt.exe --maximized -w mr-dashboard new-tab wsl.exe -d {distro} --cd {repo} --exec",
-)
 DEFAULT_SONAR_HOST = "https://sonarqube.example.com"
 DEFAULT_GITLAB_HOST = "https://gitlab.example.com"
 DEFAULT_GITLAB_TOKEN_HOST = "gitlab.example.com"
@@ -276,7 +264,7 @@ def make_handler(
         def do_POST(self):
             if not self.host_allowed():
                 return
-            actions = {"/orca/fix": self.orca_fix, "/git/fetch": self.git_fetch, "/git/auto": self.git_auto, "/git/view": self.git_view}
+            actions = {"/orca/fix": self.orca_fix, "/git/fetch": self.git_fetch, "/git/auto": self.git_auto}
             action = actions.get(self.path)
             if not action:
                 self.close_connection = True
@@ -345,27 +333,6 @@ def make_handler(
                 self.send_json(409, {"message": str(error)})
                 return
             self.send_body(200, diff.encode(), {"Content-Type": "text/plain; charset=utf-8"})
-
-        def git_view(self, payload):
-            try:
-                viewer = str(payload["viewer"])
-                iid = int(payload["iid"])
-                branch = str(payload["branch"])
-                target = str(payload["target"])
-            except (ValueError, KeyError, TypeError):
-                self.send_json(400, {"message": "requête invalide"})
-                return
-            try:
-                result = git.view(
-                    viewer,
-                    iid,
-                    branch,
-                    target
-                )
-            except GitError as error:
-                self.send_json(502, {"message": str(error)})
-                return
-            self.send_json(200, result)
 
         def host_allowed(self):
             # Refuse tout autre nom d'hôte : une page tierce qui ferait pointer son domaine sur
@@ -496,13 +463,6 @@ def require_unless_disabled(
         parser.error(f"{options} requis, ou --{switch.replace('_', '-')} si le projet n'a pas cet indicateur")
 
 
-def git_terminal(option):
-    if option:
-        return option
-    # Aucun terminal présent : None, et pas de bouton pour les visionneuses en mode texte.
-    return next((terminal for terminal in DEFAULT_GIT_TERMINALS if resolve(shlex.split(terminal))), None)
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
@@ -531,17 +491,6 @@ def main():
         default=DEFAULT_GIT_FETCH_INTERVAL_S,
         help=f"secondes entre deux git fetch automatiques du clone local, 0 pour aucun (défaut : {DEFAULT_GIT_FETCH_INTERVAL_S})"
     )
-    parser.add_argument(
-        "--git-viewers",
-        default=DEFAULT_GIT_VIEWERS,
-        help=f"visionneuses proposées, séparées par des virgules, parmi {', '.join(VIEWERS)} ; vide pour aucune "
-             f"(défaut : {DEFAULT_GIT_VIEWERS})"
-    )
-    parser.add_argument(
-        "--git-terminal",
-        help="terminal qui ouvre les visionneuses en mode texte, suivi de leur commande "
-             f"(défaut : le premier présent parmi {' | '.join(DEFAULT_GIT_TERMINALS)})"
-    )
     parser.add_argument("--quiet", action="store_true", help="ne pas journaliser chaque requête")
     args = parser.parse_args()
     require_unless_disabled(
@@ -561,8 +510,6 @@ def main():
     orca = OrcaLauncher.detect(args.repo_dir)
     git = GitActions.detect(
         args.repo_dir,
-        [name.strip() for name in args.git_viewers.split(",") if name.strip()],
-        git_terminal(args.git_terminal),
         args.git_fetch_interval
     )
     if not sonar_token and not args.no_sonar:
@@ -588,7 +535,6 @@ def main():
             "targetBranch": args.target_branch or args.pipeline_branch,
             "signalsCommand": signals_command(args),
             "orcaEnabled": orca is not None,
-            "gitViewers": git.viewer_names,
             "gitFetchIntervalS": args.git_fetch_interval,
         },
     }
