@@ -102,8 +102,9 @@ Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut
 - **diff** : chaque MR ouverte a un bouton qui affiche dans un nouvel onglet son diff depuis le point
   où elle part de sa cible (`git diff origin/<cible>...origin/<branche>`, comme l'onglet *Changes* de
   GitLab), calculé sur le dépôt local : il reste disponible pendant une coupure de GitLab. Liste des
-  fichiers repliable, côte à côte ou ligne à ligne (retenu dans le navigateur), coloration syntaxique,
-  thème du dashboard. Lecture seule : les commentaires se font dans GitLab, à un clic. Au-delà de 5 Mo
+  fichiers dans un panneau latéral toujours visible (nom, puis répertoire ; le fichier lu y est
+  surligné ; largeur réglable par son coin bas droit), côte à côte ou ligne à ligne (retenu dans le
+  navigateur), coloration syntaxique, thème du dashboard. Lecture seule : les commentaires se font dans GitLab, à un clic. Au-delà de 5 Mo
   de diff, la page renvoie vers meld. L'affichage vient de
   [diff2html](https://github.com/rtfpessoa/diff2html) (MIT), copié dans `vendor/diff2html/` pour
   marcher sans réseau ; pour le mettre à jour, y remplacer `diff2html-ui-slim.min.js` et

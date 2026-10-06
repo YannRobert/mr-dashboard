@@ -72,6 +72,28 @@
     background: linear-gradient(135deg, var(--accent), var(--accent-2));
   }
   main { padding: 1rem; }
+  /* Liste des fichiers dans un panneau toujours visible, qui défile seul ; sa largeur se règle par son coin. */
+  main.with-files { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 1rem; align-items: start; }
+  #files {
+    position: sticky; top: calc(var(--header-height, 0px) + 1rem);
+    max-height: calc(100vh - var(--header-height, 0px) - 2rem); overflow: auto; resize: horizontal;
+    width: 22rem; min-width: 12rem; max-width: 60vw;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem;
+  }
+  #files .d2h-file-list-wrapper { margin: 0; border: none; }
+  #files .d2h-file-list-header { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); }
+  #files .d2h-file-list-line { padding: 0.3rem 0.75rem; border-bottom: 1px solid var(--border); }
+  #files .d2h-file-list-line.current { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+  #files .d2h-file-name-wrapper { font-size: 0.85rem; min-width: 0; }
+  #files .d2h-file-name { display: flex; flex-direction: column; min-width: 0; text-decoration: none; }
+  #files .file-base { font-weight: 600; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+  #files .file-dir { font-size: 0.75rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+  #diff-files { min-width: 0; }
+  .d2h-file-wrapper { scroll-margin-top: calc(var(--header-height, 0px) + 0.5rem); }
+  @media (max-width: 900px) {
+    main.with-files { display: block; }
+    #files { position: static; width: auto; max-width: none; max-height: 40vh; resize: none; margin-bottom: 1rem; }
+  }
   .message { color: var(--muted); }
   .message.error { color: var(--red-fg); background: var(--red-bg); padding: 0.75rem 1rem; border-radius: 0.5rem; }
   .d2h-file-list-wrapper, .d2h-file-wrapper { border-radius: 0.5rem; }
@@ -162,16 +184,17 @@
       showMessage(texts.empty);
       return;
     }
-    const container = document.getElementById("diff");
-    container.innerHTML = "";
+    const main = document.getElementById("diff");
+    main.innerHTML = '<aside id="files"></aside><div id="diff-files"></div>';
+    main.classList.add("with-files");
+    const container = document.getElementById("diff-files");
     const ui = new Diff2HtmlUI(
       container,
       diffText,
       {
         outputFormat: format,
         drawFileList: true,
-        fileListToggle: true,
-        fileListStartVisible: true,
+        fileListToggle: false,
         fileContentToggle: true,
         matching: "lines",
         synchronisedScroll: true,
@@ -182,6 +205,44 @@
     );
     ui.draw();
     ui.highlightCode();
+    showFileList(container);
+  }
+
+  // La liste dessinée par diff2html passe dans le panneau ; chaque fichier y montre son nom, puis son répertoire.
+  function showFileList(container) {
+    const list = container.querySelector(".d2h-file-list-wrapper");
+    if (!list) return;
+    document.getElementById("files").append(list);
+    const lines = new Map();
+    for (const link of list.querySelectorAll("a.d2h-file-name")) {
+      const path = link.textContent.trim();
+      const cut = path.lastIndexOf("/") + 1;
+      link.title = path;
+      link.innerHTML = `<span class="file-base">${escapeHtml(path.slice(cut))}</span>`
+        + (cut ? `<span class="file-dir">${escapeHtml(path.slice(0, cut))}</span>` : "");
+      lines.set(link.getAttribute("href").slice(1), link.closest(".d2h-file-list-line"));
+    }
+    followCurrentFile(container, lines);
+  }
+
+  // Le fichier en haut de l'écran est surligné dans la liste, que le panneau garde en vue.
+  function followCurrentFile(container, lines) {
+    const visible = new Set();
+    let current = null;
+    const observer = new IntersectionObserver(entries => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) visible.add(entry.target);
+        else visible.delete(entry.target);
+      }
+      const top = [...visible].sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)[0];
+      const line = top && lines.get(top.id);
+      if (!line || line === current) return;
+      current?.classList.remove("current");
+      line.classList.add("current");
+      line.scrollIntoView({ block: "nearest" });
+      current = line;
+    }, { rootMargin: `-${document.querySelector("header").offsetHeight}px 0px 0px 0px` });
+    for (const file of container.querySelectorAll(".d2h-file-wrapper")) observer.observe(file);
   }
 
   function renderHeader() {
