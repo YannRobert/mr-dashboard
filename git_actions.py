@@ -145,12 +145,12 @@ class GitActions:
                 "lastSuccess": self._last_success_at,
             }
 
-    def diff(
+    def open_revisions(
             self,
             branch,
             target
     ):
-        """Diff de la MR depuis le point où elle part de sa cible, celui de l'onglet Changes de GitLab."""
+        """Bornes d'une MR ouverte : sa cible et sa branche, telles que sur origin."""
         self._check_branch_names(
             branch,
             target
@@ -159,18 +159,17 @@ class GitActions:
             branch,
             target
         )
-        return self._diff_range(f"refs/remotes/origin/{target}...refs/remotes/origin/{branch}")
+        return f"refs/remotes/origin/{target}", f"refs/remotes/origin/{branch}"
 
-    def merged_diff(
+    def merged_revisions(
             self,
             iid,
             head,
             merge_commit,
             target
     ):
-        """Diff d'une MR mergée, branche source supprimée ou non : ce que son dernier commit apportait
-        à la cible telle qu'elle était juste avant le merge. Tout se lit dans l'historique, aucun
-        worktree ni branche locale."""
+        """Bornes d'une MR mergée, branche source supprimée ou non : la cible juste avant le merge et
+        le dernier commit de la MR. Tout se lit dans l'historique, aucun worktree ni branche locale."""
         if not iid.isdigit() or not SHA.fullmatch(head) or not SHA.fullmatch(merge_commit):
             raise GitError("MR ou commit invalide")
         self._check_branch_names(target)
@@ -179,14 +178,54 @@ class GitActions:
             self._fetch(f"refs/merge-requests/{iid}/head")
         if not self._has_commit(merge_commit):
             self._fetch(target)
-        return self._diff_range(f"{merge_commit}^1...{head}")
+        return f"{merge_commit}^1", head
 
-    def _diff_range(self, revisions):
+    def diff(
+            self,
+            revisions,
+            first=None,
+            last=None
+    ):
+        """Sans plage, le diff de la MR depuis le point où elle part de sa cible, celui de l'onglet
+        Changes de GitLab ; avec, ce qu'ont apporté ensemble ses commits de first à last."""
+        base, head = revisions
+        if first is None and last is None:
+            return self._diff_range(f"{base}...{head}")
+        shas = [commit["sha"] for commit in self.commits(revisions)]
+        if first not in shas or last not in shas or shas.index(first) > shas.index(last):
+            raise GitError("plage de commits hors de la MR")
+        return self._diff_range(f"{first}^1", last)
+
+    def commits(self, revisions):
+        """Commits de la MR, du plus ancien au plus récent, sans ceux de la cible qu'elle a mergée."""
+        base, head = revisions
+        completed = self._git(
+            [
+                "log", "--first-parent", "--reverse", "--format=%H%x1f%P%x1f%an%x1f%aI%x1f%s",
+                f"{base}..{head}",
+            ],
+            timeout=DIFF_TIMEOUT_S
+        )
+        if completed.returncode != 0:
+            raise GitError(last_line(completed.stderr) or "git log en échec")
+        commits = []
+        for line in completed.stdout.splitlines():
+            sha, parents, author, date, title = line.split("\x1f", 4)
+            commits.append({
+                "sha": sha,
+                "merge": len(parents.split()) > 1,
+                "author": author,
+                "date": date,
+                "title": title,
+            })
+        return commits
+
+    def _diff_range(self, *revisions):
         try:
             completed = subprocess.run(
                 [
                     "git", "-C", str(self._repo_root), "diff", "--no-color", "--no-ext-diff", "--find-renames",
-                    revisions,
+                    *revisions,
                 ],
                 capture_output=True,
                 env=GIT_ENV,

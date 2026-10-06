@@ -84,12 +84,44 @@
   main { padding: 1rem; }
   /* Liste des fichiers dans un panneau toujours visible, qui défile seul ; sa largeur se règle par son coin. */
   main.with-files { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 1rem; align-items: start; }
-  #files {
+  /* Commits au-dessus des fichiers, dans le même panneau : chacun défile pour son compte. */
+  #side {
     position: sticky; top: calc(var(--header-height, 0px) + 1rem);
-    max-height: calc(100vh - var(--header-height, 0px) - 2rem); overflow: auto; resize: horizontal;
+    display: flex; flex-direction: column; gap: 0.6rem;
+    height: calc(100vh - var(--header-height, 0px) - 2rem); overflow: hidden; resize: horizontal;
     width: 22rem; min-width: 12rem; max-width: 60vw;
+  }
+  #files {
+    flex: 1 1 auto; min-height: 6rem; overflow: auto;
     background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem;
   }
+  #commits {
+    flex: 0 1 auto; max-height: 40%; display: flex; flex-direction: column; min-height: 0;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem;
+  }
+  #commits[hidden] { display: none; }
+  .commits-head {
+    display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;
+    padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border); font-size: 0.8rem;
+  }
+  .commits-head strong { margin-right: auto; }
+  .commits-head button { font-size: 0.75rem; padding: 0.1em 0.5em; border-radius: 0.4rem; }
+  .commits-head button[aria-pressed="true"] { color: var(--accent-fg); border-color: transparent; background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
+  .commits-head button:disabled { opacity: 0.4; cursor: default; }
+  .commits-hint { padding: 0.25rem 0.6rem; font-size: 0.7rem; color: var(--muted); border-bottom: 1px solid var(--border); }
+  .commits-warning { padding: 0.3rem 0.6rem; font-size: 0.75rem; color: var(--red-fg); background: var(--red-bg); }
+  #commit-list { list-style: none; margin: 0; padding: 0; overflow: auto; min-height: 0; }
+  #commit-list li {
+    display: grid; grid-template-columns: 2.2em minmax(0, 1fr) auto; gap: 0 0.4rem; align-items: baseline;
+    padding: 0.2rem 0.6rem; font-size: 0.78rem; cursor: pointer; user-select: none;
+    border-left: 3px solid transparent;
+  }
+  #commit-list li:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+  #commit-list li.selected { background: color-mix(in srgb, var(--accent) 16%, transparent); border-left-color: var(--accent); }
+  #commit-list li.merge { color: var(--muted); font-style: italic; }
+  #commit-list .n { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+  #commit-list .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #commit-list .a { color: var(--muted); font-size: 0.7rem; white-space: nowrap; }
   #files .d2h-file-list-wrapper { margin: 0; border: none; }
   #files .d2h-file-list-header { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); }
   #files .d2h-file-list-line { padding: 0.3rem 0.75rem; border-bottom: 1px solid var(--border); }
@@ -102,7 +134,7 @@
   .d2h-file-wrapper { scroll-margin-top: calc(var(--header-height, 0px) + 0.5rem); }
   @media (max-width: 900px) {
     main.with-files { display: block; }
-    #files { position: static; width: auto; max-width: none; max-height: 40vh; resize: none; margin-bottom: 1rem; }
+    #side { position: static; width: auto; max-width: none; height: auto; max-height: 60vh; resize: none; margin-bottom: 1rem; }
   }
   .message { color: var(--muted); }
   .message.error { color: var(--red-fg); background: var(--red-bg); padding: 0.75rem 1rem; border-radius: 0.5rem; }
@@ -162,6 +194,15 @@
       empty: "Aucune différence avec la branche cible.",
       failed: p => `Diff impossible : ${p}`,
       invalid: "Lien incomplet : il manque la branche ou sa cible.",
+      commits: n => `${n} commit${n > 1 ? "s" : ""}`,
+      all: "Tout",
+      allTitle: "Tout le diff de la MR, depuis le point où elle part de sa cible",
+      hint: "Clic : un commit · Maj+clic : jusqu'à ce commit",
+      range: p => p.first === p.last ? `commit ${p.first} sur ${p.total}` : `commits ${p.first} à ${p.last} sur ${p.total}`,
+      mergeWarning: "La plage contient un merge de la cible : le diff montre aussi ce que ce merge a apporté.",
+      emptyRange: "Aucune différence dans cette plage de commits.",
+      commitsFailed: p => `Commits indisponibles : ${p}`,
+      mergeCommit: "Merge de la cible dans la branche",
     },
     en: {
       title: p => `Diff of !${p.iid}`,
@@ -177,6 +218,15 @@
       empty: "No difference with the target branch.",
       failed: p => `Could not compute the diff: ${p}`,
       invalid: "Incomplete link: the branch or its target is missing.",
+      commits: n => `${n} commit${n > 1 ? "s" : ""}`,
+      all: "All",
+      allTitle: "The whole MR diff, from where it leaves its target",
+      hint: "Click: one commit · Shift+click: up to this commit",
+      range: p => p.first === p.last ? `commit ${p.first} of ${p.total}` : `commits ${p.first} to ${p.last} of ${p.total}`,
+      mergeWarning: "The range contains a merge of the target: the diff also shows what that merge brought in.",
+      emptyRange: "No difference in this range of commits.",
+      commitsFailed: p => `Commits unavailable: ${p}`,
+      mergeCommit: "Merge of the target into the branch",
     },
   };
   const params = new URLSearchParams(location.search);
@@ -194,6 +244,12 @@
     merge: params.get("merge") ?? "",
   };
   let diffText = null;
+  // Commits de la MR, du plus ancien au plus récent ; plage affichée en indices, null pour tout le diff.
+  let commits = null;
+  let commitsError = null;
+  let range = null;
+  let anchor = null;
+  let loadSeq = 0;
 
   function escapeHtml(text) {
     return String(text).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -251,14 +307,16 @@
       button.setAttribute("aria-pressed", String(button.dataset.format === format));
     }
     if (diffText === null) return;
+    const main = document.getElementById("diff");
+    const listScroll = document.getElementById("commit-list")?.scrollTop ?? null;
+    main.innerHTML = '<aside id="side"><section id="commits" hidden></section><div id="files"></div></aside><div id="diff-files"></div>';
+    main.classList.add("with-files");
+    renderCommits(listScroll);
+    const container = document.getElementById("diff-files");
     if (!diffText.trim()) {
-      showMessage(texts.empty);
+      container.innerHTML = `<p class="message">${escapeHtml(range ? texts.emptyRange : texts.empty)}</p>`;
       return;
     }
-    const main = document.getElementById("diff");
-    main.innerHTML = '<aside id="files"></aside><div id="diff-files"></div>';
-    main.classList.add("with-files");
-    const container = document.getElementById("diff-files");
     const ui = new Diff2HtmlUI(
       container,
       diffText,
@@ -316,13 +374,78 @@
     for (const file of container.querySelectorAll(".d2h-file-wrapper")) observer.observe(file);
   }
 
+  function renderCommits(listScroll) {
+    const section = document.getElementById("commits");
+    if (commitsError) {
+      section.hidden = false;
+      section.innerHTML = `<div class="commits-warning">${escapeHtml(texts.commitsFailed(commitsError))}</div>`;
+      return;
+    }
+    if (!commits?.length) return;
+    section.hidden = false;
+    const selected = i => range && i >= range[0] && i <= range[1];
+    const items = commits.map((c, i) => {
+      const classes = [selected(i) ? "selected" : "", c.merge ? "merge" : ""].filter(Boolean).join(" ");
+      const tooltip = `${c.sha.slice(0, 8)} · ${c.author} · ${new Date(c.date).toLocaleString(lang)}\n${c.title}${c.merge ? `\n${texts.mergeCommit}` : ""}`;
+      return `<li data-index="${i}"${classes ? ` class="${classes}"` : ""} title="${escapeHtml(tooltip)}">`
+        + `<span class="n">${i + 1}</span><span class="t">${c.merge ? "⑂ " : ""}${escapeHtml(c.title)}</span>`
+        + `<span class="a">${escapeHtml(initials(c.author))} · ${escapeHtml(age(c.date))}</span></li>`;
+    }).join("");
+    const warning = range && commits.slice(range[0], range[1] + 1).some(c => c.merge)
+      ? `<div class="commits-warning">${escapeHtml(texts.mergeWarning)}</div>` : "";
+    section.innerHTML = `<div class="commits-head"><strong>${escapeHtml(texts.commits(commits.length))}</strong>`
+      + `<button type="button" data-range="all" aria-pressed="${!range}" title="${escapeHtml(texts.allTitle)}">${escapeHtml(texts.all)}</button></div>`
+      + `<div class="commits-hint">${escapeHtml(texts.hint)}</div>${warning}<ol id="commit-list">${items}</ol>`;
+    const list = document.getElementById("commit-list");
+    if (listScroll !== null) list.scrollTop = listScroll;
+    else list.scrollTop = list.scrollHeight;
+  }
+
+  const initials = name => name.split(/\s+/).filter(Boolean).map(part => part[0].toUpperCase()).join("").slice(0, 3);
+
+  // « 3 h », « 2 j » : de quoi situer un commit dans la vie de la MR.
+  function age(iso) {
+    const minutes = Math.max(0, Math.round((Date.now() - new Date(iso)) / 60000));
+    if (minutes < 60) return `${minutes} min`;
+    if (minutes < 48 * 60) return `${Math.round(minutes / 60)} h`;
+    return `${Math.round(minutes / 1440)} ${lang === "fr" ? "j" : "d"}`;
+  }
+
+  function renderRangeLabel() {
+    const label = document.getElementById("range");
+    label.textContent = range && commits
+      ? ` — ${texts.range({ first: range[0] + 1, last: range[1] + 1, total: commits.length })}`
+      : "";
+  }
+
+  // Plage dans l'adresse : un rechargement ou un lien partagé rouvre la même.
+  function writeRangeToUrl() {
+    const url = new URL(location.href);
+    if (range) {
+      url.searchParams.set("first", commits[range[0]].sha);
+      url.searchParams.set("last", commits[range[1]].sha);
+    } else {
+      url.searchParams.delete("first");
+      url.searchParams.delete("last");
+    }
+    history.replaceState(null, "", url);
+  }
+
+  function selectRange(next) {
+    range = next;
+    writeRangeToUrl();
+    renderRangeLabel();
+    loadDiff();
+  }
+
   function renderHeader() {
     document.documentElement.lang = lang;
     const title = mr.title ? `!${mr.iid} ${mr.title}` : texts.title(mr);
     document.title = title;
     document.getElementById("title").textContent = title;
     const branches = mr.merge ? texts.mergedBranches : texts.branches;
-    document.getElementById("branches").innerHTML = branches({ branch: escapeHtml(mr.branch), target: escapeHtml(mr.target) });
+    document.getElementById("branches").innerHTML = branches({ branch: escapeHtml(mr.branch), target: escapeHtml(mr.target) })
+      + '<span id="range"></span>';
     document.getElementById("side-by-side").textContent = texts.sideBySide;
     document.getElementById("line-by-line").textContent = texts.lineByLine;
     document.getElementById("text-size").title = texts.textSize;
@@ -339,27 +462,77 @@
     applyTextScale(readTextScale());
   }
 
+  function mrQuery() {
+    return new URLSearchParams(mr.merge
+      ? { iid: mr.iid, head: mr.head, merge: mr.merge, target: mr.target }
+      : { branch: mr.branch, target: mr.target });
+  }
+
+  async function fetchText(url) {
+    const response = await fetch(url);
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.message || `HTTP ${response.status}`);
+    }
+    return response.text();
+  }
+
   async function load() {
     if (!mr.branch || !mr.target) {
       showMessage(texts.invalid, true);
       return;
     }
-    const query = new URLSearchParams(mr.merge
-      ? { iid: mr.iid, head: mr.head, merge: mr.merge, target: mr.target }
-      : { branch: mr.branch, target: mr.target });
     try {
-      const response = await fetch(`git/diff?${query}`);
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body.message || `HTTP ${response.status}`);
-      }
-      diffText = await response.text();
+      commits = JSON.parse(await fetchText(`git/commits?${mrQuery()}`));
     } catch (error) {
-      showMessage(texts.failed(error.message), true);
+      commitsError = error.message;
+    }
+    const first = params.get("first");
+    const last = params.get("last");
+    const shas = commits?.map(c => c.sha) ?? [];
+    if (first && last && shas.includes(first) && shas.indexOf(first) <= shas.indexOf(last)) {
+      range = [shas.indexOf(first), shas.indexOf(last)];
+      anchor = range[0];
+    }
+    renderRangeLabel();
+    await loadDiff();
+  }
+
+  async function loadDiff() {
+    const seq = ++loadSeq;
+    const query = mrQuery();
+    if (range) {
+      query.set("first", commits[range[0]].sha);
+      query.set("last", commits[range[1]].sha);
+    }
+    let text;
+    try {
+      text = await fetchText(`git/diff?${query}`);
+    } catch (error) {
+      if (seq === loadSeq) showMessage(texts.failed(error.message), true);
       return;
     }
+    if (seq !== loadSeq) return;
+    diffText = text;
     render();
   }
+
+  document.getElementById("diff").addEventListener("click", e => {
+    if (e.target.closest("[data-range='all']")) {
+      anchor = null;
+      selectRange(null);
+      return;
+    }
+    const item = e.target.closest("#commit-list li");
+    if (!item) return;
+    const index = Number(item.dataset.index);
+    if (e.shiftKey && anchor !== null) {
+      selectRange([Math.min(anchor, index), Math.max(anchor, index)]);
+    } else {
+      anchor = index;
+      selectRange([index, index]);
+    }
+  });
 
   document.getElementById("format").addEventListener("click", e => {
     const button = e.target.closest("[data-format]");

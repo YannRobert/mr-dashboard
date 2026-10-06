@@ -19,7 +19,9 @@ Actions locales, en POST :
                 secondes ; GET /git/status en donne le dernier résultat (cf. git_actions.py)
     /git/auto   active ou suspend le fetch automatique : {"enabled": true|false}
     /git/diff   GET ?branch=&target= : diff d'une MR depuis le point où elle part de sa cible, affiché
-                par diff.html ; ?iid=&head=&merge=&target= pour une MR mergée, retrouvée par ses commits
+                par diff.html ; ?iid=&head=&merge=&target= pour une MR mergée, retrouvée par ses commits ;
+                &first=&last= pour ce qu'ont apporté ensemble ses commits de first à last
+    /git/commits GET, mêmes paramètres : commits de la MR, du plus ancien au plus récent
 
 Usage — d'ordinaire via scripts/mr-dashboard/start.sh, qui lit ces options dans un profil
 (scripts/mr-dashboard/profiles/<nom>.conf) :
@@ -240,6 +242,8 @@ def make_handler(
                 self.send_json(200, git.status())
             elif self.path.startswith("/git/diff?"):
                 self.git_diff(parse_qs(urlsplit(self.path).query))
+            elif self.path.startswith("/git/commits?"):
+                self.git_commits(parse_qs(urlsplit(self.path).query))
             elif self.path.startswith("/gitlab/"):
                 self.relay(
                     settings["gitlab_host"] + "/api/v4/" + self.path[len("/gitlab/"):],
@@ -327,29 +331,44 @@ def make_handler(
             self.send_json(200, git.status())
 
         def git_diff(self, query):
+            first, last = (query.get(name, [None])[0] for name in ("first", "last"))
+            try:
+                diff = git.diff(
+                    self.mr_revisions(query),
+                    first,
+                    last
+                )
+            except (GitError, ValueError) as error:
+                self.send_json(409 if isinstance(error, GitError) else 400, {"message": str(error)})
+                return
+            self.send_body(200, diff.encode(), {"Content-Type": "text/plain; charset=utf-8"})
+
+        def git_commits(self, query):
+            try:
+                commits = git.commits(self.mr_revisions(query))
+            except (GitError, ValueError) as error:
+                self.send_json(409 if isinstance(error, GitError) else 400, {"message": str(error)})
+                return
+            self.send_json(200, commits)
+
+        # MR ouverte par ses branches, mergée par ses commits.
+        def mr_revisions(self, query):
             branch, target, iid, head, merge = (
                 query.get(name, [""])[0] for name in ("branch", "target", "iid", "head", "merge")
             )
             if not target or not (branch or (iid and head and merge)):
-                self.send_json(400, {"message": "requête invalide"})
-                return
-            try:
-                if branch:
-                    diff = git.diff(
-                        branch,
-                        target
-                    )
-                else:
-                    diff = git.merged_diff(
-                        iid,
-                        head,
-                        merge,
-                        target
-                    )
-            except GitError as error:
-                self.send_json(409, {"message": str(error)})
-                return
-            self.send_body(200, diff.encode(), {"Content-Type": "text/plain; charset=utf-8"})
+                raise ValueError("requête invalide")
+            if branch:
+                return git.open_revisions(
+                    branch,
+                    target
+                )
+            return git.merged_revisions(
+                iid,
+                head,
+                merge,
+                target
+            )
 
         def host_allowed(self):
             # Refuse tout autre nom d'hôte : une page tierce qui ferait pointer son domaine sur
