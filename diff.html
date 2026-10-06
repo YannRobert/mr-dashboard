@@ -87,7 +87,7 @@
   /* Commits au-dessus des fichiers, dans le même panneau : chacun défile pour son compte. */
   #side {
     position: sticky; top: calc(var(--header-height, 0px) + 1rem);
-    display: flex; flex-direction: column; gap: 0.6rem;
+    display: flex; flex-direction: column;
     height: calc(100vh - var(--header-height, 0px) - 2rem); overflow: hidden; resize: horizontal;
     width: 22rem; min-width: 12rem; max-width: 60vw;
   }
@@ -99,7 +99,11 @@
     flex: 0 1 auto; max-height: 40%; display: flex; flex-direction: column; min-height: 0;
     background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem;
   }
-  #commits[hidden] { display: none; }
+  #commits[hidden], #commits[hidden] + #split { display: none; }
+  /* Poignée entre commits et fichiers : glisser règle leur répartition, double-clic la rétablit. */
+  #split { flex: 0 0 0.6rem; cursor: row-resize; touch-action: none; display: flex; align-items: center; justify-content: center; }
+  #split::before { content: ""; width: 2.5rem; height: 3px; border-radius: 2px; background: var(--border); }
+  #split:hover::before, #split.dragging::before { background: var(--accent); }
   .commits-head {
     display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;
     padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border); font-size: 0.8rem;
@@ -130,13 +134,13 @@
   #commit-list .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #commit-list .a { color: var(--muted); font-size: 0.7rem; white-space: nowrap; }
   #files .d2h-file-list-wrapper { margin: 0; border: none; }
-  #files .d2h-file-list-header { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); }
-  #files .d2h-file-list-line { padding: 0.3rem 0.75rem; border-bottom: 1px solid var(--border); }
+  #files .d2h-file-list-header { padding: 0.4rem 0.75rem; font-size: 0.85rem; border-bottom: 1px solid var(--border); }
+  #files .d2h-file-list-line { padding: 0.25rem 0.75rem; border-bottom: 1px solid var(--border); }
   #files .d2h-file-list-line.current { background: color-mix(in srgb, var(--accent) 14%, transparent); }
-  #files .d2h-file-name-wrapper { font-size: 0.85rem; min-width: 0; }
+  #files .d2h-file-name-wrapper { font-size: 0.78rem; min-width: 0; }
   #files .d2h-file-name { display: flex; flex-direction: column; min-width: 0; text-decoration: none; }
   #files .file-base { font-weight: 600; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
-  #files .file-dir { font-size: 0.75rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+  #files .file-dir { font-size: 0.7rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
   #diff-files { min-width: 0; }
   .d2h-file-wrapper { scroll-margin-top: calc(var(--header-height, 0px) + 0.5rem); }
   @media (max-width: 900px) {
@@ -184,6 +188,7 @@
   const FORMAT_KEY = "mr-dashboard.diffFormat";
   const DASHBOARD_TEXT_SCALE_KEY = "mr-dashboard.textScale";
   const TEXT_SCALE_KEY = "mr-dashboard.diffTextRatio";
+  const COMMITS_SHARE_KEY = "mr-dashboard.diffCommitsShare";
   const TEXT_SCALES = [0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3];
   const DEFAULT_TEXT_SCALE = 1.25;
   const TEXTS = {
@@ -205,6 +210,7 @@
       all: "Tout",
       allTitle: "Tout le diff de la MR, depuis le point où elle part de sa cible",
       hint: "Clic : un commit · Maj+clic : jusqu'à ce commit",
+      splitTitle: "Glisser pour répartir la hauteur entre commits et fichiers · double-clic : répartition par défaut",
       range: p => p.first === p.last ? `commit ${p.first} sur ${p.total}` : `commits ${p.first} à ${p.last} sur ${p.total}`,
       mergeWarning: "La plage contient un merge de la cible : le diff montre aussi ce que ce merge a apporté.",
       emptyRange: "Aucune différence dans cette plage de commits.",
@@ -235,6 +241,7 @@
       all: "All",
       allTitle: "The whole MR diff, from where it leaves its target",
       hint: "Click: one commit · Shift+click: up to this commit",
+      splitTitle: "Drag to share the height between commits and files · double-click: default split",
       range: p => p.first === p.last ? `commit ${p.first} of ${p.total}` : `commits ${p.first} to ${p.last} of ${p.total}`,
       mergeWarning: "The range contains a merge of the target: the diff also shows what that merge brought in.",
       emptyRange: "No difference in this range of commits.",
@@ -333,7 +340,7 @@
     if (diffText === null) return;
     const main = document.getElementById("diff");
     const listScroll = document.getElementById("commit-list")?.scrollTop ?? null;
-    main.innerHTML = '<aside id="side"><section id="commits" hidden></section><div id="files"></div></aside><div id="diff-files"></div>';
+    main.innerHTML = `<aside id="side"><section id="commits" hidden></section><div id="split" role="separator" aria-orientation="horizontal" title="${escapeHtml(texts.splitTitle)}"></div><div id="files"></div></aside><div id="diff-files"></div>`;
     main.classList.add("with-files");
     renderCommits(listScroll);
     const container = document.getElementById("diff-files");
@@ -436,7 +443,67 @@
     const list = document.getElementById("commit-list");
     if (listScroll !== null) list.scrollTop = listScroll;
     else list.scrollTop = list.scrollHeight;
+    applyCommitsShare(readCommitsShare());
   }
+
+  function readCommitsShare() {
+    try {
+      const share = Number(localStorage.getItem(COMMITS_SHARE_KEY));
+      return share > 0 && share < 1 ? share : null;
+    } catch (ignored) {
+      return null;
+    }
+  }
+
+  function saveCommitsShare(share) {
+    try {
+      if (share === null) localStorage.removeItem(COMMITS_SHARE_KEY);
+      else localStorage.setItem(COMMITS_SHARE_KEY, String(share));
+    } catch (ignored) { /* stockage indisponible : la répartition n'est pas retenue */ }
+  }
+
+  // Part de la hauteur du panneau donnée aux commits ; null : hauteur naturelle, plafonnée par la feuille de style.
+  function applyCommitsShare(share) {
+    const section = document.getElementById("commits");
+    if (!section) return;
+    section.style.height = share === null ? "" : `${share * 100}%`;
+    section.style.maxHeight = share === null ? "" : "none";
+    section.style.flexShrink = share === null ? "" : "0";
+  }
+
+  document.addEventListener("pointerdown", event => {
+    const split = event.target.closest?.("#split");
+    if (!split || event.button !== 0) return;
+    event.preventDefault();
+    const side = document.getElementById("side");
+    const section = document.getElementById("commits");
+    const startY = event.clientY;
+    const startHeight = section.getBoundingClientRect().height;
+    const minHeight = 48;
+    const maxHeight = side.clientHeight - split.offsetHeight - 96;
+    let share = null;
+    split.setPointerCapture(event.pointerId);
+    split.classList.add("dragging");
+    const move = moveEvent => {
+      const height = Math.min(Math.max(startHeight + moveEvent.clientY - startY, minHeight), maxHeight);
+      share = height / side.clientHeight;
+      applyCommitsShare(share);
+    };
+    const end = () => {
+      split.removeEventListener("pointermove", move);
+      split.classList.remove("dragging");
+      if (share !== null) saveCommitsShare(share);
+    };
+    split.addEventListener("pointermove", move);
+    split.addEventListener("pointerup", end, { once: true });
+    split.addEventListener("pointercancel", end, { once: true });
+  });
+
+  document.addEventListener("dblclick", event => {
+    if (!event.target.closest?.("#split")) return;
+    saveCommitsShare(null);
+    applyCommitsShare(null);
+  });
 
   const seenKey = () => `mr-dashboard.diffSeen.${mr.iid}`;
 

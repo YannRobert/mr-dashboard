@@ -117,7 +117,9 @@ Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut
   diff complet ; la plage est dans l'adresse. Les commits sont groupés par push, d'après les versions
   de la MR dans GitLab (sans GitLab, pas de groupes) : un clic sur un push, ou **Dernier push**, n'affiche
   que les commits arrivés avec lui. **Nouveaux (n)** n'affiche que les commits arrivés depuis la dernière
-  lecture de ce diff dans le navigateur, numéros en couleur dans la liste. Une plage qui contient un merge de la cible le signale :
+  lecture de ce diff dans le navigateur, numéros en couleur dans la liste.
+  La poignée entre la liste des commits et celle des fichiers règle leur répartition (retenue par le
+  navigateur) ; un double-clic la rétablit. Une plage qui contient un merge de la cible le signale :
   son diff montre aussi ce que ce merge a apporté. Liste des
   fichiers dans un panneau latéral toujours visible (nom, puis répertoire ; le fichier lu y est
   surligné ; largeur réglable par son coin bas droit), côte à côte ou ligne à ligne (retenu dans le
