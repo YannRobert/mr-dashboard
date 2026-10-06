@@ -329,6 +329,7 @@
   .ok.good { color: var(--green-fg); font-weight: 600; }
   .muted { color: var(--muted); }
   .late-orange { color: var(--orange-fg); font-weight: 600; }
+  .behind-unit { color: var(--muted); font-size: 0.75rem; }
   .labels { display: flex; flex-wrap: wrap; gap: 4px; }
   .label {
     font-size: 0.8rem; font-weight: 500; border-radius: 999px; padding: 0.1em 0.65em;
@@ -340,11 +341,11 @@
   /* Actions sur la MR (diff, correction) : boutons discrets, les signaux restent ce qui attire l'œil. */
   .mr-action { flex: none; white-space: nowrap; font-size: 0.85rem; font-weight: 600; padding: 0.3em 0.7em; color: var(--muted); }
   .mr-action:hover { color: var(--text); border-color: var(--faint); }
-  dialog.ai-prompt {
   /* Liseré rouge : sa seule présence signale une MR qui a quelque chose à corriger. */
   .mr-action.ai-fix { color: var(--text); border: 1px solid var(--red-fg); }
   .mr-action.ai-fix:hover { border-color: var(--red-fg); background: var(--red-bg); }
   .mr-action.placeholder { visibility: hidden; }
+  dialog.ai-prompt {
     width: min(1200px, calc(100vw - 32px)); padding: 1.2rem; border: 1px solid var(--border);
     border-radius: 0.8rem; background: var(--surface); color: var(--text); box-shadow: var(--shadow);
   }
@@ -681,9 +682,9 @@ const PIPELINE_RANK = {
 // Ordre des colonnes, et pour chacune : valeur de tri (null = inconnue) et sens du premier clic.
 // Les signaux trient par gravité décroissante au premier clic, pour faire remonter les alertes.
 // Libellé et aide de chaque colonne viennent des traductions : col.<clé> et help.<clé>.
-const COLUMNS = [
   // Actions dans leur colonne, empilées : sous le titre, elles ajoutaient une troisième ligne à chaque MR.
   { key: "actions", sortable: false, cellClass: "actions-cell", render: mr => `<div class="actions">${gitDiffButton(mr)}${aiFixButton(mr) || aiFixPlaceholder()}</div>` },
+const COLUMNS = [
   { key: "title", firstDir: "asc", cellClass: "mr-cell", value: mr => mr.title.replace(/^Draft:\s*/i, ""), render: mrCell },
   { key: "author", firstDir: "asc", cellClass: "nowrap", value: mr => mr.author?.name ?? null, render: authorCell },
   { key: "commits", firstDir: "desc", num: true, cellClass: "num", value: commitsCount, render: commitsCell },
@@ -890,8 +891,8 @@ const I18N = {
     "group.review": "Revue",
     "group.quality": "Qualité",
     "group.target": "Retard sur la cible",
-    "group.time": "Durées",
     "col.actions": "Actions",
+    "group.time": "Durées",
     "col.title": "MR",
     "col.author": "Auteur",
     "col.commits": "Commits",
@@ -1019,7 +1020,7 @@ const I18N = {
     "ca.comments.mine": p => `${p.n} commentaire${plural(p.n)} de l'auteur — ${p.authors}\n${p.from}${p.to ? ` → ${p.to}` : ""}`,
     "ca.cumulCount": p => `${p.n}ᵉ commit — ${p.sha} ${p.title}\n${p.date}`,
     "behind.upToDate": p => `À jour avec ${p.target}`,
-    "behind.late": p => `${p.n} commit${plural(p.n)} de retard`,
+    "behind.unit": p => `commit${plural(p.n)} de retard`,
     "behind.none": "à jour",
     "behind.count": p => `${p.n} commit${plural(p.n)} de ${p.target} absent${plural(p.n)} de la MR`,
     "behind.since": p => `Retard depuis le ${p.date} (commit ${p.next}, après le dernier commit commun ${p.base})`,
@@ -1133,8 +1134,8 @@ const I18N = {
     "group.review": "Review",
     "group.quality": "Quality",
     "group.target": "Behind target",
-    "group.time": "Times",
     "col.actions": "Actions",
+    "group.time": "Times",
     "col.title": "MR",
     "col.author": "Author",
     "col.commits": "Commits",
@@ -1262,7 +1263,7 @@ const I18N = {
     "ca.comments.mine": p => `${p.n} comment${pluralEn(p.n)} by the author — ${p.authors}\n${p.from}${p.to ? ` → ${p.to}` : ""}`,
     "ca.cumulCount": p => `Commit #${p.n} — ${p.sha} ${p.title}\n${p.date}`,
     "behind.upToDate": p => `Up to date with ${p.target}`,
-    "behind.late": p => `${p.n} commit${pluralEn(p.n)} late`,
+    "behind.unit": p => `commit${pluralEn(p.n)} late`,
     "behind.none": "up to date",
     "behind.count": p => `${p.n} commit${pluralEn(p.n)} of ${p.target} missing from the MR`,
     "behind.since": p => `Behind since ${p.date} (commit ${p.next}, after the last common commit ${p.base})`,
@@ -2833,8 +2834,8 @@ function renderHeaders() {
     .join("");
   $("headers").innerHTML = `<tr class="groups">${groups}</tr><tr class="columns">` + shownColumns().map(column => {
     const active = state.filters.sort === column.key;
-    const arrow = active ? (state.filters.dir === "asc" ? "▲" : "▼") : "";
     if (column.sortable === false) return `<th class="${groupClass(column.key)}" title="${escapeHtml(help)}"><span class="col-label">${escapeHtml(t(`col.${column.key}`))}</span></th>`;
+    const arrow = active ? (state.filters.dir === "asc" ? "▲" : "▼") : "";
     const ariaSort = active ? ` aria-sort="${state.filters.dir === "asc" ? "ascending" : "descending"}"` : "";
     const help = has(`help.${column.key}`) ? t(`help.${column.key}`) : "";
     return `<th class="${column.num ? "num" : ""} ${groupClass(column.key)}"${ariaSort} title="${escapeHtml(help)}">` +
@@ -3038,14 +3039,14 @@ function renderGitFetchFreshness() {
   );
 }
 
+// indicateur qualité imparfait ou un thread non résolu. Le prompt ne cite que ce qui l'est, avec les
+// valeurs affichées dans le tableau.
 // ---------- Prompt de correction ----------
 
 // Le bouton n'apparaît que s'il y a quelque chose à corriger : une branche en retard ou en conflit, un
 // Place du bouton gardée quand il n'y a rien à corriger : « diff » reste au même endroit d'une ligne à l'autre.
 const aiFixPlaceholder = () => `<button type="button" class="mr-action ai-fix placeholder" tabindex="-1" aria-hidden="true">${escapeHtml(t("aiFix"))}</button>`;
 
-// indicateur qualité imparfait ou un thread non résolu. Le prompt ne cite que ce qui l'est, avec les
-// valeurs affichées dans le tableau.
 function aiFixButton(mr) {
   const s = signalsOf(mr);
   if (s.loading || mr.state === "merged") return "";
@@ -3583,13 +3584,15 @@ function behindCell(mr) {
   const behind = s.behind;
   if (!behind || behind.count == null) return `<span class="muted" title="${escapeHtml(behind?.error ?? s.error ?? "")}">?</span>`;
   if (behind.count === 0) return `<span class="ok good" title="${escapeHtml(t("behind.upToDate", { target: mr.target_branch }))}">${escapeHtml(t("behind.none"))}</span>`;
-  const count = `<div title="${escapeHtml(t("behind.count", { n: behind.count, target: mr.target_branch }))}">${escapeHtml(t("behind.late", { n: behind.count }))}</div>`;
+  // Le nombre et son ancienneté sur une ligne, l'unité en petit dessous : la colonne ne prend que la
+  // largeur de son libellé le plus court.
+  const count = `<span title="${escapeHtml(t("behind.count", { n: behind.count, target: mr.target_branch }))}">${behind.count}</span>`;
   const hours = behind.since ? (gitlabNow() - new Date(behind.since)) / 3600000 : 0;
   const tone = hours > BEHIND_ORANGE_HOURS ? "late-orange" : "muted";
   const since = behind.since
-    ? `<div class="${tone}" title="${escapeHtml(t("behind.since", { date: formatDate(behind.since), next: behind.next, base: behind.base }))}">(${compactDuration(gitlabNow() - new Date(behind.since))})</div>`
-    : `<div class="muted" title="${escapeHtml(behind.error ?? "")}">(?)</div>`;
-  return count + since;
+    ? `<span class="${tone}" title="${escapeHtml(t("behind.since", { date: formatDate(behind.since), next: behind.next, base: behind.base }))}">(${compactDuration(gitlabNow() - new Date(behind.since))})</span>`
+    : `<span class="muted" title="${escapeHtml(behind.error ?? "")}">(?)</span>`;
+  return `<div>${count} ${since}</div><div class="behind-unit">${escapeHtml(t("behind.unit", { n: behind.count }))}</div>`;
 }
 
 // ---------- Pipeline de la branche suivie ----------
@@ -3819,22 +3822,21 @@ function stageIcon(group) {
 
 // ---------- Utilitaires ----------
 
-// « - 4 heures » plutôt que « il y a 4 heures » : la colonne se lit plus vite sans le préfixe répété.
+// « - 4h » plutôt que « il y a 4 heures » : la colonne se lit plus vite sans le préfixe répété, et reste
+// étroite. Les jours gardent leur mot, court dans les deux langues.
 const durationFormat = unit => new Intl.NumberFormat(locale(), { style: "unit", unit, unitDisplay: "long" });
 
-// Entre 1 h et 3 h, « 2h59 » : l'heure arrondie de Intl (« 3 heures ») y écrase une précision encore utile.
+  const sign = seconds < 0 ? "- " : "";
+// Entre 1 h et 3 h, « 2h59 » : l'heure arrondie (« 3h ») y écraserait une précision encore utile.
 function relative(iso) {
   const seconds = (new Date(iso) - gitlabNow()) / 1000;
   const minutes = Math.floor(Math.abs(seconds) / 60);
-  if (minutes >= 60 && minutes < 180) {
-    return `${seconds < 0 ? "- " : ""}${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, "0")}`;
-  }
-  const steps = [[60, "second"], [60, "minute"], [24, "hour"], [Infinity, "day"]];
-  let value = seconds;
-  for (const [size, unit] of steps) {
-    if (Math.abs(value) < size) return `${value < 0 ? "- " : ""}${durationFormat(unit).format(Math.abs(Math.round(value)))}`;
-    value /= size;
-  }
+  if (minutes < 1) return `${sign}< 1 min`;
+  if (minutes < 60) return `${sign}${minutes} min`;
+  if (minutes < 180) return `${sign}${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, "0")}`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${sign}${hours}h`;
+  return `${sign}${durationFormat("day").format(Math.round(hours / 24))}`;
 }
 
 // « < 1 min », « 20 min », « 1h20 », « 2 j 3h » (« 2 d 3h » en anglais) : plus précis que relative() à l'échelle d'une journée de retard.
