@@ -289,7 +289,8 @@
   table.mrs td.signal { white-space: nowrap; }
   table.mrs td.signal .stack { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; }
 
-  .mr-cell { min-width: 22rem; }
+  /* Toute la largeur que les autres colonnes laissent : ses deux lignes y tiennent sans retour à la ligne. */
+  .mr-cell { min-width: 22rem; width: 100%; }
   /* Titre sur une seule ligne, sans peser sur la largeur de la colonne (contain) : réduit par fitTitles,
      puis tronqué par « … » s'il ne tient toujours pas ; complet au survol. */
   .mr-cell .title { display: flex; align-items: baseline; gap: 6px; contain: inline-size; font-weight: 600; font-size: 1.05rem; line-height: 1.35; }
@@ -301,7 +302,8 @@
     color: var(--grey-fg); background: var(--grey-bg); border: 1px dashed var(--border-strong);
     border-radius: 4px; padding: 1px 6px; vertical-align: 2px;
   }
-  .mr-cell .sub { color: var(--muted); font-size: 0.85rem; margin-top: 0.2rem; }
+  /* Une seule ligne, tronquée en fin de branches : le diffstat passe avant elles pour rester visible. */
+  .mr-cell .sub { color: var(--muted); font-size: 0.85rem; margin-top: 0.2rem; contain: inline-size; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .mr-cell .sub .iid { font-weight: 600; color: var(--accent); }
   .mr-cell .sub code {
     font-size: 0.8rem; background: var(--surface-2); border: 1px solid var(--border);
@@ -333,15 +335,16 @@
     background: var(--blue-bg); color: var(--blue-fg); border: 0; cursor: pointer;
   }
   .label:hover { filter: brightness(0.96); }
-  /* Les actions sur leur propre ligne, sous le titre : à côté, elles écrasaient le titre et élargissaient la
-     colonne au point de pousser les dernières hors de l'écran. */
-  .mr-cell .title-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-top: 0.4rem; }
-  .mr-cell .title-actions:empty { display: none; }
-  .mr-cell .title-actions .pill { font-size: 0.85rem; }
+  .mr-cell .title .pill { font-size: 0.8rem; font-weight: 600; }
+  .actions-cell .actions { display: flex; flex-direction: column; align-items: stretch; gap: 0.3rem; }
   /* Actions sur la MR (diff, correction) : boutons discrets, les signaux restent ce qui attire l'œil. */
   .mr-action { flex: none; white-space: nowrap; font-size: 0.85rem; font-weight: 600; padding: 0.3em 0.7em; color: var(--muted); }
   .mr-action:hover { color: var(--text); border-color: var(--faint); }
   dialog.ai-prompt {
+  /* Liseré rouge : sa seule présence signale une MR qui a quelque chose à corriger. */
+  .mr-action.ai-fix { color: var(--text); border: 1px solid var(--red-fg); }
+  .mr-action.ai-fix:hover { border-color: var(--red-fg); background: var(--red-bg); }
+  .mr-action.placeholder { visibility: hidden; }
     width: min(1200px, calc(100vw - 32px)); padding: 1.2rem; border: 1px solid var(--border);
     border-radius: 0.8rem; background: var(--surface); color: var(--text); box-shadow: var(--shadow);
   }
@@ -679,6 +682,8 @@ const PIPELINE_RANK = {
 // Les signaux trient par gravité décroissante au premier clic, pour faire remonter les alertes.
 // Libellé et aide de chaque colonne viennent des traductions : col.<clé> et help.<clé>.
 const COLUMNS = [
+  // Actions dans leur colonne, empilées : sous le titre, elles ajoutaient une troisième ligne à chaque MR.
+  { key: "actions", sortable: false, cellClass: "actions-cell", render: mr => `<div class="actions">${gitDiffButton(mr)}${aiFixButton(mr) || aiFixPlaceholder()}</div>` },
   { key: "title", firstDir: "asc", cellClass: "mr-cell", value: mr => mr.title.replace(/^Draft:\s*/i, ""), render: mrCell },
   { key: "author", firstDir: "asc", cellClass: "nowrap", value: mr => mr.author?.name ?? null, render: authorCell },
   { key: "commits", firstDir: "desc", num: true, cellClass: "num", value: commitsCount, render: commitsCell },
@@ -723,7 +728,7 @@ const DEFAULT_SORTS = { open: { key: "activity", dir: "desc" }, merged: { key: "
 // le retard sur la branche cible, puis les durées à droite.
 const COLUMN_GROUPS = {
   open: [
-    { key: "mr", columns: ["title", "author"] },
+    { key: "mr", columns: ["title", "author", "actions"] },
     { key: "review", columns: ["commits", "comments", "threads"] },
     { key: "quality", columns: ["pipeline", "issues", "coverage", "pit"] },
     { key: "target", columns: ["behind"] },
@@ -886,6 +891,7 @@ const I18N = {
     "group.quality": "Qualité",
     "group.target": "Retard sur la cible",
     "group.time": "Durées",
+    "col.actions": "Actions",
     "col.title": "MR",
     "col.author": "Auteur",
     "col.commits": "Commits",
@@ -1128,6 +1134,7 @@ const I18N = {
     "group.quality": "Quality",
     "group.target": "Behind target",
     "group.time": "Times",
+    "col.actions": "Actions",
     "col.title": "MR",
     "col.author": "Author",
     "col.commits": "Commits",
@@ -2827,6 +2834,7 @@ function renderHeaders() {
   $("headers").innerHTML = `<tr class="groups">${groups}</tr><tr class="columns">` + shownColumns().map(column => {
     const active = state.filters.sort === column.key;
     const arrow = active ? (state.filters.dir === "asc" ? "▲" : "▼") : "";
+    if (column.sortable === false) return `<th class="${groupClass(column.key)}" title="${escapeHtml(help)}"><span class="col-label">${escapeHtml(t(`col.${column.key}`))}</span></th>`;
     const ariaSort = active ? ` aria-sort="${state.filters.dir === "asc" ? "ascending" : "descending"}"` : "";
     const help = has(`help.${column.key}`) ? t(`help.${column.key}`) : "";
     return `<th class="${column.num ? "num" : ""} ${groupClass(column.key)}"${ariaSort} title="${escapeHtml(help)}">` +
@@ -2884,9 +2892,8 @@ function mrCell(mr) {
     .map(l => `<button type="button" class="label" data-add-label="${escapeHtml(l)}" title="${escapeHtml(t("label.add"))}">${escapeHtml(l)}</button>`)
     .join("");
   const conflicts = mr.has_conflicts && mr.state !== "merged" ? " " + pill("red", t("conflicts"), t("conflicts.title"), mr.web_url) : "";
-  return `<div class="title"><a href="${escapeHtml(mr.web_url)}" target="_blank" rel="noopener" title="${escapeHtml(mr.title.replace(/^Draft:\s*/i, ""))}">${escapeHtml(mr.title.replace(/^Draft:\s*/i, ""))}</a>${mr.draft ? '<span class="draft">Draft</span>' : ""}${conflicts}</div>
-    <div class="sub"><span class="iid">!${mr.iid}</span> · <code>${escapeHtml(mr.source_branch)}</code> → <code>${escapeHtml(mr.target_branch)}</code>${diffStat(mr)}</div>
-    <div class="title-actions">${stalledPill(mr)}${changesRequestedPill(mr)}${approvalPill(mr)}${gitDiffButton(mr)}${aiFixButton(mr)}</div>
+  return `<div class="title"><a href="${escapeHtml(mr.web_url)}" target="_blank" rel="noopener" title="${escapeHtml(mr.title.replace(/^Draft:\s*/i, ""))}">${escapeHtml(mr.title.replace(/^Draft:\s*/i, ""))}</a>${mr.draft ? '<span class="draft">Draft</span>' : ""}${conflicts}${stalledPill(mr)}${changesRequestedPill(mr)}${approvalPill(mr)}</div>
+    <div class="sub" title="${escapeHtml(`${mr.source_branch} → ${mr.target_branch}`)}"><span class="iid">!${mr.iid}</span>${diffStat(mr)} · <code>${escapeHtml(mr.source_branch)}</code> → <code>${escapeHtml(mr.target_branch)}</code></div>
     ${labels ? `<div class="labels">${labels}</div>` : ""}`;
 }
 
@@ -3034,6 +3041,9 @@ function renderGitFetchFreshness() {
 // ---------- Prompt de correction ----------
 
 // Le bouton n'apparaît que s'il y a quelque chose à corriger : une branche en retard ou en conflit, un
+// Place du bouton gardée quand il n'y a rien à corriger : « diff » reste au même endroit d'une ligne à l'autre.
+const aiFixPlaceholder = () => `<button type="button" class="mr-action ai-fix placeholder" tabindex="-1" aria-hidden="true">${escapeHtml(t("aiFix"))}</button>`;
+
 // indicateur qualité imparfait ou un thread non résolu. Le prompt ne cite que ce qui l'est, avec les
 // valeurs affichées dans le tableau.
 function aiFixButton(mr) {
@@ -3041,7 +3051,7 @@ function aiFixButton(mr) {
   if (s.loading || mr.state === "merged") return "";
   const outdated = mr.has_conflicts || s.behind?.count > 0;
   if (!outdated && !qualityDefects(s).length && !(s.threads?.unresolved > 0)) return "";
-  return `<button type="button" class="mr-action" data-ai-fix="${mr.iid}" title="${escapeHtml(t("aiFix.title"))}">${escapeHtml(t("aiFix"))}</button>`;
+  return `<button type="button" class="mr-action ai-fix" data-ai-fix="${mr.iid}" title="${escapeHtml(t("aiFix.title"))}">${escapeHtml(t("aiFix"))}</button>`;
 }
 
 // Alimente le prompt seul : en français quelle que soit la langue de l'interface, comme aiFixPrompt.
