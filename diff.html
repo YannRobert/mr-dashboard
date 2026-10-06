@@ -9,11 +9,12 @@
   // Thème du dashboard et taille du texte, posés avant le premier rendu.
   try {
     const scale = Number(localStorage.getItem("mr-dashboard.diffTextScale"));
-    if (scale) document.documentElement.style.setProperty("--text-scale", scale);
+    document.documentElement.style.setProperty("--text-scale", scale || 2);
     const theme = localStorage.getItem("mr-dashboard.theme");
     document.documentElement.dataset.theme = theme === "light" || theme === "dark" ? theme
       : matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   } catch (ignored) {
+    document.documentElement.style.setProperty("--text-scale", 2);
     document.documentElement.dataset.theme = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   }
 </script>
@@ -48,7 +49,8 @@
     --red-bg: #3d1a1a; --red-fg: #ffb4ab;
   }
   /* Taille du texte de la page, réglée par A− / A+ sans toucher au zoom du navigateur, qui vaut pour tout le
-     site et agrandirait donc aussi le dashboard. À 100 %, celle du dashboard. */
+     site et agrandirait donc aussi le dashboard. À 100 %, celle du dashboard ; 200 % par défaut, le code se
+     lisant de plus près qu'un tableau. */
   html { font-size: calc(100% * var(--text-scale, 1)); }
   body {
     margin: 0;
@@ -137,7 +139,8 @@
 <script>
   const FORMAT_KEY = "mr-dashboard.diffFormat";
   const TEXT_SCALE_KEY = "mr-dashboard.diffTextScale";
-  const TEXT_SCALES = [0.8, 0.9, 1, 1.1, 1.25, 1.4, 1.6, 1.8, 2];
+  const TEXT_SCALES = [0.8, 0.9, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3];
+  const DEFAULT_TEXT_SCALE = 2;
   const TEXTS = {
     fr: {
       title: p => `Diff de !${p.iid}`,
@@ -202,9 +205,9 @@
   function readTextScale() {
     try {
       const scale = Number(localStorage.getItem(TEXT_SCALE_KEY));
-      return TEXT_SCALES.includes(scale) ? scale : 1;
+      return TEXT_SCALES.includes(scale) ? scale : DEFAULT_TEXT_SCALE;
     } catch (ignored) {
-      return 1;
+      return DEFAULT_TEXT_SCALE;
     }
   }
 
