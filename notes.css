@@ -1,0 +1,27 @@
+/* Corps d'un commentaire GitLab rendu (notes.js) : de quoi lire titres, listes, tableaux et code, aux couleurs de la page. */
+.gl-body { overflow-wrap: anywhere; color: var(--text); }
+.gl-body > :first-child { margin-top: 0; }
+.gl-body > :last-child { margin-bottom: 0; }
+.gl-body p, .gl-body ul, .gl-body ol, .gl-body table, .gl-body pre, .gl-body blockquote, .gl-body details { margin: 0.45em 0; }
+.gl-body h1, .gl-body h2, .gl-body h3, .gl-body h4, .gl-body h5, .gl-body h6 { margin: 0.8em 0 0.35em; line-height: 1.25; }
+.gl-body h1 { font-size: 1.35em; }
+.gl-body h2 { font-size: 1.2em; }
+.gl-body h3 { font-size: 1.08em; }
+.gl-body h4, .gl-body h5, .gl-body h6 { font-size: 1em; }
+.gl-body ul, .gl-body ol { padding-left: 1.5em; }
+.gl-body li.task-list-item { list-style: none; }
+.gl-body li.task-list-item input { margin: 0 0.3em 0 -1.3em; }
+.gl-body a { color: var(--link); }
+.gl-body code { font: 0.9em Menlo, Consolas, monospace; padding: 0.05em 0.25em; border-radius: 0.25rem; background: var(--bg); }
+.gl-body pre { padding: 0.45em 0.6em; border-radius: 0.35rem; background: var(--bg); border: 1px solid var(--border); overflow-x: auto; white-space: pre; }
+.gl-body pre code { padding: 0; background: none; font-size: 0.85em; }
+.gl-body pre .line { display: inline; }
+.gl-body blockquote { padding: 0.1em 0.8em; border-left: 3px solid var(--border-strong); color: var(--muted); }
+.gl-body table { border-collapse: collapse; display: block; max-width: 100%; overflow-x: auto; font-size: 0.92em; }
+.gl-body th, .gl-body td { padding: 0.25em 0.6em; border: 1px solid var(--border-strong); vertical-align: top; }
+.gl-body th { background: var(--bg); font-weight: 600; }
+.gl-body tr:nth-child(even) td { background: color-mix(in srgb, var(--bg) 50%, transparent); }
+.gl-body details > summary { cursor: pointer; font-weight: 600; }
+.gl-body img { max-width: 100%; }
+.gl-body hr { border: none; border-top: 1px solid var(--border); margin: 0.8em 0; }
+.gl-body .gfm-project_member, .gl-body .gfm-merge_request, .gl-body .gfm-issue, .gl-body .gfm-commit { font-weight: 500; }

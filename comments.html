@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Commentaires — MisteR Dashboard</title>
+<script>
+  // Thème du dashboard et taille du texte, posés avant le premier rendu.
+  try {
+    const scale = Number(localStorage.getItem("mr-dashboard.textScale"));
+    if (scale) document.documentElement.style.setProperty("--text-scale", scale);
+    const theme = localStorage.getItem("mr-dashboard.theme");
+    document.documentElement.dataset.theme = theme === "light" || theme === "dark" ? theme
+      : matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  } catch (ignored) {
+    document.documentElement.dataset.theme = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+</script>
+<link rel="stylesheet" href="notes.css">
+<style>
+  :root {
+    --bg: #f3f4f7;
+    --surface: #ffffff;
+    --border: #e4e6ec;
+    --border-strong: #d2d5de;
+    --text: #1b1d24;
+    --muted: #6a6f7d;
+    --link: #2356c7;
+    --accent: #4f46e5;
+    --accent-fg: #ffffff;
+    --red-bg: #fdecec; --red-fg: #b42318;
+    color-scheme: light;
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #111217;
+    --surface: #1a1c23;
+    --border: #2c2f3a;
+    --border-strong: #3a3e4b;
+    --text: #eceef3;
+    --muted: #9ba1b0;
+    --link: #86a9f7;
+    --accent: #818cf8;
+    --accent-fg: #0f1020;
+    --red-bg: #3d1a1a; --red-fg: #ffb4ab;
+  }
+  /* Taille du texte du dashboard (même base, même réglage A− / A+), un peu plus grande : on lit de la prose. */
+  html { font-size: calc(clamp(13px, 0.75vw, 28px) * var(--text-scale, 1) * 1.15); }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 1rem/1.5 "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  a { color: var(--link); }
+  header {
+    position: sticky; top: 0; z-index: 10;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 1.4rem;
+    padding: 0.75rem 1rem; background: var(--surface); border-bottom: 1px solid var(--border);
+  }
+  header h1 { flex: 1 1 30rem; margin: 0; font-size: 1.05rem; overflow-wrap: anywhere; }
+  .summary { color: var(--muted); font-size: 0.85rem; }
+  .links { display: flex; gap: 0.5rem; }
+  .links a {
+    font-size: 0.85rem; text-decoration: none; color: var(--text); padding: 0.25em 0.8em;
+    border: 1px solid var(--border-strong); border-radius: 0.5rem; background: var(--surface);
+  }
+  .links a[hidden] { display: none; }
+  main { box-sizing: border-box; max-width: 62rem; margin: 0 auto; padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
+  .message { color: var(--muted); }
+  .message.error { color: var(--red-fg); }
+  .thread {
+    background: var(--surface); border: 1px solid var(--border-strong); border-left: 3px solid var(--accent);
+    border-radius: 0.5rem; overflow: hidden;
+  }
+  .thread.resolved { border-left-color: var(--muted); }
+  .thread > summary {
+    display: flex; flex-wrap: wrap; gap: 0.2rem 0.6rem; align-items: baseline; padding: 0.45rem 0.8rem;
+    cursor: pointer; font-size: 0.85rem; color: var(--muted); border-bottom: 1px solid var(--border);
+  }
+  .thread:not([open]) > summary { border-bottom: none; }
+  .thread > summary strong { color: var(--text); }
+  .thread > summary a { margin-left: auto; }
+  .badge { font-size: 0.72rem; font-weight: 600; padding: 0 0.4em; border-radius: 0.3rem; border: 1px solid currentColor; }
+  .note { padding: 0.6rem 0.8rem; }
+  .note + .note { border-top: 1px dashed var(--border); margin-left: 1.5rem; }
+  .note-meta { margin-bottom: 0.3rem; font-size: 0.78rem; color: var(--muted); }
+  .note-meta strong { color: var(--text); }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title"></h1>
+  <span class="summary" id="summary"></span>
+  <nav class="links">
+    <a id="diff-link" target="_blank" rel="noopener" hidden></a>
+    <a id="gitlab-link" target="_blank" rel="noopener" hidden></a>
+  </nav>
+</header>
+<main id="comments"><p class="message" id="loading"></p></main>
+<script src="notes.js"></script>
+<script>
+  const TEXTS = {
+    fr: {
+      title: p => `Commentaires de !${p.iid}${p.title ? ` ${p.title}` : ""}`,
+      loading: "Chargement des commentaires GitLab…",
+      failed: p => `Commentaires GitLab indisponibles : ${p}`,
+      none: "Aucun commentaire général sur cette MR : seuls des diff notes, ou rien.",
+      summary: p => `${p.n} commentaire${p.n > 1 ? "s" : ""} hors diff notes${p.open ? ` · ${p.open} non résolu${p.open > 1 ? "s" : ""}` : ""}`,
+      resolved: "Résolu",
+      unresolved: "Non résolu",
+      replies: n => `${n} réponse${n > 1 ? "s" : ""}`,
+      diff: "Diff",
+      diffTitle: "Afficher dans un onglet le diff de la MR, calculé sur le dépôt local",
+      gitlab: "Ouvrir dans GitLab",
+      openNote: "GitLab",
+    },
+    en: {
+      title: p => `Comments on !${p.iid}${p.title ? ` ${p.title}` : ""}`,
+      loading: "Loading GitLab comments…",
+      failed: p => `GitLab comments unavailable: ${p}`,
+      none: "No general comment on this MR: only diff notes, or nothing.",
+      summary: p => `${p.n} comment${p.n > 1 ? "s" : ""} besides diff notes${p.open ? ` · ${p.open} unresolved` : ""}`,
+      resolved: "Resolved",
+      unresolved: "Unresolved",
+      replies: n => `${n} repl${n > 1 ? "ies" : "y"}`,
+      diff: "Diff",
+      diffTitle: "Show in a tab the diff of the MR, computed on the local repository",
+      gitlab: "Open in GitLab",
+      openNote: "GitLab",
+    },
+  };
+  const params = new URLSearchParams(location.search);
+  const lang = params.get("lang") in TEXTS ? params.get("lang")
+    : (navigator.language || "").toLowerCase().startsWith("fr") ? "fr" : "en";
+  const texts = TEXTS[lang];
+  const iid = params.get("iid") ?? "";
+  document.documentElement.lang = lang;
+
+  function escapeHtml(text) {
+    return String(text).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  }
+
+  // « 3 h », « 2 j » : de quoi situer un commentaire dans la vie de la MR.
+  function age(iso) {
+    const minutes = Math.max(0, Math.round((Date.now() - new Date(iso)) / 60000));
+    if (minutes < 60) return `${minutes} min`;
+    if (minutes < 48 * 60) return `${Math.round(minutes / 60)} h`;
+    return `${Math.round(minutes / 1440)} ${lang === "fr" ? "j" : "d"}`;
+  }
+
+  function showMessage(text, error) {
+    document.getElementById("comments").innerHTML = `<p class="message${error ? " error" : ""}">${escapeHtml(text)}</p>`;
+  }
+
+  function renderHeader(mr) {
+    const title = texts.title({ iid, title: mr?.title.replace(/^Draft:\s*/i, "") });
+    document.getElementById("title").textContent = title;
+    document.title = `${title} — MisteR Dashboard`;
+    if (!mr) return;
+    const gitlab = document.getElementById("gitlab-link");
+    gitlab.textContent = texts.gitlab;
+    gitlab.href = mr.webUrl;
+    gitlab.hidden = false;
+    // Même diff que depuis le dashboard : une MR mergée se retrouve par ses commits, sa branche ayant pu disparaître.
+    if (mr.state === "merged" && !mr.mergeCommitSha) return;
+    const query = new URLSearchParams({
+      iid,
+      title: mr.title.replace(/^Draft:\s*/i, ""),
+      branch: mr.sourceBranch,
+      target: mr.targetBranch,
+      url: mr.webUrl,
+      lang,
+    });
+    if (mr.state === "merged") {
+      query.set("head", mr.diffHeadSha);
+      query.set("merge", mr.mergeCommitSha);
+    }
+    const diff = document.getElementById("diff-link");
+    diff.textContent = texts.diff;
+    diff.title = texts.diffTitle;
+    diff.href = `diff.html?${query}`;
+    diff.hidden = false;
+  }
+
+  function threadHtml(discussion, gitlabWeb) {
+    const notes = discussion.notes.nodes.filter(n => !n.system);
+    const [first, ...replies] = notes;
+    const resolved = discussion.resolvable && discussion.resolved;
+    const when = n => `<span title="${escapeHtml(new Date(n.createdAt).toLocaleString(lang))}">${escapeHtml(age(n.createdAt))}</span>`;
+    // Auteur et date du premier commentaire dans l'en-tête du fil ; chaque réponse porte les siens.
+    const note = (n, i) => `<div class="note">`
+      + (i ? `<div class="note-meta"><strong>${escapeHtml(n.author?.name ?? "?")}</strong> · ${when(n)}</div>` : "")
+      + `<div class="gl-body">${GitlabNotes.render(n.bodyHtml, gitlabWeb)}</div></div>`;
+    const badge = discussion.resolvable ? `<span class="badge">${escapeHtml(resolved ? texts.resolved : texts.unresolved)}</span>` : "";
+    return `<details class="thread${resolved ? " resolved" : ""}"${resolved ? "" : " open"}>`
+      + `<summary><strong>${escapeHtml(first.author?.name ?? "?")}</strong>`
+      + `<span>${escapeHtml(new Date(first.createdAt).toLocaleString(lang, { dateStyle: "short", timeStyle: "short" }))} · ${when(first)}</span>`
+      + badge + (replies.length ? `<span>${escapeHtml(texts.replies(replies.length))}</span>` : "")
+      + `<a href="${escapeHtml(first.url)}" target="_blank" rel="noopener">${escapeHtml(texts.openNote)}</a></summary>`
+      + notes.map(note).join("") + `</details>`;
+  }
+
+  async function load() {
+    document.getElementById("loading").textContent = texts.loading;
+    renderHeader(null);
+    try {
+      const config = await (await fetch("config")).json();
+      let mr = null;
+      const discussions = await GitlabNotes.allNodes(async after => {
+        const data = await GitlabNotes.graphql(`{ project(fullPath: ${JSON.stringify(config.gitlabProject)}) {
+          mergeRequest(iid: ${JSON.stringify(iid)}) {
+            title webUrl state sourceBranch targetBranch diffHeadSha mergeCommitSha
+            discussions(first: 50${after ? `, after: ${JSON.stringify(after)}` : ""}) {
+              pageInfo { hasNextPage endCursor }
+              nodes { resolvable resolved notes(first: 100) { nodes {
+                system url createdAt author { name } position { positionType } bodyHtml
+              } } }
+            }
+          }
+        } }`);
+        mr = data.project?.mergeRequest;
+        if (!mr) throw new Error(`!${iid} ?`);
+        return mr.discussions;
+      });
+      renderHeader(mr);
+      // Commentaires généraux : ceux qui ne portent sur aucune ligne ; les messages système de GitLab
+      // (commits ajoutés, statut changé) n'en sont pas.
+      const general = discussions.filter(d => {
+        const first = d.notes.nodes[0];
+        return first && !first.position && d.notes.nodes.some(n => !n.system);
+      });
+      const open = general.filter(d => d.resolvable && !d.resolved).length;
+      document.getElementById("summary").textContent = texts.summary({ n: general.length, open });
+      if (!general.length) {
+        showMessage(texts.none);
+        return;
+      }
+      document.getElementById("comments").innerHTML = general.map(d => threadHtml(d, config.gitlabWeb)).join("");
+    } catch (error) {
+      showMessage(texts.failed(error.message), true);
+    }
+  }
+
+  load();
+</script>
+</body>
+</html>

@@ -20,6 +20,7 @@
   }
 </script>
 <link rel="stylesheet" href="vendor/diff2html/diff2html.min.css">
+<link rel="stylesheet" href="notes.css">
 <style>
   :root {
     --bg: #f3f4f7;
@@ -78,6 +79,10 @@
   .format button:first-child { border-radius: 0.5rem 0 0 0.5rem; }
   .format button:last-child { border-radius: 0 0.5rem 0.5rem 0; border-left: none; }
   .toggle { border-radius: 0.5rem; }
+  a.toggle {
+    display: inline-block; font-size: 0.9rem; color: var(--text); background: var(--surface); text-decoration: none;
+    border: 1px solid var(--border-strong); padding: 0.3em 0.8em;
+  }
   .notes-nav { display: flex; align-items: center; gap: 0.25rem; }
   /* Place gardée même masquée : afficher ‹ › ne décale pas les autres commandes. */
   .notes-nav.off { visibility: hidden; }
@@ -241,19 +246,19 @@
       <output id="note-position"></output>
       <button type="button" data-note-step="1">›</button>
     </div>
-    <button type="button" class="toggle" id="comments-toggle" aria-pressed="false"></button>
+    <a class="toggle" id="comments-link" target="_blank" rel="noopener"></a>
     <a id="gitlab" target="_blank" rel="noopener" hidden></a>
   </div>
 </header>
 <main id="diff"><p class="message" id="loading"></p></main>
 <script src="vendor/diff2html/diff2html-ui-slim.min.js"></script>
+<script src="notes.js"></script>
 <script>
   const FORMAT_KEY = "mr-dashboard.diffFormat";
   const DASHBOARD_TEXT_SCALE_KEY = "mr-dashboard.textScale";
   const TEXT_SCALE_KEY = "mr-dashboard.diffTextRatio";
   const COMMITS_SHARE_KEY = "mr-dashboard.diffCommitsShare";
   const NOTES_KEY = "mr-dashboard.diffNotes";
-  const COMMENTS_KEY = "mr-dashboard.diffComments";
   const TEXT_SCALES = [0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3];
   const DEFAULT_TEXT_SCALE = 1.25;
   const TEXTS = {
@@ -289,9 +294,7 @@
       pushTitle: "Clic : les commits de ce push",
       notes: "💬 Diff notes",
       comments: "🗨 Commentaires",
-      commentsTitle: "Afficher en tête du diff les commentaires de la MR qui ne portent pas sur une ligne ; désactivé, la page ne les charge pas",
-      commentsCount: n => `${n} commentaire${n > 1 ? "s" : ""} hors diff notes`,
-      generalComments: n => `${n} commentaire${n > 1 ? "s" : ""} de la MR, hors diff notes`,
+      commentsTitle: "Afficher dans un onglet les commentaires de la MR qui ne portent sur aucune ligne, rendus comme dans GitLab",
       notesCount: n => `${n} diff note${n > 1 ? "s" : ""} dans la MR`,
       placedNotes: n => `${n} diff note${n > 1 ? "s" : ""} placée${n > 1 ? "s" : ""} dans le diff affiché`,
       notesTitle: "Afficher les diff notes GitLab sous les lignes commentées ; désactivé, la page ne les charge pas. "
@@ -347,9 +350,7 @@
       pushTitle: "Click: this push's commits",
       notes: "💬 Diff notes",
       comments: "🗨 Comments",
-      commentsTitle: "Show at the top of the diff the MR comments that are not on a line; off, the page does not load them",
-      commentsCount: n => `${n} comment${n > 1 ? "s" : ""} besides diff notes`,
-      generalComments: n => `${n} MR comment${n > 1 ? "s" : ""}, besides diff notes`,
+      commentsTitle: "Show in a tab the MR comments that are not on a line, rendered as in GitLab",
       notesCount: n => `${n} diff note${n > 1 ? "s" : ""} in the MR`,
       placedNotes: n => `${n} diff note${n > 1 ? "s" : ""} placed in the displayed diff`,
       notesTitle: "Show the GitLab diff notes under the commented lines; off, the page does not load them. "
@@ -402,8 +403,9 @@
   let loadSeq = 0;
   // Discussions de diff GitLab, chargées au premier affichage des commentaires ; null : pas encore.
   let discussions = null;
-  // Commentaires de la MR qui ne portent sur aucune ligne, chargés avec les diff notes.
-  let generalDiscussions = null;
+  // HTML des notes rendu par GitLab, par identifiant de note ; une note absente se lit en texte.
+  let notesHtml = new Map();
+  let gitlabWeb = "";
   let discussionsError = null;
   // Dernière version GitLab de la MR : la position d'une note encore valable est recalée sur son dernier
   // commit à chaque push, celle d'une note obsolète reste sur un commit plus ancien. Une nouvelle note
@@ -501,7 +503,6 @@
     ui.highlightCode();
     showFileList(container);
     if (readNotesEnabled()) placeNotes(container);
-    if (readEnabled(COMMENTS_KEY)) placeComments(container);
     container.classList.toggle("can-comment", canComment());
   }
 
@@ -667,11 +668,6 @@
     notes.setAttribute("aria-pressed", String(readNotesEnabled()));
     notes.textContent = texts.notes;
     notes.title = discussions ? `${texts.notesTitle} — ${texts.notesCount(discussions.length)}` : texts.notesTitle;
-    const comments = document.getElementById("comments-toggle");
-    comments.setAttribute("aria-pressed", String(readEnabled(COMMENTS_KEY)));
-    comments.textContent = texts.comments;
-    comments.title = generalDiscussions
-      ? `${texts.commentsTitle} — ${texts.commentsCount(generalDiscussions.length)}` : texts.commentsTitle;
   }
 
   // Toutes les pages : GitLab en sert 100 au plus par appel.
@@ -687,14 +683,26 @@
     return all;
   }
 
+  // Rendu GitLab des notes, que l'API REST ne donne pas : sans lui, les notes restent lisibles en texte.
+  async function loadNotesHtml() {
+    const { gitlabProject: path, gitlabWeb: web } = await config();
+    gitlabWeb = web;
+    const notes = await GitlabNotes.allNodes(async after => (await GitlabNotes.graphql(`{
+      project(fullPath: ${JSON.stringify(path)}) { mergeRequest(iid: ${JSON.stringify(String(mr.iid))}) {
+        notes(first: 100${after ? `, after: ${JSON.stringify(after)}` : ""}) { pageInfo { hasNextPage endCursor } nodes { id bodyHtml } }
+      } }
+    }`)).project.mergeRequest.notes);
+    return new Map(notes.map(n => [GitlabNotes.noteId(n.id), n.bodyHtml]));
+  }
+
   async function ensureDiscussions() {
     if (discussions !== null || discussionsError !== null) return;
     document.getElementById("diff-files")
       ?.insertAdjacentHTML("afterbegin", `<p class="notes-status" id="notes-status">${escapeHtml(texts.notesLoading)}</p>`);
     try {
-      const all = await loadDiscussions();
+      const [all, html] = await Promise.all([loadDiscussions(), loadNotesHtml().catch(() => new Map())]);
       discussions = all.filter(d => d.notes[0]?.type === "DiffNote" && d.notes[0].position?.position_type === "text");
-      generalDiscussions = all.filter(d => d.notes[0]?.type !== "DiffNote" && d.notes.some(n => !n.system));
+      notesHtml = html;
     } catch (error) {
       discussionsError = error.message;
     }
@@ -754,14 +762,14 @@
     const [first, ...replies] = discussion.notes.filter(n => !n.system);
     if (!first) return "";
     const resolved = discussion.notes.some(n => n.resolvable) && discussion.notes.every(n => !n.resolvable || n.resolved);
-    const label = first.position
-      ? texts.lines(notePlace(first.position))
-      : new Date(first.created_at).toLocaleString(lang, { dateStyle: "short", timeStyle: "short" });
+    const label = texts.lines(notePlace(first.position));
     const link = /^https:\/\//.test(mr.url)
       ? `<a href="${escapeHtml(`${mr.url}#note_${first.id}`)}" target="_blank" rel="noopener">${escapeHtml(texts.openInGitlab)}</a>` : "";
     const note = n => `<div class="note"><div class="note-meta"><strong>${escapeHtml(n.author?.name ?? "?")}</strong> · `
       + `<span title="${escapeHtml(new Date(n.created_at).toLocaleString(lang))}">${escapeHtml(age(n.created_at))}</span></div>`
-      + `<div class="note-body">${markdown(n.body)}</div></div>`;
+      + (notesHtml.has(n.id)
+        ? `<div class="gl-body">${GitlabNotes.render(notesHtml.get(n.id), gitlabWeb)}</div></div>`
+        : `<div class="note-body">${markdown(n.body)}</div></div>`);
     return `<details class="note-thread${resolved ? " resolved" : ""}"${resolved ? "" : " open"}>`
       + `<summary>${resolved ? `<span class="badge">${escapeHtml(texts.resolved)}</span>` : ""}`
       + `<span>${escapeHtml(label)}${replies.length ? ` · ${escapeHtml(texts.replies(replies.length))}` : ""}</span>${link}</summary>`
@@ -769,19 +777,8 @@
       + [first, ...replies].map(note).join("") + `</details>`;
   }
 
-  function placeComments(container) {
-    if (discussionsError) {
-      if (!readNotesEnabled()) {
-        container.insertAdjacentHTML("afterbegin", `<p class="message error">${escapeHtml(texts.notesFailed(discussionsError))}</p>`);
-      }
-      return;
-    }
-    if (!generalDiscussions?.length) return;
-    container.insertAdjacentHTML("afterbegin", `<details class="notes-elsewhere" open><summary>${escapeHtml(texts.generalComments(generalDiscussions.length))}</summary>`
-      + `${generalDiscussions.map(d => threadHtml(d)).join("")}</details>`);
-  }
-
-  // Le strict nécessaire du markdown GitLab pour lire une note : blocs de code, code en ligne, gras.
+  // Le strict nécessaire du markdown GitLab pour lire une note dont GitLab n'a pas donné le rendu : blocs
+  // de code, code en ligne, gras.
   // Sur le texte déjà échappé, donc sans HTML venu de la note.
   function markdown(body) {
     return escapeHtml(body).split(/```[^\n]*\n?/).map((part, i) => i % 2
@@ -1074,11 +1071,12 @@
   // Chaque version GitLab de la MR finit par le commit poussé en dernier : les commits jusqu'à lui,
   // depuis le push précédent, sont arrivés ensemble. Une version d'avant un rebase ne correspond à
   // aucun commit et se fond dans la suivante. Sans GitLab, pas de groupes : la liste reste utilisable.
-  let projectPromise = null;
-  function gitlabProject() {
-    projectPromise ??= fetch("config").then(r => r.json()).then(config => encodeURIComponent(config.gitlabProject));
-    return projectPromise;
+  let configPromise = null;
+  function config() {
+    configPromise ??= fetch("config").then(r => r.json());
+    return configPromise;
   }
+  const gitlabProject = () => config().then(c => encodeURIComponent(c.gitlabProject));
 
   async function loadPushes() {
     try {
@@ -1151,6 +1149,10 @@
     const [smaller, larger] = document.querySelectorAll("[data-text-step]");
     smaller.setAttribute("aria-label", texts.smaller);
     larger.setAttribute("aria-label", texts.larger);
+    const comments = document.getElementById("comments-link");
+    comments.textContent = texts.comments;
+    comments.title = texts.commentsTitle;
+    comments.href = `comments.html?${new URLSearchParams({ iid: mr.iid, lang })}`;
     const gitlab = document.getElementById("gitlab");
     if (/^https:\/\//.test(mr.url)) {
       gitlab.href = `${mr.url}/diffs`;
@@ -1198,7 +1200,7 @@
       seenAtOpen = readSeen();
       await loadPushes();
     }
-    if (readNotesEnabled() || readEnabled(COMMENTS_KEY)) await ensureDiscussions();
+    if (readNotesEnabled()) await ensureDiscussions();
     await loadDiff();
   }
 
@@ -1296,16 +1298,6 @@
     if (enabled) showNotes();
     else {
       currentNote = -1;
-      renderNotesToggle();
-      render();
-      renderNotesNav();
-    }
-  });
-  document.getElementById("comments-toggle").addEventListener("click", () => {
-    const enabled = !readEnabled(COMMENTS_KEY);
-    saveEnabled(COMMENTS_KEY, enabled);
-    if (enabled) showNotes();
-    else {
       renderNotesToggle();
       render();
       renderNotesNav();

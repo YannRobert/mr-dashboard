@@ -348,6 +348,9 @@
   .mr-action.ai-fix { color: var(--text); border: 1px solid var(--red-fg); }
   .mr-action.ai-fix:hover { border-color: var(--red-fg); background: var(--red-bg); }
   .mr-action.placeholder { visibility: hidden; }
+  .actions-row { display: flex; gap: 0.2rem; }
+  .actions-row > .mr-action:first-child { flex: 1; }
+  a.mr-action { text-decoration: none; border: 1px solid var(--border-strong); border-radius: 0.5rem; background: var(--surface); text-align: center; }
   dialog.ai-prompt {
     width: min(1200px, calc(100vw - 32px)); padding: 1.2rem; border: 1px solid var(--border);
     border-radius: 0.8rem; background: var(--surface); color: var(--text); box-shadow: var(--shadow);
@@ -690,7 +693,7 @@ const COLUMNS = [
   { key: "title", firstDir: "asc", cellClass: "mr-cell", value: mr => mr.title.replace(/^Draft:\s*/i, ""), render: mrCell },
   { key: "author", firstDir: "asc", cellClass: "nowrap", value: mr => mr.author?.name ?? null, render: authorCell },
   // Actions dans leur colonne, empilées : sous le titre, elles ajoutaient une troisième ligne à chaque MR.
-  { key: "actions", sortable: false, cellClass: "actions-cell", render: mr => `<div class="actions">${gitDiffButton(mr)}${mr.state === "merged" ? "" : aiFixButton(mr) || aiFixPlaceholder()}</div>` },
+  { key: "actions", sortable: false, cellClass: "actions-cell", render: mr => `<div class="actions"><div class="actions-row">${gitDiffButton(mr)}${commentsLink(mr)}</div>${mr.state === "merged" ? "" : aiFixButton(mr) || aiFixPlaceholder()}</div>` },
   { key: "commits", firstDir: "desc", num: true, cellClass: "num", value: commitsCount, render: commitsCell },
   { key: "comments", firstDir: "desc", num: true, cellClass: "num", value: mr => mr.user_notes_count, render: mr => String(mr.user_notes_count) },
   { key: "threads", firstDir: "desc", num: true, cellClass: "num",
@@ -1001,6 +1004,7 @@ const I18N = {
     "gitFetch.failedTitle": p => `${p.message}\nDernier fetch réussi : ${p.success}`,
     "gitFetch.noSuccess": "aucun",
     "gitDiff.title": p => `Afficher dans un onglet le diff de ${p.branch}, comparée à ${p.target}, calculé sur le dépôt local`,
+    "comments.title": "Afficher dans un onglet les commentaires de la MR qui ne portent sur aucune ligne, rendus comme dans GitLab",
     "threads.title": p => `${p.n} thread${plural(p.n)} non résolu${plural(p.n)} sur ${p.total}`,
     "approved": p => (p.n > 1 ? `Approuvée ×${p.n}` : "Approuvée"),
     "approved.title": p => `Approuvée par ${p.names}`,
@@ -1244,6 +1248,7 @@ const I18N = {
     "gitFetch.failedTitle": p => `${p.message}\nLast successful fetch: ${p.success}`,
     "gitFetch.noSuccess": "none",
     "gitDiff.title": p => `Show in a tab the diff of ${p.branch} compared with ${p.target}, computed on the local repository`,
+    "comments.title": "Show in a tab the MR comments that are not on a line, rendered as in GitLab",
     "threads.title": p => `${p.n} unresolved thread${pluralEn(p.n)} out of ${p.total}`,
     "approved": p => (p.n > 1 ? `Approved ×${p.n}` : "Approved"),
     "approved.title": p => `Approved by ${p.names}`,
@@ -2918,6 +2923,11 @@ function diffStat(mr) {
 function gitDiffButton(mr) {
   if (mr.state === "merged" && !mr.merge_commit_sha) return "";
   return `<button type="button" class="mr-action" data-git-diff="${mr.iid}" title="${escapeHtml(t("gitDiff.title", { branch: mr.source_branch, target: mr.target_branch }))}">diff</button>`;
+}
+
+function commentsLink(mr) {
+  const query = new URLSearchParams({ iid: mr.iid, lang: state.lang });
+  return `<a class="mr-action" href="comments.html?${query}" target="_blank" rel="noopener" title="${escapeHtml(t("comments.title"))}">🗨</a>`;
 }
 
 function openGitDiff(mr) {

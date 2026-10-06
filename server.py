@@ -75,9 +75,11 @@ UPSTREAM_IDLE_S = 30
 UPSTREAM_MAX_IDLE_PER_HOST = 12
 STATIC_DIR = Path(__file__).resolve().parent
 # Bibliothèques servies depuis le dépôt plutôt qu'un CDN : la page de diff marche aussi sans réseau.
-VENDOR_FILES = {
+STATIC_FILES = {
     "/vendor/diff2html/diff2html-ui-slim.min.js": "text/javascript; charset=utf-8",
     "/vendor/diff2html/diff2html.min.css": "text/css; charset=utf-8",
+    "/notes.js": "text/javascript; charset=utf-8",
+    "/notes.css": "text/css; charset=utf-8",
 }
 SIGNALS_SCRIPT = STATIC_DIR.parent / "mr-ci-signals.py"
 REPO_ROOT = STATIC_DIR.parent.parent
@@ -262,8 +264,10 @@ def make_handler(
                 self.send_json(200, settings["public"])
             elif self.path.startswith("/diff.html"):
                 self.send_file(STATIC_DIR / "diff.html", "text/html; charset=utf-8")
-            elif self.path in VENDOR_FILES:
-                self.send_file(STATIC_DIR / self.path.lstrip("/"), VENDOR_FILES[self.path])
+            elif self.path.startswith("/comments.html"):
+                self.send_file(STATIC_DIR / "comments.html", "text/html; charset=utf-8")
+            elif self.path in STATIC_FILES:
+                self.send_file(STATIC_DIR / self.path.lstrip("/"), STATIC_FILES[self.path])
             elif self.path == "/git/status":
                 self.send_json(200, git.status())
             elif self.path.startswith("/git/diff?"):

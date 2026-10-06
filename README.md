@@ -134,9 +134,13 @@ Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut
 - **💬 Diff notes**, dans l'en-tête du diff, affiche les diff notes GitLab de la MR sous les lignes
   commentées, résolues repliées. Une note posée sur un code qui a changé depuis, ou hors de la plage de
   commits affichée, va dans « diff notes hors du diff affiché », en tête du diff. **‹ ›** passent d'une
-  diff note à la suivante. **🗨 Commentaires** affiche à part, en tête du diff, les commentaires de la
-  MR qui ne portent sur aucune ligne. Désactivés — par défaut, choix retenus par le navigateur —, ils
-  ne chargent rien de plus ; les commandes gardent leur place quel que soit leur état.
+  diff note à la suivante. Désactivé — par défaut, choix retenu par le navigateur —, la page ne charge
+  rien de plus ; les commandes gardent leur place quel que soit son état.
+- **🗨 Commentaires** — dans l'en-tête du diff, ou à côté de **diff** dans le dashboard — ouvre dans un
+  onglet `comments.html`, les commentaires de la MR qui ne portent sur aucune ligne (rapports PIT,
+  Sonar, Trivy, revues…), avec leurs réponses. Commentaires et diff notes sont rendus comme dans
+  GitLab, d'après le HTML que GitLab en donne (`notes.js`, `notes.css`), débarrassé de tout ce qui
+  pourrait s'exécuter dans la page.
 - Diff notes affichées, sur tout le diff (sans plage de commits) et un clone local à jour du dernier
   push : un clic sur un numéro de ligne ouvre un éditeur dessous, Maj+clic l'étend à une plage ;
   **Publier dans GitLab** (Ctrl+Entrée) y crée la discussion. C'est la seule écriture du serveur dans
