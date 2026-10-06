@@ -25,3 +25,22 @@
 .gl-body img { max-width: 100%; }
 .gl-body hr { border: none; border-top: 1px solid var(--border); margin: 0.8em 0; }
 .gl-body .gfm-project_member, .gl-body .gfm-merge_request, .gl-body .gfm-issue, .gl-body .gfm-commit { font-weight: 500; }
+
+/* Bas d'un fil : Répondre, Résoudre ou Rouvrir, et la réponse en cours d'écriture (notes.js). */
+.thread-actions { display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; padding: 0.35rem 0.6rem; border-top: 1px solid var(--border); }
+.thread-actions[hidden] { display: none; }
+.thread-actions button {
+  font: inherit; font-size: 0.8rem; padding: 0.2em 0.8em; cursor: pointer; color: var(--text);
+  background: var(--surface); border: 1px solid var(--border-strong); border-radius: 0.5rem;
+}
+.thread-actions button:hover { border-color: var(--accent); }
+.thread-actions button[type="submit"] { color: var(--accent-fg); background: var(--accent); border-color: var(--accent); }
+.thread-actions button:disabled { opacity: 0.5; cursor: default; }
+.thread-error { margin-right: auto; font-size: 0.8rem; color: var(--red-fg); overflow-wrap: anywhere; }
+.thread-reply { border-top: 1px solid var(--border); }
+.thread-reply textarea {
+  display: block; box-sizing: border-box; width: calc(100% - 1.2rem); min-height: 5rem; margin: 0.4rem 0.6rem 0; resize: vertical;
+  padding: 0.35rem 0.5rem; font: 0.85rem/1.4 Menlo, Consolas, monospace; color: var(--text); background: var(--bg);
+  border: 1px solid var(--border-strong); border-radius: 0.35rem;
+}
+.thread-reply .thread-actions { border-top: none; }

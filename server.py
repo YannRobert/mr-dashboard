@@ -10,8 +10,8 @@ La page (index.html) ne parle qu'à ce serveur, qui relaie deux préfixes :
 
 Le relais est nécessaire pour Sonar, qui ne renvoie aucun en-tête CORS : un navigateur ne peut pas
 l'interroger directement. Il sert aussi à garder les deux tokens hors du navigateur. Seul GET est
-relayé, et le serveur n'écoute que sur 127.0.0.1 : la seule écriture dans GitLab est l'action
-/gitlab/discussion ci-dessous, qui valide sa requête avant de la transmettre.
+relayé, et le serveur n'écoute que sur 127.0.0.1 : les seules écritures dans GitLab sont les actions
+/gitlab/… ci-dessous, qui valident leur requête avant de la transmettre.
 
 Actions locales, en POST :
     /orca/fix   ouvre dans Orca une session Claude Code avec le prompt de correction d'une MR
@@ -21,6 +21,8 @@ Actions locales, en POST :
     /git/auto   active ou suspend le fetch automatique : {"enabled": true|false}
     /gitlab/discussion  ouvre une discussion sur une ou plusieurs lignes du diff d'une MR du projet
                 suivi : {"iid", "body", "position"}, position au format de l'API GitLab
+    /gitlab/reply       répond à un fil d'une MR du projet suivi : {"iid", "discussion", "body"}
+    /gitlab/resolve     résout un fil, ou le rouvre : {"iid", "discussion", "resolved": true|false}
     /git/diff   GET ?branch=&target= : diff d'une MR depuis le point où elle part de sa cible, affiché
                 par diff.html ; ?iid=&head=&merge=&target= pour une MR mergée, retrouvée par ses commits ;
                 &first=&last= pour ce qu'ont apporté ensemble ses commits de first à last
@@ -143,19 +145,20 @@ class UpstreamPool:
                 headers
             )
 
-    def post(
+    def write(
             self,
+            method,
             url,
             headers,
             body
     ):
-        """POST, et renvoie (statut, corps, en-têtes) ; toujours sur une connexion neuve, sans nouvel
-        essai : une requête qui écrit ne se rejoue pas à l'aveugle."""
+        """Requête qui écrit (POST, PUT), et renvoie (statut, corps, en-têtes) ; toujours sur une
+        connexion neuve, sans nouvel essai : une requête qui écrit ne se rejoue pas à l'aveugle."""
         target = urlsplit(url)
         return self._send(
             target,
             self._connect(target),
-            "POST",
+            method,
             target.path,
             headers,
             body
@@ -303,7 +306,9 @@ def make_handler(
                 "/orca/fix": self.orca_fix,
                 "/git/fetch": self.git_fetch,
                 "/git/auto": self.git_auto,
-                "/gitlab/discussion": self.gitlab_discussion
+                "/gitlab/discussion": self.gitlab_discussion,
+                "/gitlab/reply": self.gitlab_reply,
+                "/gitlab/resolve": self.gitlab_resolve
             }
             action = actions.get(self.path)
             if not action:
@@ -372,10 +377,48 @@ def make_handler(
                 self.send_json(400, {"message": "requête invalide"})
                 return
             iid, body = request
+            self.gitlab_write(
+                "POST",
+                f"merge_requests/{iid}/discussions",
+                body
+            )
+
+        def gitlab_reply(self, payload):
+            request = reply_request(payload)
+            if not request:
+                self.send_json(400, {"message": "requête invalide"})
+                return
+            iid, discussion, body = request
+            self.gitlab_write(
+                "POST",
+                f"merge_requests/{iid}/discussions/{discussion}/notes",
+                body
+            )
+
+        def gitlab_resolve(self, payload):
+            request = resolve_request(payload)
+            if not request:
+                self.send_json(400, {"message": "requête invalide"})
+                return
+            iid, discussion, body = request
+            self.gitlab_write(
+                "PUT",
+                f"merge_requests/{iid}/discussions/{discussion}",
+                body
+            )
+
+        def gitlab_write(
+                self,
+                method,
+                path,
+                body
+        ):
+            """Transmet à GitLab, pour le projet suivi, une écriture déjà validée ; path relatif au projet."""
             project = quote(settings["public"]["gitlabProject"], safe="")
             try:
-                status, content, upstream_headers = upstream.post(
-                    f"{settings['gitlab_host']}/api/v4/projects/{project}/merge_requests/{iid}/discussions",
+                status, content, upstream_headers = upstream.write(
+                    method,
+                    f"{settings['gitlab_host']}/api/v4/projects/{project}/{path}",
                     {"PRIVATE-TOKEN": settings["gitlab_token"], "Content-Type": "application/json"},
                     body
                 )
@@ -515,7 +558,7 @@ def discussion_request(payload):
     if not isinstance(payload, dict):
         return None
     iid, body, position = payload.get("iid"), payload.get("body"), payload.get("position")
-    if not isinstance(iid, int) or isinstance(iid, bool) or iid <= 0:
+    if not is_positive(iid):
         return None
     if not isinstance(body, str) or not body.strip() or not isinstance(position, dict):
         return None
@@ -524,7 +567,7 @@ def discussion_request(payload):
     if not all(isinstance(position.get(name), str) and position[name] for name in ("old_path", "new_path")):
         return None
     lines = {name: position.get(name) for name in ("old_line", "new_line")}
-    if not all(line is None or is_line(line) for line in lines.values()):
+    if not all(line is None or is_positive(line) for line in lines.values()):
         return None
     if lines == {"old_line": None, "new_line": None}:
         return None
@@ -542,12 +585,42 @@ def discussion_request(payload):
     return iid, json.dumps({"body": body, "position": clean}).encode()
 
 
+def reply_request(payload):
+    """(iid, discussion, corps JSON pour GitLab) d'une réponse à un fil, None si elle est invalide."""
+    target = discussion_target(payload)
+    body = payload.get("body") if target else None
+    if not isinstance(body, str) or not body.strip():
+        return None
+    return *target, json.dumps({"body": body}).encode()
+
+
+def resolve_request(payload):
+    """(iid, discussion, corps JSON pour GitLab) d'une demande de résoudre ou rouvrir un fil, None si
+    elle est invalide."""
+    target = discussion_target(payload)
+    resolved = payload.get("resolved") if target else None
+    if not isinstance(resolved, bool):
+        return None
+    return *target, json.dumps({"resolved": resolved}).encode()
+
+
+def discussion_target(payload):
+    """(iid, discussion) d'un fil d'une MR, None si la demande ne le désigne pas sans ambiguïté :
+    l'identifiant d'un fil GitLab est un SHA, rien d'autre ne peut entrer dans le chemin de l'API."""
+    if not isinstance(payload, dict):
+        return None
+    iid, discussion = payload.get("iid"), payload.get("discussion")
+    if not is_positive(iid) or not is_sha(discussion):
+        return None
+    return iid, discussion
+
+
+def is_positive(value):
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+
 def is_sha(value):
     return isinstance(value, str) and len(value) in (40, 64) and all(c in "0123456789abcdef" for c in value)
-
-
-def is_line(value):
-    return isinstance(value, int) and not isinstance(value, bool) and value > 0
 
 
 def range_end(end):
@@ -558,7 +631,7 @@ def range_end(end):
     if not isinstance(line_code, str) or len(line_code) > 200:
         return None
     lines = {name: end.get(name) for name in ("old_line", "new_line")}
-    if not all(line is None or is_line(line) for line in lines.values()):
+    if not all(line is None or is_positive(line) for line in lines.values()):
         return None
     return {"line_code": line_code, "type": end["type"], **{n: v for n, v in lines.items() if v is not None}}
 

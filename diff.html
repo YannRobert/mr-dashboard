@@ -423,6 +423,8 @@
   let selection = null;
   // Fil de commentaire courant de la navigation ‹ ›, en indice dans l'ordre du diff ; -1 : aucun encore.
   let currentNote = -1;
+  // Hauteur des fils placés dans le diff : la ligne vide d'en face la suit (fil replié, réponse ouverte…).
+  let notesObserver = null;
 
   function escapeHtml(text) {
     return String(text).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -779,11 +781,11 @@
       + (notesHtml.has(n.id)
         ? `<div class="gl-body">${GitlabNotes.render(notesHtml.get(n.id), gitlabWeb)}</div></div>`
         : `<div class="note-body">${markdown(n.body)}</div></div>`);
-    return `<details class="note-thread${state ? ` ${state}` : ""}"${resolved ? "" : " open"}>`
+    return `<details class="note-thread${state ? ` ${state}` : ""}" data-discussion="${escapeHtml(discussion.id)}"${resolved ? "" : " open"}>`
       + `<summary>${state ? `<span class="badge">${escapeHtml(texts[state])}</span>` : ""}`
       + `<span>${escapeHtml(label)}${replies.length ? ` · ${escapeHtml(texts.replies(replies.length))}` : ""}</span>${link}</summary>`
       + (where ? `<div class="note-where">${escapeHtml(where)}</div>` : "")
-      + [first, ...replies].map(note).join("") + `</details>`;
+      + [first, ...replies].map(note).join("") + GitlabNotes.threadActionsHtml({ resolvable, resolved }, lang) + `</details>`;
   }
 
   // Le strict nécessaire du markdown GitLab pour lire une note dont GitLab n'a pas donné le rendu : blocs
@@ -898,6 +900,9 @@
     const column = container.querySelector(".d2h-file-side-diff, .d2h-file-diff");
     if (column) container.style.setProperty("--note-column", `${column.clientWidth}px`);
     alignSpacers(pairs);
+    notesObserver?.disconnect();
+    notesObserver = new ResizeObserver(() => alignSpacers(pairs));
+    pairs.forEach(pair => notesObserver.observe(pair.noteRow));
     for (const [id, count] of perFile) {
       document.querySelector(`#files a.d2h-file-name[href="#${CSS.escape(id)}"] .file-base`)
         ?.insertAdjacentHTML("beforeend", `<span class="file-notes">💬 ${count}</span>`);
@@ -907,10 +912,24 @@
     }
     currentNote = -1;
     renderNotesNav();
-    // Un fil replié ou déplié change de hauteur : la ligne vide d'en face suit.
-    container.addEventListener("toggle", event => {
-      if (event.target.classList?.contains("note-thread")) alignSpacers(pairs);
-    }, true);
+  }
+
+  // Fil relu dans GitLab après une réponse ou une résolution, et réaffiché à sa place.
+  async function refreshThread(id) {
+    const project = await gitlabProject();
+    const [response, html] = await Promise.all([
+      fetch(`gitlab/projects/${project}/merge_requests/${mr.iid}/discussions/${id}`),
+      loadNotesHtml().catch(() => notesHtml),
+    ]);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const discussion = await response.json();
+    notesHtml = html;
+    discussions = discussions.map(d => d.id === id ? discussion : d);
+    const thread = document.querySelector(`#diff-files [data-discussion="${CSS.escape(id)}"]`);
+    if (!thread) return;
+    const current = thread.classList.contains("current");
+    thread.outerHTML = threadHtml(discussion, thread.querySelector(".note-where")?.textContent);
+    if (current) document.querySelector(`#diff-files [data-discussion="${CSS.escape(id)}"]`)?.classList.add("current");
   }
 
   // Une note se pose sur le diff que GitLab connaît : celui de sa dernière version, que la page montre
@@ -1273,6 +1292,7 @@
     }
   });
 
+  GitlabNotes.handleThreads(document.getElementById("diff"), { iid: mr.iid, lang, refresh: refreshThread });
   document.getElementById("diff").addEventListener("submit", e => {
     if (!e.target.matches(".note-editor")) return;
     e.preventDefault();

@@ -200,12 +200,42 @@
       + `<div class="gl-body">${GitlabNotes.render(n.bodyHtml, gitlabWeb)}</div></div>`;
     const badge = discussion.resolvable ? `<span class="badge">${escapeHtml(resolved ? texts.resolved : texts.unresolved)}</span>` : "";
     const state = resolved ? " resolved" : discussion.resolvable ? " unresolved" : "";
-    return `<details class="thread${state}"${resolved ? "" : " open"}>`
+    const id = GitlabNotes.discussionId(discussion.id);
+    return `<details class="thread${state}" data-discussion="${escapeHtml(id)}"${resolved ? "" : " open"}>`
       + `<summary><strong>${escapeHtml(first.author?.name ?? "?")}</strong>`
       + `<span>${escapeHtml(new Date(first.createdAt).toLocaleString(lang, { dateStyle: "short", timeStyle: "short" }))} · ${when(first)}</span>`
       + badge + (replies.length ? `<span>${escapeHtml(texts.replies(replies.length))}</span>` : "")
       + `<a href="${escapeHtml(first.url)}" target="_blank" rel="noopener">${escapeHtml(texts.openNote)}</a></summary>`
-      + notes.map(note).join("") + `</details>`;
+      + notes.map(note).join("") + GitlabNotes.threadActionsHtml(discussion, lang) + `</details>`;
+  }
+
+  // Commentaires généraux : ceux qui ne portent sur aucune ligne ; les messages système de GitLab
+  // (commits ajoutés, statut changé) n'en sont pas.
+  async function fetchComments(config) {
+    let mr = null;
+    const discussions = await GitlabNotes.allNodes(async after => {
+      const data = await GitlabNotes.graphql(`{ project(fullPath: ${JSON.stringify(config.gitlabProject)}) {
+        mergeRequest(iid: ${JSON.stringify(iid)}) {
+          title webUrl state sourceBranch targetBranch diffHeadSha mergeCommitSha
+          discussions(first: 50${after ? `, after: ${JSON.stringify(after)}` : ""}) {
+            pageInfo { hasNextPage endCursor }
+            nodes { id resolvable resolved notes(first: 100) { nodes {
+              system url createdAt author { name } position { positionType } bodyHtml
+            } } }
+          }
+        }
+      } }`);
+      mr = data.project?.mergeRequest;
+      if (!mr) throw new Error(`!${iid} ?`);
+      return mr.discussions;
+    });
+    const general = discussions.filter(d => {
+      const first = d.notes.nodes[0];
+      return first && !first.position && d.notes.nodes.some(n => !n.system);
+    });
+    const open = general.filter(d => d.resolvable && !d.resolved).length;
+    document.getElementById("summary").textContent = texts.summary({ n: general.length, open });
+    return { mr, general };
   }
 
   async function load() {
@@ -213,37 +243,25 @@
     renderHeader(null);
     try {
       const config = await (await fetch("config")).json();
-      let mr = null;
-      const discussions = await GitlabNotes.allNodes(async after => {
-        const data = await GitlabNotes.graphql(`{ project(fullPath: ${JSON.stringify(config.gitlabProject)}) {
-          mergeRequest(iid: ${JSON.stringify(iid)}) {
-            title webUrl state sourceBranch targetBranch diffHeadSha mergeCommitSha
-            discussions(first: 50${after ? `, after: ${JSON.stringify(after)}` : ""}) {
-              pageInfo { hasNextPage endCursor }
-              nodes { resolvable resolved notes(first: 100) { nodes {
-                system url createdAt author { name } position { positionType } bodyHtml
-              } } }
-            }
-          }
-        } }`);
-        mr = data.project?.mergeRequest;
-        if (!mr) throw new Error(`!${iid} ?`);
-        return mr.discussions;
-      });
+      const { mr, general } = await fetchComments(config);
       renderHeader(mr);
-      // Commentaires généraux : ceux qui ne portent sur aucune ligne ; les messages système de GitLab
-      // (commits ajoutés, statut changé) n'en sont pas.
-      const general = discussions.filter(d => {
-        const first = d.notes.nodes[0];
-        return first && !first.position && d.notes.nodes.some(n => !n.system);
-      });
-      const open = general.filter(d => d.resolvable && !d.resolved).length;
-      document.getElementById("summary").textContent = texts.summary({ n: general.length, open });
       if (!general.length) {
         showMessage(texts.none);
         return;
       }
-      document.getElementById("comments").innerHTML = general.map(d => threadHtml(d, config.gitlabWeb)).join("");
+      const container = document.getElementById("comments");
+      container.innerHTML = general.map(d => threadHtml(d, config.gitlabWeb)).join("");
+      // Après une réponse, une résolution : seul ce fil est réaffiché, les autres gardent leur état.
+      GitlabNotes.handleThreads(container, {
+        iid,
+        lang,
+        refresh: async id => {
+          const { general: updated } = await fetchComments(config);
+          const discussion = updated.find(d => GitlabNotes.discussionId(d.id) === id);
+          const thread = container.querySelector(`[data-discussion="${CSS.escape(id)}"]`);
+          if (discussion && thread) thread.outerHTML = threadHtml(discussion, config.gitlabWeb);
+        },
+      });
     } catch (error) {
       showMessage(texts.failed(error.message), true);
     }

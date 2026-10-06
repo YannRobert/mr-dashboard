@@ -64,8 +64,137 @@ window.GitlabNotes = (() => {
     return doc.body.innerHTML;
   }
 
-  // Identifiant numérique d'une note, d'après son identifiant GraphQL « gid://gitlab/DiffNote/123 ».
+  // Identifiant d'une note ou d'un fil, d'après son identifiant GraphQL : « gid://gitlab/DiffNote/123 »
+  // donne 123, « gid://gitlab/Discussion/<sha> » le SHA du fil.
   const noteId = gid => Number(String(gid).split("/").pop());
+  const discussionId = gid => String(gid).split("/").pop();
 
-  return { graphql, allNodes, render, noteId };
+  const TEXTS = {
+    fr: {
+      reply: "Répondre",
+      resolve: "Résoudre",
+      reopen: "Rouvrir",
+      cancel: "Annuler",
+      publish: "Publier dans GitLab",
+      placeholder: "Réponse, en markdown — Ctrl+Entrée pour publier, Échap pour annuler",
+      publishing: "Publication…",
+      failed: p => `GitLab a refusé : ${p}`,
+    },
+    en: {
+      reply: "Reply",
+      resolve: "Resolve",
+      reopen: "Reopen",
+      cancel: "Cancel",
+      publish: "Publish to GitLab",
+      placeholder: "Reply, in markdown — Ctrl+Enter to publish, Escape to cancel",
+      publishing: "Publishing…",
+      failed: p => `GitLab refused: ${p}`,
+    },
+  };
+  const escapeHtml = text => String(text).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+  // Écriture dans GitLab par une action du serveur, qui ne transmet que ce qu'elle a validé.
+  async function write(action, payload) {
+    const response = await fetch(`gitlab/${action}`, {
+      method: "POST",
+      headers: { "X-MR-Dashboard": "1", "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const message = result.message ?? result.error ?? `HTTP ${response.status}`;
+      throw new Error(typeof message === "string" ? message : JSON.stringify(message));
+    }
+    return result;
+  }
+
+  // Bas d'un fil, à placer dans l'élément qui porte data-discussion : Répondre, et Résoudre ou Rouvrir
+  // pour un fil qui peut l'être.
+  function threadActionsHtml(discussion, lang) {
+    const texts = TEXTS[lang] ?? TEXTS.en;
+    const resolve = discussion.resolvable
+      ? `<button type="button" data-thread-resolve="${!discussion.resolved}">${escapeHtml(discussion.resolved ? texts.reopen : texts.resolve)}</button>`
+      : "";
+    return `<div class="thread-actions"><span class="thread-error"></span>${resolve}`
+      + `<button type="button" data-thread-reply>${escapeHtml(texts.reply)}</button></div>`;
+  }
+
+  // Répondre, résoudre, rouvrir, dans les fils de root ; refresh(discussion) réaffiche le fil après
+  // l'écriture et rend une promesse.
+  function handleThreads(root, { iid, lang, refresh }) {
+    const texts = TEXTS[lang] ?? TEXTS.en;
+    const threadOf = element => element.closest("[data-discussion]");
+
+    async function run(thread, controls, operation) {
+      const error = thread.querySelector(".thread-error");
+      controls.forEach(c => { c.disabled = true; });
+      error.textContent = texts.publishing;
+      try {
+        await operation();
+        await refresh(thread.dataset.discussion);
+      } catch (failure) {
+        controls.forEach(c => { c.disabled = false; });
+        error.textContent = texts.failed(failure.message);
+      }
+    }
+
+    function openReply(thread) {
+      const actions = thread.querySelector(".thread-actions");
+      actions.hidden = true;
+      actions.insertAdjacentHTML("afterend", `<form class="thread-reply">`
+        + `<textarea placeholder="${escapeHtml(texts.placeholder)}"></textarea>`
+        + `<div class="thread-actions"><span class="thread-error"></span>`
+        + `<button type="button" data-reply-cancel>${escapeHtml(texts.cancel)}</button>`
+        + `<button type="submit">${escapeHtml(texts.publish)}</button></div></form>`);
+      thread.querySelector(".thread-reply textarea").focus();
+    }
+
+    function closeReply(form) {
+      form.previousElementSibling.hidden = false;
+      form.remove();
+    }
+
+    root.addEventListener("click", event => {
+      const replyButton = event.target.closest("[data-thread-reply]");
+      if (replyButton) {
+        openReply(threadOf(replyButton));
+        return;
+      }
+      const cancel = event.target.closest("[data-reply-cancel]");
+      if (cancel) {
+        closeReply(cancel.closest(".thread-reply"));
+        return;
+      }
+      const resolveButton = event.target.closest("[data-thread-resolve]");
+      if (resolveButton) {
+        const thread = threadOf(resolveButton);
+        run(thread, [resolveButton], () => write("resolve", {
+          iid: Number(iid),
+          discussion: thread.dataset.discussion,
+          resolved: resolveButton.dataset.threadResolve === "true",
+        }));
+      }
+    });
+    root.addEventListener("submit", event => {
+      const form = event.target.closest(".thread-reply");
+      if (!form) return;
+      event.preventDefault();
+      const body = form.querySelector("textarea").value;
+      if (!body.trim()) return;
+      const thread = threadOf(form);
+      run(thread, [...form.querySelectorAll("button, textarea")], () => write("reply", {
+        iid: Number(iid),
+        discussion: thread.dataset.discussion,
+        body,
+      }));
+    });
+    root.addEventListener("keydown", event => {
+      const form = event.target.closest?.(".thread-reply");
+      if (!form) return;
+      if (event.key === "Escape") closeReply(form);
+      else if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) form.requestSubmit();
+    });
+  }
+
+  return { graphql, allNodes, render, noteId, discussionId, threadActionsHtml, handleThreads };
 })();
