@@ -119,6 +119,12 @@
   #commit-list li:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); }
   #commit-list li.selected { background: color-mix(in srgb, var(--accent) 16%, transparent); border-left-color: var(--accent); }
   #commit-list li.merge { color: var(--muted); font-style: italic; }
+  #commit-list li.push {
+    display: flex; gap: 0.4rem; padding: 0.3rem 0.6rem 0.15rem; font-size: 0.7rem; font-weight: 600;
+    color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; border-top: 1px solid var(--border);
+  }
+  #commit-list li.push:first-child { border-top: 0; }
+  #commit-list li.push:hover { color: var(--link); }
   #commit-list .n { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
   #commit-list .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #commit-list .a { color: var(--muted); font-size: 0.7rem; white-space: nowrap; }
@@ -203,6 +209,10 @@
       emptyRange: "Aucune différence dans cette plage de commits.",
       commitsFailed: p => `Commits indisponibles : ${p}`,
       mergeCommit: "Merge de la cible dans la branche",
+      lastPush: "Dernier push",
+      lastPushTitle: "Les commits arrivés avec le dernier push",
+      push: p => `Push · ${p.date} · ${p.count} commit${p.count > 1 ? "s" : ""}`,
+      pushTitle: "Clic : les commits de ce push",
     },
     en: {
       title: p => `Diff of !${p.iid}`,
@@ -227,6 +237,10 @@
       emptyRange: "No difference in this range of commits.",
       commitsFailed: p => `Commits unavailable: ${p}`,
       mergeCommit: "Merge of the target into the branch",
+      lastPush: "Last push",
+      lastPushTitle: "The commits that came with the last push",
+      push: p => `Push · ${p.date} · ${p.count} commit${p.count > 1 ? "s" : ""}`,
+      pushTitle: "Click: this push's commits",
     },
   };
   const params = new URLSearchParams(location.search);
@@ -249,6 +263,8 @@
   let commitsError = null;
   let range = null;
   let anchor = null;
+  // Pushs de la MR, d'après ses versions GitLab : [premier, dernier] indice de commit et date.
+  let pushes = [];
   let loadSeq = 0;
 
   function escapeHtml(text) {
@@ -384,21 +400,55 @@
     if (!commits?.length) return;
     section.hidden = false;
     const selected = i => range && i >= range[0] && i <= range[1];
+    const pushStarts = new Map(pushes.map((push, k) => [push.first, k]));
     const items = commits.map((c, i) => {
       const classes = [selected(i) ? "selected" : "", c.merge ? "merge" : ""].filter(Boolean).join(" ");
       const tooltip = `${c.sha.slice(0, 8)} · ${c.author} · ${new Date(c.date).toLocaleString(lang)}\n${c.title}${c.merge ? `\n${texts.mergeCommit}` : ""}`;
-      return `<li data-index="${i}"${classes ? ` class="${classes}"` : ""} title="${escapeHtml(tooltip)}">`
+      const push = pushes[pushStarts.get(i)];
+      const separator = push
+        ? `<li class="push" data-push="${pushStarts.get(i)}" title="${escapeHtml(texts.pushTitle)}">${escapeHtml(texts.push({
+          date: new Date(push.date).toLocaleString(lang, { dateStyle: "short", timeStyle: "short" }),
+          count: push.last - push.first + 1,
+        }))}</li>`
+        : "";
+      return `${separator}<li data-index="${i}"${classes ? ` class="${classes}"` : ""} title="${escapeHtml(tooltip)}">`
         + `<span class="n">${i + 1}</span><span class="t">${c.merge ? "⑂ " : ""}${escapeHtml(c.title)}</span>`
         + `<span class="a">${escapeHtml(initials(c.author))} · ${escapeHtml(age(c.date))}</span></li>`;
     }).join("");
     const warning = range && commits.slice(range[0], range[1] + 1).some(c => c.merge)
       ? `<div class="commits-warning">${escapeHtml(texts.mergeWarning)}</div>` : "";
     section.innerHTML = `<div class="commits-head"><strong>${escapeHtml(texts.commits(commits.length))}</strong>`
+      + (pushes.length > 1 ? `<button type="button" data-push="${pushes.length - 1}" aria-pressed="${isPush(pushes.length - 1)}" title="${escapeHtml(texts.lastPushTitle)}">${escapeHtml(texts.lastPush)}</button>` : "")
       + `<button type="button" data-range="all" aria-pressed="${!range}" title="${escapeHtml(texts.allTitle)}">${escapeHtml(texts.all)}</button></div>`
       + `<div class="commits-hint">${escapeHtml(texts.hint)}</div>${warning}<ol id="commit-list">${items}</ol>`;
     const list = document.getElementById("commit-list");
     if (listScroll !== null) list.scrollTop = listScroll;
     else list.scrollTop = list.scrollHeight;
+  }
+
+  const isPush = k => !!range && range[0] === pushes[k].first && range[1] === pushes[k].last;
+
+  // Chaque version GitLab de la MR finit par le commit poussé en dernier : les commits jusqu'à lui,
+  // depuis le push précédent, sont arrivés ensemble. Une version d'avant un rebase ne correspond à
+  // aucun commit et se fond dans la suivante. Sans GitLab, pas de groupes : la liste reste utilisable.
+  async function loadPushes() {
+    try {
+      const config = await (await fetch("config")).json();
+      const project = encodeURIComponent(config.gitlabProject);
+      const versions = JSON.parse(await fetchText(`gitlab/projects/${project}/merge_requests/${mr.iid}/versions`));
+      const heads = new Map(versions.map(v => [v.head_commit_sha, v.created_at]));
+      let first = 0;
+      const found = [];
+      commits.forEach((c, i) => {
+        if (!heads.has(c.sha)) return;
+        found.push({ first, last: i, date: heads.get(c.sha) });
+        first = i + 1;
+      });
+      if (found.length && first < commits.length) found.push({ first, last: commits.length - 1, date: commits.at(-1).date });
+      pushes = found;
+    } catch (ignored) {
+      pushes = [];
+    }
   }
 
   const initials = name => name.split(/\s+/).filter(Boolean).map(part => part[0].toUpperCase()).join("").slice(0, 3);
@@ -495,6 +545,7 @@
       anchor = range[0];
     }
     renderRangeLabel();
+    if (commits?.length) await loadPushes();
     await loadDiff();
   }
 
@@ -523,7 +574,14 @@
       selectRange(null);
       return;
     }
-    const item = e.target.closest("#commit-list li");
+    const push = e.target.closest("[data-push]");
+    if (push) {
+      const { first, last } = pushes[Number(push.dataset.push)];
+      anchor = first;
+      selectRange([first, last]);
+      return;
+    }
+    const item = e.target.closest("#commit-list li[data-index]");
     if (!item) return;
     const index = Number(item.dataset.index);
     if (e.shiftKey && anchor !== null) {

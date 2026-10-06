@@ -114,7 +114,9 @@ Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut
   de `refs/merge-requests/<iid>/head`. Ni worktree ni branche locale : un simple `git diff`. Au-dessus
   des fichiers, les commits de la MR (sans ceux de la cible qu'elle a mergée) : un clic n'affiche que
   ce commit, Maj+clic étend jusqu'à un autre (`git diff <premier>^1 <dernier>`), **Tout** revient au
-  diff complet ; la plage est dans l'adresse. Une plage qui contient un merge de la cible le signale :
+  diff complet ; la plage est dans l'adresse. Les commits sont groupés par push, d'après les versions
+  de la MR dans GitLab (sans GitLab, pas de groupes) : un clic sur un push, ou **Dernier push**, n'affiche
+  que les commits arrivés avec lui. Une plage qui contient un merge de la cible le signale :
   son diff montre aussi ce que ce merge a apporté. Liste des
   fichiers dans un panneau latéral toujours visible (nom, puis répertoire ; le fichier lu y est
   surligné ; largeur réglable par son coin bas droit), côte à côte ou ligne à ligne (retenu dans le
