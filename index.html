@@ -319,6 +319,8 @@
   .author { display: flex; align-items: center; gap: 0.5em; white-space: nowrap; text-align: left; }
   /* Prénom et nom sur deux lignes, coupés au premier espace : la colonne n'a que la largeur du plus long. */
   .author .author-name { display: flex; flex-direction: column; font-size: 0.85rem; line-height: 1.2; }
+  /* Nom en plus petit : le prénom suffit à reconnaître, le nom complet reste lisible sur une capture. */
+  .author .author-name > span + span { font-size: 0.75em; }
   .avatar {
     width: 1.8em; height: 1.8em; border-radius: 50%; flex: none;
     display: grid; place-items: center; font-size: 0.78rem; font-weight: 700; color: var(--avatar-fg);
