@@ -125,6 +125,7 @@
   }
   #commit-list li.push:first-child { border-top: 0; }
   #commit-list li.push:hover { color: var(--link); }
+  #commit-list li.new .n { color: var(--accent); font-weight: 700; }
   #commit-list .n { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
   #commit-list .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #commit-list .a { color: var(--muted); font-size: 0.7rem; white-space: nowrap; }
@@ -209,6 +210,8 @@
       emptyRange: "Aucune différence dans cette plage de commits.",
       commitsFailed: p => `Commits indisponibles : ${p}`,
       mergeCommit: "Merge de la cible dans la branche",
+      sinceSeen: n => `Nouveaux (${n})`,
+      sinceSeenTitle: "Les commits arrivés depuis la dernière fois que ce diff a été lu dans ce navigateur",
       lastPush: "Dernier push",
       lastPushTitle: "Les commits arrivés avec le dernier push",
       push: p => `Push · ${p.date} · ${p.count} commit${p.count > 1 ? "s" : ""}`,
@@ -237,6 +240,8 @@
       emptyRange: "No difference in this range of commits.",
       commitsFailed: p => `Commits unavailable: ${p}`,
       mergeCommit: "Merge of the target into the branch",
+      sinceSeen: n => `New (${n})`,
+      sinceSeenTitle: "The commits that came since this diff was last read in this browser",
       lastPush: "Last push",
       lastPushTitle: "The commits that came with the last push",
       push: p => `Push · ${p.date} · ${p.count} commit${p.count > 1 ? "s" : ""}`,
@@ -265,6 +270,9 @@
   let anchor = null;
   // Pushs de la MR, d'après ses versions GitLab : [premier, dernier] indice de commit et date.
   let pushes = [];
+  // Dernier commit lu à l'ouverture de la page, pas à chaque plage affichée : sinon les nouveaux
+  // cesseraient de l'être dès le premier coup d'œil. -1 : rien de lu, ou un commit qui n'est plus dans la MR.
+  let seenAtOpen = -1;
   let loadSeq = 0;
 
   function escapeHtml(text) {
@@ -402,7 +410,8 @@
     const selected = i => range && i >= range[0] && i <= range[1];
     const pushStarts = new Map(pushes.map((push, k) => [push.first, k]));
     const items = commits.map((c, i) => {
-      const classes = [selected(i) ? "selected" : "", c.merge ? "merge" : ""].filter(Boolean).join(" ");
+      const classes = [selected(i) ? "selected" : "", c.merge ? "merge" : "", seenAtOpen >= 0 && i > seenAtOpen ? "new" : ""]
+        .filter(Boolean).join(" ");
       const tooltip = `${c.sha.slice(0, 8)} · ${c.author} · ${new Date(c.date).toLocaleString(lang)}\n${c.title}${c.merge ? `\n${texts.mergeCommit}` : ""}`;
       const push = pushes[pushStarts.get(i)];
       const separator = push
@@ -418,12 +427,36 @@
     const warning = range && commits.slice(range[0], range[1] + 1).some(c => c.merge)
       ? `<div class="commits-warning">${escapeHtml(texts.mergeWarning)}</div>` : "";
     section.innerHTML = `<div class="commits-head"><strong>${escapeHtml(texts.commits(commits.length))}</strong>`
+      + (seenAtOpen >= 0 && seenAtOpen < commits.length - 1
+        ? `<button type="button" data-range="new" aria-pressed="${!!range && range[0] === seenAtOpen + 1 && range[1] === commits.length - 1}" title="${escapeHtml(texts.sinceSeenTitle)}">${escapeHtml(texts.sinceSeen(commits.length - 1 - seenAtOpen))}</button>`
+        : "")
       + (pushes.length > 1 ? `<button type="button" data-push="${pushes.length - 1}" aria-pressed="${isPush(pushes.length - 1)}" title="${escapeHtml(texts.lastPushTitle)}">${escapeHtml(texts.lastPush)}</button>` : "")
       + `<button type="button" data-range="all" aria-pressed="${!range}" title="${escapeHtml(texts.allTitle)}">${escapeHtml(texts.all)}</button></div>`
       + `<div class="commits-hint">${escapeHtml(texts.hint)}</div>${warning}<ol id="commit-list">${items}</ol>`;
     const list = document.getElementById("commit-list");
     if (listScroll !== null) list.scrollTop = listScroll;
     else list.scrollTop = list.scrollHeight;
+  }
+
+  const seenKey = () => `mr-dashboard.diffSeen.${mr.iid}`;
+
+  function readSeen() {
+    try {
+      return commits.findIndex(c => c.sha === localStorage.getItem(seenKey()));
+    } catch (ignored) {
+      return -1;
+    }
+  }
+
+  // Retient le commit le plus récent affiché, sans jamais reculer : relire un vieux commit ne rend pas
+  // les suivants nouveaux.
+  function markSeen() {
+    if (!commits?.length) return;
+    const shown = range ? range[1] : commits.length - 1;
+    if (shown <= readSeen()) return;
+    try {
+      localStorage.setItem(seenKey(), commits[shown].sha);
+    } catch (ignored) { /* stockage indisponible : rien n'est retenu */ }
   }
 
   const isPush = k => !!range && range[0] === pushes[k].first && range[1] === pushes[k].last;
@@ -545,7 +578,10 @@
       anchor = range[0];
     }
     renderRangeLabel();
-    if (commits?.length) await loadPushes();
+    if (commits?.length) {
+      seenAtOpen = readSeen();
+      await loadPushes();
+    }
     await loadDiff();
   }
 
@@ -566,9 +602,15 @@
     if (seq !== loadSeq) return;
     diffText = text;
     render();
+    markSeen();
   }
 
   document.getElementById("diff").addEventListener("click", e => {
+    if (e.target.closest("[data-range='new']")) {
+      anchor = seenAtOpen + 1;
+      selectRange([seenAtOpen + 1, commits.length - 1]);
+      return;
+    }
     if (e.target.closest("[data-range='all']")) {
       anchor = null;
       selectRange(null);
