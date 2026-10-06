@@ -308,7 +308,14 @@ def make_handler(
             self.send_json(200, result)
 
         def git_fetch(self, payload):
-            git.fetch()
+            signature = payload.get("signature") if isinstance(payload, dict) else None
+            if signature is None:
+                git.fetch()
+            elif isinstance(signature, str):
+                git.fetch_if_changed(signature)
+            else:
+                self.send_json(400, {"message": "requête invalide"})
+                return
             self.send_json(200, git.status())
 
         def git_auto(self, payload):

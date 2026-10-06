@@ -66,6 +66,10 @@ ensemble — puis `start.sh <nom>`.
   navigateur. Sur ses propres MR, la notification reste affichée et revient toutes les 15 minutes tant
   qu'un problème reste ouvert.
 - `?lang=en` pour forcer l'anglais.
+- Recharger la page ne sollicite ni GitLab ni git : elle réaffiche les données sauvegardées dans le
+  navigateur et n'interroge GitLab que si l'actualisation des 5 minutes est due, comptées depuis la
+  dernière, d'où qu'elle vienne (autre onglet compris). Le serveur ne fetch que si l'état des MR a changé
+  depuis le dernier qu'une page lui a signalé. **Rafraîchir** et **git fetch** partent toujours.
 - Le texte grandit avec la largeur de la fenêtre : à 100 % de zoom, le tableau tient sur tout écran.
   **A− / A+**, dans l'en-tête, l'ajustent de 70 à 150 % (retenu dans le navigateur, repris par la page
   de diff) ; préférer ce réglage au zoom du navigateur, qui vaut pour tous les onglets du dashboard.

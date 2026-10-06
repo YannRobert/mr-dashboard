@@ -2920,14 +2920,20 @@ function fetchIfRepoChanged() {
   const seen = [...state.mrs.map(mr => `${mr.iid}:${mr.sha}`).sort(), state.branchPipeline?.sha ?? ""].join(" ");
   if (seen === state.gitFetch.seen) return;
   state.gitFetch.seen = seen;
-  gitFetch();
+  gitFetch(seen);
 }
 
-async function gitFetch() {
+// Avec l'état des MR, le serveur ne fetch que s'il diffère du dernier qu'on lui a signalé : une page
+// rechargée ou un autre onglet ne relance pas de fetch. Sans, le fetch part toujours (bouton).
+async function gitFetch(signature) {
   state.gitFetch.running = true;
   renderGitFetch();
   try {
-    state.gitFetch.status = (await api("/git/fetch", { method: "POST", headers: { "X-MR-Dashboard": "1" } })).body;
+    state.gitFetch.status = (await api("/git/fetch", {
+      method: "POST",
+      headers: { "X-MR-Dashboard": "1", "Content-Type": "application/json" },
+      body: JSON.stringify(signature === undefined ? {} : { signature }),
+    })).body;
   } catch (error) {
     state.gitFetch.status = { last: { at: new Date().toISOString(), ok: false, message: error.message }, lastSuccess: state.gitFetch.status?.lastSuccess };
   } finally {
@@ -3979,7 +3985,7 @@ systemDark.addEventListener("change", () => {
 });
 setInterval(renderStatus, 30 * 1000);
 setInterval(loadGitFetchStatus, 30 * 1000);
-$("git-fetch").addEventListener("click", gitFetch);
+$("git-fetch").addEventListener("click", () => gitFetch());
 $("git-fetch-auto").addEventListener("change", e => setGitFetchAuto(e.target.checked));
 $("ai-copy").addEventListener("click", copyAiPrompt);
 $("ai-orca").addEventListener("click", openInOrca);
@@ -4003,8 +4009,9 @@ if ("Notification" in window) {
   $("notify-control").previousElementSibling.remove();
   $("notify-control").remove();
 }
-// Données sauvegardées : affichées tout de suite avec leur âge, puis remplacées d'un bloc par la mise à
-// jour lancée derrière. Sans elles, premier chargement au fil de l'eau.
+// Données sauvegardées : affichées tout de suite avec leur âge, et GitLab n'est interrogé que si
+// l'actualisation est due, cycle compté depuis la sauvegarde : recharger la page ne le sollicite pas.
+// Sans elles, premier chargement au fil de l'eau.
 // Une sauvegarde illisible par cette version de la page (forme d'une version antérieure, données
 // inattendues) est jetée : elle ne doit jamais empêcher la mise à jour de partir.
 const saved = readSnapshot();
@@ -4018,7 +4025,13 @@ if (saved) {
     if (!state.configLoaded) state.config = null;
   }
 }
-sharedRefresh();
+if (state.refreshedAt) {
+  state.cycleStart = state.refreshedAt;
+  ensureConfig()
+    .then(fetchIfRepoChanged)
+    .catch(error => showError(t("error.load", { message: error.message })));
+  sharedRefresh({ onlyIfDue: true });
+} else sharedRefresh();
 if (mergedView()) loadMerged();
 </script>
 </body>

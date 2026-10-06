@@ -40,6 +40,8 @@ class GitActions:
         self._running = False
         self._last = None
         self._last_success_at = None
+        # État des MR qui a déclenché le dernier fetch sur changement, partagé par tous les onglets.
+        self._repo_signature = None
         self._auto = True
         self._wake = threading.Event()
         # Échéance du prochain fetch automatique, en temps monotone : chaque fetch, d'où qu'il vienne,
@@ -108,6 +110,15 @@ class GitActions:
                 if result["ok"]:
                     self._last_success_at = result["at"]
             return result
+
+    def fetch_if_changed(self, signature):
+        """Fetch si l'état des MR vu par la page diffère du dernier signalé : une page rechargée, ou un
+        autre onglet qui voit le même état, ne relance pas de fetch."""
+        with self._state_lock:
+            if signature == self._repo_signature:
+                return self._last
+            self._repo_signature = signature
+        return self.fetch()
 
     def _run_fetch(self):
         at = datetime.now(timezone.utc).isoformat()
