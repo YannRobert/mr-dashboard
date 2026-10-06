@@ -100,20 +100,23 @@ Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut
   réussi). Les `origin/<branche>` restent ainsi à jour pendant une coupure
   de GitLab : on peut relire et committer, puis pousser à son retour.
 - **Visionneuses** : chaque MR ouverte a un bouton par visionneuse de `GIT_VIEWERS` présente sur le
-  poste — par défaut `meld,tig`. Une branche absente en local est d'abord fetchée.
+  poste — par défaut `meld,tig diff,tig`. Une branche absente en local est d'abord fetchée.
   - **meld** : les fichiers modifiés par la MR depuis le point où elle part de sa cible
     (`git difftool --dir-diff --tool=meld origin/<cible>...origin/<branche>`, comme l'onglet
     *Changes* de GitLab), à parcourir un par un, diff côte à côte. Installation :
     `sudo apt install meld`.
   - **tig** : les commits de la MR absents de sa cible (`tig origin/<cible>..origin/<branche>`) ;
     `Entrée` sur un commit affiche son diff, `q` revient en arrière. Installation : `sudo apt install tig`.
+  - **tig diff** : le diff cumulé de la MR depuis le point où elle part de sa cible
+    (`git diff --stat -p origin/<cible>...origin/<branche> | tig`), d'un seul tenant : la liste des
+    fichiers en tête, `Entrée` sur l'un d'eux saute à son diff, `@` au bloc de modifications suivant.
   - **lazygit** et **gitk** restent disponibles. lazygit s'ouvre sur la branche extraite : dans le
     worktree où elle l'est s'il y en a un (on peut y corriger et pousser), sinon dans son worktree de
     revue `<clone>-MR<iid>`, à côté du worktree principal, comme pour une revue (cf. `GIT.md`) : créé
     au besoin, détaché sur `origin/<branche>`, et ramené sur le dernier commit poussé à chaque
     ouverture tant qu'il est détaché et sans modification. Les autres comparent des références depuis
     le worktree principal, qui n'est jamais modifié ; aucun worktree n'est supprimé.
-- Les visionneuses en mode texte (tig, lazygit) s'ouvrent par `GIT_TERMINAL`. Par défaut, le premier
+- Les visionneuses en mode texte (tig diff, tig, lazygit) s'ouvrent par `GIT_TERMINAL`. Par défaut, le premier
   présent sur le poste : un onglet WezTerm, dans son domaine par défaut, qui doit donc être WSL
   (`config.default_domain = 'WSL:Ubuntu-24.04'` dans `.wezterm.lua` ; `--domain` y lancerait la
   visionneuse deux fois) (`wezterm.exe start --new-tab --cwd {repo} --`), sinon un onglet d'une

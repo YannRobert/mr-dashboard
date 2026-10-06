@@ -43,10 +43,13 @@ VIEWERS = {
     # Les fichiers modifiés par la MR depuis le point où elle part de sa cible, un par un.
     "meld": Viewer("git difftool --dir-diff --no-prompt --tool=meld origin/{target}...origin/{branch}", False, False),
     "tig": Viewer("tig origin/{target}..origin/{branch}", True, False),
+    # Le diff cumulé de la MR, lu par tig : la liste des fichiers en tête mène au diff de chacun. La
+    # plage arrive en argument du shell, jamais dans son script.
+    "tig diff": Viewer("sh -c 'git diff --stat -p \"$1\" | tig' tig-diff origin/{target}...origin/{branch}", True, False),
     "lazygit": Viewer("lazygit log", True, True),
     "gitk": Viewer("gitk --boundary origin/{target}..origin/{branch}", False, False),
 }
-REQUIRED_PROGRAMS = {"meld": "meld"}
+REQUIRED_PROGRAMS = {"meld": "meld", "tig diff": "tig"}
 
 
 class GitActions:

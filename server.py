@@ -57,7 +57,7 @@ from orca_launcher import OrcaError, OrcaLauncher
 DEFAULT_PORT = 8765
 DEFAULT_GIT_FETCH_INTERVAL_S = 300
 # Un bouton par visionneuse présente sur le poste, dans cet ordre ; les commandes sont dans git_actions.VIEWERS.
-DEFAULT_GIT_VIEWERS = "meld,tig"
+DEFAULT_GIT_VIEWERS = "meld,tig diff,tig"
 # Terminaux essayés dans l'ordre, le premier présent sur le poste l'emporte : onglet WezTerm, dans son
 # domaine par défaut qui doit être WSL (--domain y lancerait la visionneuse deux fois), ou
 # onglet d'une fenêtre Windows Terminal réservée aux MR, agrandie au maximum à sa création, où WSL lance la
