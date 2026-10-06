@@ -144,6 +144,9 @@ Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut
 - Un onglet par page et par MR : un lien vers le diff ou les commentaires d'une MR déjà ouverts — depuis
   le dashboard, le diff ou les commentaires — ramène à leur onglet, sans le recharger (`tabs.js`). Le
   clic du milieu et Ctrl+clic ouvrent toujours un nouvel onglet.
+- **✕ Fermer**, dans l'en-tête du diff et des commentaires, ferme l'onglet sans confirmation du
+  navigateur. Celui-ci ne laisse fermer qu'un onglet ouvert depuis le dashboard ou un lien ; pour un
+  onglet ouvert à la main, le bouton devient « Ctrl+W ».
 - Diff notes affichées, sur tout le diff (sans plage de commits) et un clone local à jour du dernier
   push : un clic sur un numéro de ligne ouvre un éditeur dessous, Maj+clic l'étend à une plage ;
   **Publier dans GitLab** (Ctrl+Entrée) y crée la discussion.

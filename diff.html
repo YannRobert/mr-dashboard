@@ -251,6 +251,7 @@
     </div>
     <a class="toggle" id="comments-link" target="_blank" data-tab="comments"></a>
     <a id="gitlab" target="_blank" rel="noopener" hidden></a>
+    <button type="button" class="toggle" id="close-tab" data-close-tab></button>
   </div>
 </header>
 <main id="diff"><p class="message" id="loading"></p></main>
@@ -276,6 +277,9 @@
       smaller: "Texte plus petit",
       larger: "Texte plus grand",
       gitlab: "Ouvrir dans GitLab",
+      close: "✕ Fermer",
+      closeTitle: "Fermer cet onglet",
+      closeRefused: "Le navigateur refuse de fermer un onglet qu'il n'a pas ouvert depuis le dashboard : Ctrl+W",
       loading: "Calcul du diff sur le dépôt local…",
       empty: "Aucune différence avec la branche cible.",
       failed: p => `Diff impossible : ${p}`,
@@ -333,6 +337,9 @@
       smaller: "Smaller text",
       larger: "Larger text",
       gitlab: "Open in GitLab",
+      close: "✕ Close",
+      closeTitle: "Close this tab",
+      closeRefused: "The browser does not let the page close a tab it did not open from the dashboard: Ctrl+W",
       loading: "Computing the diff on the local repository…",
       empty: "No difference with the target branch.",
       failed: p => `Could not compute the diff: ${p}`,
@@ -1182,6 +1189,10 @@
     comments.title = texts.commentsTitle;
     comments.href = `comments.html?${new URLSearchParams({ iid: mr.iid, lang })}`;
     comments.dataset.iid = mr.iid;
+    const close = document.getElementById("close-tab");
+    close.textContent = texts.close;
+    close.title = texts.closeTitle;
+    close.dataset.closeRefused = texts.closeRefused;
     const gitlab = document.getElementById("gitlab");
     if (/^https:\/\//.test(mr.url)) {
       gitlab.href = `${mr.url}/diffs`;

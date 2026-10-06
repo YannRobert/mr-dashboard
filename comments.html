@@ -66,6 +66,10 @@
     border: 1px solid var(--border-strong); border-radius: 0.5rem; background: var(--surface);
   }
   .links a[hidden] { display: none; }
+  .links button {
+    font: inherit; font-size: 0.85rem; color: var(--text); padding: 0.25em 0.8em; cursor: pointer;
+    border: 1px solid var(--border-strong); border-radius: 0.5rem; background: var(--surface);
+  }
   main { box-sizing: border-box; max-width: 62rem; margin: 0 auto; padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
   .message { color: var(--muted); }
   .message.error { color: var(--red-fg); }
@@ -98,6 +102,7 @@
   <nav class="links">
     <a id="diff-link" target="_blank" data-tab="diff" hidden></a>
     <a id="gitlab-link" target="_blank" rel="noopener" hidden></a>
+    <button type="button" id="close-tab" data-close-tab></button>
   </nav>
 </header>
 <main id="comments"><p class="message" id="loading"></p></main>
@@ -117,6 +122,9 @@
       diff: "Diff",
       diffTitle: "git diff de cette MR",
       gitlab: "Ouvrir dans GitLab",
+      close: "✕ Fermer",
+      closeTitle: "Fermer cet onglet",
+      closeRefused: "Le navigateur refuse de fermer un onglet qu'il n'a pas ouvert depuis le dashboard : Ctrl+W",
       openNote: "GitLab",
     },
     en: {
@@ -131,6 +139,9 @@
       diff: "Diff",
       diffTitle: "git diff of this MR",
       gitlab: "Open in GitLab",
+      close: "✕ Close",
+      closeTitle: "Close this tab",
+      closeRefused: "The browser does not let the page close a tab it did not open from the dashboard: Ctrl+W",
       openNote: "GitLab",
     },
   };
@@ -141,6 +152,10 @@
   const iid = params.get("iid") ?? "";
   document.documentElement.lang = lang;
   MrTabs.claim("comments", iid);
+  const closeTab = document.getElementById("close-tab");
+  closeTab.textContent = texts.close;
+  closeTab.title = texts.closeTitle;
+  closeTab.dataset.closeRefused = texts.closeRefused;
 
   function escapeHtml(text) {
     return String(text).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
