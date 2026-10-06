@@ -93,12 +93,13 @@
   <h1 id="title"></h1>
   <span class="summary" id="summary"></span>
   <nav class="links">
-    <a id="diff-link" target="_blank" rel="noopener" hidden></a>
+    <a id="diff-link" target="_blank" data-tab="diff" hidden></a>
     <a id="gitlab-link" target="_blank" rel="noopener" hidden></a>
   </nav>
 </header>
 <main id="comments"><p class="message" id="loading"></p></main>
 <script src="notes.js"></script>
+<script src="tabs.js"></script>
 <script>
   const TEXTS = {
     fr: {
@@ -136,6 +137,7 @@
   const texts = TEXTS[lang];
   const iid = params.get("iid") ?? "";
   document.documentElement.lang = lang;
+  MrTabs.claim("comments", iid);
 
   function escapeHtml(text) {
     return String(text).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -180,6 +182,7 @@
     diff.textContent = texts.diff;
     diff.title = texts.diffTitle;
     diff.href = `diff.html?${query}`;
+    diff.dataset.iid = iid;
     diff.hidden = false;
   }
 

@@ -246,13 +246,14 @@
       <output id="note-position"></output>
       <button type="button" data-note-step="1">›</button>
     </div>
-    <a class="toggle" id="comments-link" target="_blank" rel="noopener"></a>
+    <a class="toggle" id="comments-link" target="_blank" data-tab="comments"></a>
     <a id="gitlab" target="_blank" rel="noopener" hidden></a>
   </div>
 </header>
 <main id="diff"><p class="message" id="loading"></p></main>
 <script src="vendor/diff2html/diff2html-ui-slim.min.js"></script>
 <script src="notes.js"></script>
+<script src="tabs.js"></script>
 <script>
   const FORMAT_KEY = "mr-dashboard.diffFormat";
   const DASHBOARD_TEXT_SCALE_KEY = "mr-dashboard.textScale";
@@ -389,6 +390,7 @@
     head: params.get("head") ?? "",
     merge: params.get("merge") ?? "",
   };
+  MrTabs.claim("diff", mr.iid);
   let diffText = null;
   // Commits de la MR, du plus ancien au plus récent ; plage affichée en indices, null pour tout le diff.
   let commits = null;
@@ -1153,6 +1155,7 @@
     comments.textContent = texts.comments;
     comments.title = texts.commentsTitle;
     comments.href = `comments.html?${new URLSearchParams({ iid: mr.iid, lang })}`;
+    comments.dataset.iid = mr.iid;
     const gitlab = document.getElementById("gitlab");
     if (/^https:\/\//.test(mr.url)) {
       gitlab.href = `${mr.url}/diffs`;

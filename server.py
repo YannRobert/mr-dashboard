@@ -80,6 +80,7 @@ STATIC_FILES = {
     "/vendor/diff2html/diff2html.min.css": "text/css; charset=utf-8",
     "/notes.js": "text/javascript; charset=utf-8",
     "/notes.css": "text/css; charset=utf-8",
+    "/tabs.js": "text/javascript; charset=utf-8",
 }
 SIGNALS_SCRIPT = STATIC_DIR.parent / "mr-ci-signals.py"
 REPO_ROOT = STATIC_DIR.parent.parent
