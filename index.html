@@ -45,7 +45,7 @@
     --focus: #4f46e5;
     color-scheme: light;
   }
-  /* data-theme vaut le choix enregistré ou, en automatique, le thème du système : posé par le script de l'en-tête. */
+  /* data-theme vaut le choix enregistré ou, à défaut, le thème du système : posé par le script de l'en-tête. */
   :root[data-theme="dark"] {
     color-scheme: dark;
     --bg: #111217;
@@ -73,9 +73,9 @@
   }
   * { box-sizing: border-box; }
   /* Toute la page est en rem, sur une base proportionnelle à la largeur de la fenêtre : ce qui tient à 100 %
-     sur un écran tient sur tous, et reste lisible sur un grand sans zoom (13 px jusqu'en 1620, ~15 px en 1920,
-     ~20 px en 2560). A− / A+ l'ajustent, sans le zoom du navigateur qui vaut pour tout le site. */
-  html { font-size: calc(clamp(13px, 0.8vw, 28px) * var(--text-scale, 1)); }
+     sur un écran tient sur tous, et reste lisible sur un grand sans zoom (13 px jusqu'en 1730, ~14 px en 1920,
+     ~19 px en 2560). A− / A+ l'ajustent, sans le zoom du navigateur qui vaut pour tout le site. */
+  html { font-size: calc(clamp(13px, 0.75vw, 28px) * var(--text-scale, 1)); }
   body {
     margin: 0;
     background: var(--bg);
@@ -104,7 +104,11 @@
     display: grid; place-items: center; font-weight: 800; font-size: 1.1rem;
     color: #fff; background: linear-gradient(135deg, var(--accent), var(--accent-2));
   }
-  header .header-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.8rem; }
+  header .header-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.8rem 1.4rem; }
+  /* Commandes d'actualisation alignées à droite, sous les préférences d'affichage. */
+  header .header-row.commands { justify-content: flex-end; }
+  /* Commandes de l'en-tête à la taille du texte du tableau : elles ne doivent pas l'emporter sur les données. */
+  header button { font-size: 0.9rem; }
   /* Le slogan sous le nom, à hauteur de la pastille « MR » : moins de place en largeur. */
   header h1 { margin: 0; display: flex; flex-direction: column; font-size: 1.4rem; font-weight: 700; letter-spacing: -0.01em; }
   header h1 .name { font-size: 1.15rem; line-height: 1.15; }
@@ -140,9 +144,9 @@
     padding: 0.3rem 0.3rem 0.3rem 0.8rem; border: 1px solid var(--border); border-radius: 0.7rem; background: var(--surface-2);
   }
   header label.auto {
-    display: inline-flex; gap: 0.4em; align-items: center; color: var(--text); font-size: 1rem; cursor: pointer;
+    display: inline-flex; gap: 0.4em; align-items: center; color: var(--text); font-size: 0.9rem; cursor: pointer;
   }
-  header label.auto input { accent-color: var(--accent); width: 1.4rem; height: 1.4rem; margin: 0; cursor: pointer; }
+  header label.auto input { accent-color: var(--accent); width: 1.15rem; height: 1.15rem; margin: 0; cursor: pointer; }
   /* Fraîcheur des données : 5 segments, un par minute, qui s'éteignent jusqu'à la prochaine actualisation
      auto ; vert jusqu'à 2 min, rouge à 4 min. Animation CSS pure, relancée à chaque actualisation : aucun
      calcul pendant l'attente. */
@@ -494,7 +498,6 @@
       <button type="button" data-lang="en" lang="en" title="English">EN</button>
     </div>
     <div class="lang-switch theme-switch" role="group" aria-label="Thème" data-i18n-aria-label="theme.group">
-      <button type="button" data-theme-choice="auto" data-i18n="theme.auto" data-i18n-title="theme.auto.title">Auto</button>
       <button type="button" data-theme-choice="light" aria-label="Clair" data-i18n-aria-label="theme.light" data-i18n-title="theme.light"><span aria-hidden="true">☀</span></button>
       <button type="button" data-theme-choice="dark" aria-label="Sombre" data-i18n-aria-label="theme.dark" data-i18n-title="theme.dark"><span aria-hidden="true">☾</span></button>
     </div>
@@ -506,7 +509,7 @@
     <span class="divider" aria-hidden="true"></span>
     <button type="button" id="clear-storage" class="icon-button" aria-label="Effacer les données locales" data-i18n-aria-label="clearStorage" data-i18n-title="clearStorage.title"><span aria-hidden="true">🧹</span></button>
   </div>
-  <div class="header-row">
+  <div class="header-row commands">
     <div class="status" role="status" aria-live="polite">
       <span class="meta" id="refreshed"></span>
     </div>
@@ -805,8 +808,6 @@ const I18N = {
     "tagline": "Le dashboard très rapide des Merge Requests",
     "lang.group": "Langue",
     "theme.group": "Thème",
-    "theme.auto": "Auto",
-    "theme.auto.title": "Suivre le thème clair ou sombre du système",
     "theme.light": "Thème clair",
     "theme.dark": "Thème sombre",
     "textSize.group": "Taille du texte",
@@ -1051,8 +1052,6 @@ const I18N = {
     "tagline": "Very Fast Merge Requests Dashboard",
     "lang.group": "Language",
     "theme.group": "Theme",
-    "theme.auto": "Auto",
-    "theme.auto.title": "Follow the system light or dark theme",
     "theme.light": "Light theme",
     "theme.dark": "Dark theme",
     "textSize.group": "Text size",
@@ -1801,27 +1800,25 @@ function saveAutoRefresh(enabled) {
   } catch (ignored) { /* stockage indisponible : la préférence vaut pour la session */ }
 }
 
-// Choix de thème : "light", "dark", ou "auto" pour suivre le système.
+// Thème "light" ou "dark", au choix de l'utilisateur ; tant qu'il n'a rien choisi, celui du système.
 const systemDark = matchMedia("(prefers-color-scheme: dark)");
 
 function readTheme() {
   try {
     const theme = localStorage.getItem(THEME_KEY);
-    return theme === "light" || theme === "dark" ? theme : "auto";
-  } catch (ignored) {
-    return "auto";
-  }
+    if (theme === "light" || theme === "dark") return theme;
+  } catch (ignored) { /* stockage indisponible : thème du système */ }
+  return matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
 function saveTheme(theme) {
   try {
-    if (theme === "auto") localStorage.removeItem(THEME_KEY);
-    else localStorage.setItem(THEME_KEY, theme);
+    localStorage.setItem(THEME_KEY, theme);
   } catch (ignored) { /* stockage indisponible : le choix vaut pour la session */ }
 }
 
 function applyTheme() {
-  document.documentElement.dataset.theme = state.theme === "auto" ? (systemDark.matches ? "dark" : "light") : state.theme;
+  document.documentElement.dataset.theme = state.theme;
   for (const el of document.querySelectorAll("[data-theme-choice]")) el.setAttribute("aria-pressed", String(el.dataset.themeChoice === state.theme));
 }
 
@@ -4009,7 +4006,10 @@ window.addEventListener("storage", e => {
   }
   if (e.key === TEXT_SCALE_KEY) applyTextScale();
 });
-systemDark.addEventListener("change", applyTheme);
+systemDark.addEventListener("change", () => {
+  state.theme = readTheme();
+  applyTheme();
+});
 setInterval(renderStatus, 30 * 1000);
 setInterval(loadGitFetchStatus, 30 * 1000);
 $("git-fetch").addEventListener("click", gitFetch);
