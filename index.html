@@ -688,7 +688,7 @@ const COLUMNS = [
   { key: "title", firstDir: "asc", cellClass: "mr-cell", value: mr => mr.title.replace(/^Draft:\s*/i, ""), render: mrCell },
   { key: "author", firstDir: "asc", cellClass: "nowrap", value: mr => mr.author?.name ?? null, render: authorCell },
   // Actions dans leur colonne, empilées : sous le titre, elles ajoutaient une troisième ligne à chaque MR.
-  { key: "actions", sortable: false, cellClass: "actions-cell", render: mr => `<div class="actions">${gitDiffButton(mr)}${aiFixButton(mr) || aiFixPlaceholder()}</div>` },
+  { key: "actions", sortable: false, cellClass: "actions-cell", render: mr => `<div class="actions">${gitDiffButton(mr)}${mr.state === "merged" ? "" : aiFixButton(mr) || aiFixPlaceholder()}</div>` },
   { key: "commits", firstDir: "desc", num: true, cellClass: "num", value: commitsCount, render: commitsCell },
   { key: "comments", firstDir: "desc", num: true, cellClass: "num", value: mr => mr.user_notes_count, render: mr => String(mr.user_notes_count) },
   { key: "threads", firstDir: "desc", num: true, cellClass: "num",
@@ -738,7 +738,7 @@ const COLUMN_GROUPS = {
     { key: "time", columns: ["last_commit", "activity", "created"] },
   ],
   merged: [
-    { key: "mr", columns: ["title", "author"] },
+    { key: "mr", columns: ["title", "author", "actions"] },
     { key: "review", columns: ["commits", "comments", "threads"] },
     { key: "lifecycle", columns: ["merged", "duration", "build", "stabilisation"] },
   ],
@@ -2912,8 +2912,9 @@ function diffStat(mr) {
     `<span class="add">+${n(d.additions)}</span> <span class="del">−${n(d.deletions)}</span></span>`;
 }
 
+// MR mergée : retrouvée par son merge commit, sa branche source est d'ordinaire supprimée.
 function gitDiffButton(mr) {
-  if (mr.state === "merged") return "";
+  if (mr.state === "merged" && !mr.merge_commit_sha) return "";
   return `<button type="button" class="mr-action" data-git-diff="${mr.iid}" title="${escapeHtml(t("gitDiff.title", { branch: mr.source_branch, target: mr.target_branch }))}">diff</button>`;
 }
 
@@ -2926,6 +2927,10 @@ function openGitDiff(mr) {
     url: mr.web_url,
     lang: state.lang,
   });
+  if (mr.state === "merged") {
+    query.set("head", mr.sha);
+    query.set("merge", mr.merge_commit_sha);
+  }
   window.open(`diff.html?${query}`, "_blank", "noopener");
 }
 
@@ -3950,7 +3955,8 @@ document.addEventListener("click", e => {
   }
   const gitDiff = e.target.closest("[data-git-diff]");
   if (gitDiff) {
-    openGitDiff(state.mrs.find(mr => String(mr.iid) === gitDiff.dataset.gitDiff));
+    const mrs = mergedView() ? state.merged.mrs : state.mrs;
+    openGitDiff(mrs.find(mr => String(mr.iid) === gitDiff.dataset.gitDiff));
     return;
   }
   const aiFix = e.target.closest("[data-ai-fix]");

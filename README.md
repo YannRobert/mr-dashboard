@@ -108,7 +108,10 @@ Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut
   de GitLab : on peut relire et committer, puis pousser à son retour.
 - **diff** : chaque MR ouverte a un bouton qui affiche dans un nouvel onglet son diff depuis le point
   où elle part de sa cible (`git diff origin/<cible>...origin/<branche>`, comme l'onglet *Changes* de
-  GitLab), calculé sur le dépôt local : il reste disponible pendant une coupure de GitLab. Liste des
+  GitLab), calculé sur le dépôt local : il reste disponible pendant une coupure de GitLab. Une MR
+  mergée, même ancienne et sa branche supprimée, a le sien, retrouvé par ses commits
+  (`git diff <merge commit>^1...<dernier commit>`) ; une tête absente du clone, après un squash, vient
+  de `refs/merge-requests/<iid>/head`. Ni worktree ni branche locale : un simple `git diff`. Liste des
   fichiers dans un panneau latéral toujours visible (nom, puis répertoire ; le fichier lu y est
   surligné ; largeur réglable par son coin bas droit), côte à côte ou ligne à ligne (retenu dans le
   navigateur), coloration syntaxique, thème du dashboard. Texte à la taille de celui du dashboard, réglage

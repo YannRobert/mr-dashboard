@@ -151,6 +151,7 @@
     fr: {
       title: p => `Diff de !${p.iid}`,
       branches: p => `<code>${p.branch}</code> comparée à <code>${p.target}</code>, depuis leur point de divergence`,
+      mergedBranches: p => `<code>${p.branch}</code> telle que mergée dans <code>${p.target}</code>`,
       sideBySide: "Côte à côte",
       lineByLine: "Ligne à ligne",
       textSize: "Taille du texte du diff, par rapport à celle du dashboard ; sans toucher au zoom du navigateur ni donc au dashboard",
@@ -165,6 +166,7 @@
     en: {
       title: p => `Diff of !${p.iid}`,
       branches: p => `<code>${p.branch}</code> compared with <code>${p.target}</code>, from where they diverge`,
+      mergedBranches: p => `<code>${p.branch}</code> as merged into <code>${p.target}</code>`,
       sideBySide: "Side by side",
       lineByLine: "Line by line",
       textSize: "Diff text size, relative to the dashboard's; leaves the browser zoom, hence the dashboard, untouched",
@@ -187,6 +189,9 @@
     branch: params.get("branch") ?? "",
     target: params.get("target") ?? "",
     url: params.get("url") ?? "",
+    // MR mergée : son dernier commit et son merge commit, la branche source ayant pu disparaître.
+    head: params.get("head") ?? "",
+    merge: params.get("merge") ?? "",
   };
   let diffText = null;
 
@@ -316,7 +321,8 @@
     const title = mr.title ? `!${mr.iid} ${mr.title}` : texts.title(mr);
     document.title = title;
     document.getElementById("title").textContent = title;
-    document.getElementById("branches").innerHTML = texts.branches({ branch: escapeHtml(mr.branch), target: escapeHtml(mr.target) });
+    const branches = mr.merge ? texts.mergedBranches : texts.branches;
+    document.getElementById("branches").innerHTML = branches({ branch: escapeHtml(mr.branch), target: escapeHtml(mr.target) });
     document.getElementById("side-by-side").textContent = texts.sideBySide;
     document.getElementById("line-by-line").textContent = texts.lineByLine;
     document.getElementById("text-size").title = texts.textSize;
@@ -338,7 +344,9 @@
       showMessage(texts.invalid, true);
       return;
     }
-    const query = new URLSearchParams({ branch: mr.branch, target: mr.target });
+    const query = new URLSearchParams(mr.merge
+      ? { iid: mr.iid, head: mr.head, merge: mr.merge, target: mr.target }
+      : { branch: mr.branch, target: mr.target });
     try {
       const response = await fetch(`git/diff?${query}`);
       if (!response.ok) {

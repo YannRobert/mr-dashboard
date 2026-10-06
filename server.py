@@ -19,7 +19,7 @@ Actions locales, en POST :
                 secondes ; GET /git/status en donne le dernier résultat (cf. git_actions.py)
     /git/auto   active ou suspend le fetch automatique : {"enabled": true|false}
     /git/diff   GET ?branch=&target= : diff d'une MR depuis le point où elle part de sa cible, affiché
-                par diff.html
+                par diff.html ; ?iid=&head=&merge=&target= pour une MR mergée, retrouvée par ses commits
 
 Usage — d'ordinaire via scripts/mr-dashboard/start.sh, qui lit ces options dans un profil
 (scripts/mr-dashboard/profiles/<nom>.conf) :
@@ -327,15 +327,25 @@ def make_handler(
             self.send_json(200, git.status())
 
         def git_diff(self, query):
-            branch, target = (query.get(name, [""])[0] for name in ("branch", "target"))
-            if not branch or not target:
+            branch, target, iid, head, merge = (
+                query.get(name, [""])[0] for name in ("branch", "target", "iid", "head", "merge")
+            )
+            if not target or not (branch or (iid and head and merge)):
                 self.send_json(400, {"message": "requête invalide"})
                 return
             try:
-                diff = git.diff(
-                    branch,
-                    target
-                )
+                if branch:
+                    diff = git.diff(
+                        branch,
+                        target
+                    )
+                else:
+                    diff = git.merged_diff(
+                        iid,
+                        head,
+                        merge,
+                        target
+                    )
             except GitError as error:
                 self.send_json(409, {"message": str(error)})
                 return

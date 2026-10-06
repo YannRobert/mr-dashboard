@@ -1,4 +1,4 @@
-"""Actions git sur le clone local du projet suivi : fetch et diff d'une MR.
+"""Actions git sur le clone local du projet suivi : fetch et diff d'une MR, ouverte ou mergée.
 
 Tant que le fetch automatique est activé, il tourne aussi tout seul à intervalle régulier : les branches
 distantes restent à jour même sans page ouverte, et le restent pendant une coupure de GitLab — on peut
@@ -8,6 +8,7 @@ Fetch et diff se font dans le worktree principal, retrouvé depuis n'importe que
 sans jamais rien y extraire : il porte le travail en cours.
 """
 import os
+import re
 import subprocess
 import threading
 import time
@@ -19,6 +20,7 @@ DIFF_TIMEOUT_S = 30
 MAX_DIFF_BYTES = 5_000_000
 # Jamais d'invite d'identifiants : sans terminal pour y répondre, git attendrait jusqu'au délai.
 GIT_ENV = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+SHA = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 
 
 class GitError(Exception):
@@ -157,11 +159,34 @@ class GitActions:
             branch,
             target
         )
+        return self._diff_range(f"refs/remotes/origin/{target}...refs/remotes/origin/{branch}")
+
+    def merged_diff(
+            self,
+            iid,
+            head,
+            merge_commit,
+            target
+    ):
+        """Diff d'une MR mergée, branche source supprimée ou non : ce que son dernier commit apportait
+        à la cible telle qu'elle était juste avant le merge. Tout se lit dans l'historique, aucun
+        worktree ni branche locale."""
+        if not iid.isdigit() or not SHA.fullmatch(head) or not SHA.fullmatch(merge_commit):
+            raise GitError("MR ou commit invalide")
+        self._check_branch_names(target)
+        # Branche source supprimée et MR squashée : GitLab garde sa tête sous refs/merge-requests.
+        if not self._has_commit(head):
+            self._fetch(f"refs/merge-requests/{iid}/head")
+        if not self._has_commit(merge_commit):
+            self._fetch(target)
+        return self._diff_range(f"{merge_commit}^1...{head}")
+
+    def _diff_range(self, revisions):
         try:
             completed = subprocess.run(
                 [
                     "git", "-C", str(self._repo_root), "diff", "--no-color", "--no-ext-diff", "--find-renames",
-                    f"refs/remotes/origin/{target}...refs/remotes/origin/{branch}",
+                    revisions,
                 ],
                 capture_output=True,
                 env=GIT_ENV,
@@ -181,10 +206,9 @@ class GitActions:
 
     def _check_branch_names(
             self,
-            branch,
-            target
+            *names
     ):
-        for name in (branch, target):
+        for name in names:
             if self._git(["check-ref-format", "--branch", name]).returncode != 0:
                 raise GitError(f"nom de branche invalide : {name}")
 
@@ -195,17 +219,22 @@ class GitActions:
     ):
         """Branche poussée depuis le dernier fetch : on va la chercher, elle seule."""
         missing = [name for name in (branch, target) if not self._has_remote_branch(name)]
-        if not missing:
-            return
+        if missing:
+            self._fetch(*missing)
+
+    def _fetch(self, *refspecs):
         try:
-            completed = self._git(["fetch", "origin", *missing], timeout=FETCH_TIMEOUT_S)
+            completed = self._git(["fetch", "origin", *refspecs], timeout=FETCH_TIMEOUT_S)
         except subprocess.TimeoutExpired as error:
             raise GitError(f"aucune réponse de git fetch en {FETCH_TIMEOUT_S} s") from error
         if completed.returncode != 0:
-            raise GitError(last_line(completed.stderr) or "branche introuvable sur origin")
+            raise GitError(last_line(completed.stderr) or "introuvable sur origin")
 
     def _has_remote_branch(self, name):
         return self._git(["rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{name}"]).returncode == 0
+
+    def _has_commit(self, sha):
+        return self._git(["cat-file", "-e", f"{sha}^{{commit}}"]).returncode == 0
 
     def _git(
             self,
