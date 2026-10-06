@@ -18,13 +18,13 @@ Actions locales, en POST :
     /git/fetch  git fetch du clone local, qui tourne aussi tout seul toutes les --git-fetch-interval
                 secondes ; GET /git/status en donne le dernier résultat (cf. git_actions.py)
     /git/auto   active ou suspend le fetch automatique : {"enabled": true|false}
-    /git/view   ouvre la branche d'une MR dans la visionneuse --git-viewer
+    /git/view   ouvre la branche d'une MR dans la visionneuse --git-viewer, par le terminal --git-terminal
 
 Usage — d'ordinaire via scripts/mr-dashboard/start.sh, qui lit ces options dans un profil
 (scripts/mr-dashboard/profiles/<nom>.conf) :
     python3 scripts/mr-dashboard/server.py --gitlab-project <groupe/projet> --pipeline-branch <branche> \
         --sonar-project <clé> --sonar-job <job> --pit-job <job> --pit-marker <marqueur> \
-        --repo-dir <clone local du projet> --git-fetch-interval 300 --git-viewer 'gitk origin/{target}..origin/{branch}' --port 8766
+        --repo-dir <clone local du projet> --git-fetch-interval 300 --git-viewer 'gitk origin/{target}..origin/{branch}' --git-terminal none --port 8766
     python3 scripts/mr-dashboard/server.py --gitlab-project <groupe/projet> --pipeline-branch main \
         --no-sonar --no-pit   # projet sans analyse Sonar ni mutation testing
 
@@ -56,7 +56,10 @@ from orca_launcher import OrcaError, OrcaLauncher
 DEFAULT_PORT = 8765
 DEFAULT_GIT_FETCH_INTERVAL_S = 300
 # Les commits de la MR, et le commit de la cible d'où elle part pour situer la divergence.
-DEFAULT_GIT_VIEWER = "gitk --boundary origin/{target}..origin/{branch}"
+# Ouvert sur le panneau des branches, d'où l'on compare la branche de la MR à sa cible.
+DEFAULT_GIT_VIEWER = "lazygit branch"
+# Onglet Windows Terminal, où WSL lance la visionneuse sans shell, dans le worktree de la branche.
+DEFAULT_GIT_TERMINAL = "wt.exe -w 0 new-tab wsl.exe -d {distro} --cd {repo} --exec"
 DEFAULT_SONAR_HOST = "https://sonarqube.example.com"
 DEFAULT_GITLAB_HOST = "https://gitlab.example.com"
 DEFAULT_GITLAB_TOKEN_HOST = "gitlab.example.com"
@@ -486,7 +489,12 @@ def main():
     parser.add_argument(
         "--git-viewer",
         default=DEFAULT_GIT_VIEWER,
-        help=f"commande qui ouvre la branche d'une MR, où {{branch}} et {{target}} sont remplacés (défaut : {DEFAULT_GIT_VIEWER})"
+        help=f"commande qui ouvre la branche d'une MR, où {{branch}}, {{target}} et {{repo}} sont remplacés (défaut : {DEFAULT_GIT_VIEWER})"
+    )
+    parser.add_argument(
+        "--git-terminal",
+        default=DEFAULT_GIT_TERMINAL,
+        help=f"terminal qui ouvre la visionneuse, suivi de sa commande ; none pour une visionneuse graphique (défaut : {DEFAULT_GIT_TERMINAL})"
     )
     parser.add_argument("--quiet", action="store_true", help="ne pas journaliser chaque requête")
     args = parser.parse_args()
@@ -508,6 +516,7 @@ def main():
     git = GitActions.detect(
         args.repo_dir,
         args.git_viewer,
+        "" if args.git_terminal == "none" else args.git_terminal,
         args.git_fetch_interval
     )
     if not sonar_token and not args.no_sonar:

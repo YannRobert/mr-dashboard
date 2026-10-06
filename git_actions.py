@@ -4,7 +4,9 @@ Tant que le fetch automatique est activé, il tourne aussi tout seul à interval
 distantes restent à jour même sans page ouverte, et le restent pendant une coupure de GitLab — on peut
 alors relire et committer sur origin/<branche>, puis pousser à son retour.
 
-Tout se passe dans le worktree principal, retrouvé depuis n'importe quel worktree du clone.
+Le fetch se fait dans le worktree principal, retrouvé depuis n'importe quel worktree du clone ; la
+visionneuse s'ouvre dans le worktree où la branche de la MR est extraite s'il y en a un, sinon dans le
+principal.
 """
 import os
 import shlex
@@ -30,10 +32,12 @@ class GitActions:
             self,
             repo_root,
             viewer,
+            terminal,
             fetch_interval_s
     ):
         self._repo_root = repo_root
         self._viewer = viewer
+        self._terminal = terminal
         self._fetch_interval_s = fetch_interval_s
         self._fetch_lock = threading.Lock()
         self._state_lock = threading.Lock()
@@ -53,19 +57,25 @@ class GitActions:
             cls,
             repo_dir,
             viewer,
+            terminal,
             fetch_interval_s
     ):
+        """terminal, vide pour une visionneuse graphique, ouvre celle qui s'utilise dans un terminal."""
         common_dir = subprocess.run(
             ["git", "-C", str(repo_dir), "rev-parse", "--path-format=absolute", "--git-common-dir"],
             capture_output=True,
             text=True,
             check=True
         ).stdout.strip()
-        viewer_args = shlex.split(viewer)
-        # Visionneuse absente du poste : son bouton n'est pas proposé.
+        viewer_args = resolve(shlex.split(viewer))
+        terminal_args = shlex.split(terminal)
+        # Visionneuse ou terminal absent du poste : le bouton n'est pas proposé.
+        if terminal_args and not resolve(terminal_args):
+            viewer_args = None
         return cls(
             Path(common_dir).parent,
-            viewer_args if viewer_args and shutil.which(viewer_args[0]) else None,
+            viewer_args,
+            terminal_args,
             fetch_interval_s
         )
 
@@ -152,6 +162,10 @@ class GitActions:
         for name in (branch, target):
             if self._git(["check-ref-format", "--branch", name]).returncode != 0:
                 raise GitError(f"nom de branche invalide : {name}")
+        # Le terminal Windows découpe sa ligne de commande sur « ; » : une branche qui en contient
+        # pourrait y glisser une commande à lui.
+        if self._terminal and any(";" in name for name in (branch, target)):
+            raise GitError("nom de branche non pris en charge par le terminal : « ; »")
         # Branche poussée depuis le dernier fetch : on va la chercher, elle seule.
         missing = [name for name in (branch, target) if not self._has_remote_branch(name)]
         if missing:
@@ -161,12 +175,13 @@ class GitActions:
                 raise GitError(f"aucune réponse de git fetch en {FETCH_TIMEOUT_S} s") from error
             if completed.returncode != 0:
                 raise GitError(last_line(completed.stderr) or "branche introuvable sur origin")
-        values = {"branch": branch, "target": target}
-        command = [arg.format(**values) for arg in self._viewer]
+        repo = self._worktree_of(branch)
+        values = {"branch": branch, "target": target, "repo": repo, "distro": os.environ.get("WSL_DISTRO_NAME", "")}
+        command = [arg.format(**values) for arg in [*self._terminal, *self._viewer]]
         try:
             subprocess.Popen(
                 command,
-                cwd=self._repo_root,
+                cwd=repo,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
@@ -175,6 +190,15 @@ class GitActions:
         except OSError as error:
             raise GitError(str(error)) from error
         return {"command": shlex.join(command)}
+
+    def _worktree_of(self, branch):
+        """Worktree où la branche est extraite : on peut y corriger et pousser sans rien déplacer."""
+        listing = self._git(["worktree", "list", "--porcelain"]).stdout
+        for block in listing.split("\n\n"):
+            fields = dict(line.split(" ", 1) for line in block.splitlines() if " " in line)
+            if fields.get("branch") == f"refs/heads/{branch}":
+                return fields["worktree"]
+        return str(self._repo_root)
 
     def _has_remote_branch(self, name):
         return self._git(["rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{name}"]).returncode == 0
@@ -191,6 +215,17 @@ class GitActions:
             env=GIT_ENV,
             timeout=timeout
         )
+
+
+# Dossiers d'installation par utilisateur (go install, pipx…), que le PATH d'un shell non interactif omet.
+USER_BIN_DIRS = [Path.home() / "go" / "bin", Path.home() / ".local" / "bin"]
+
+
+def resolve(args):
+    """Programme en chemin absolu : le terminal qui l'ouvre n'a pas forcément le même PATH."""
+    search_path = os.pathsep.join([os.environ.get("PATH", ""), *map(str, USER_BIN_DIRS)])
+    program = shutil.which(os.path.expanduser(args[0]), path=search_path) if args else None
+    return [program, *args[1:]] if program else None
 
 
 def last_line(text):
