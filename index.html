@@ -498,6 +498,7 @@
     <div class="refresh-controls" role="group" aria-label="Fetch du dépôt local" data-i18n-aria-label="gitFetch.group">
       <label class="auto" data-i18n-title="gitFetch.autoTitle"><input type="checkbox" id="git-fetch-auto" checked autocomplete="off"> <span data-i18n="gitFetch.auto">Fetch auto</span></label>
       <button type="button" id="git-fetch" class="primary" data-i18n-title="gitFetch.title">git fetch</button>
+      <div class="freshness" id="git-fetch-freshness" hidden aria-hidden="true"></div>
     </div>
   </div>
   <span class="divider" id="git-fetch-divider" aria-hidden="true" hidden></span>
@@ -740,7 +741,7 @@ const state = {
   branchPipelineTimer: null,
   configLoaded: false,
   // Dernier état du fetch local rapporté par le serveur, et MR + cible vues au dernier fetch déclenché.
-  gitFetch: { status: null, running: false, seen: null },
+  gitFetch: { status: null, running: false, seen: null, nextTimer: null },
   mrs: [],
   // undefined tant que rien n'est chargé, null si la branche n'a aucun pipeline.
   branchPipeline: undefined,
@@ -1807,12 +1808,24 @@ function renderFreshness() {
   const bar = $("freshness");
   bar.hidden = !state.autoRefresh || !state.cycleStart || mergedView();
   if (bar.hidden) return;
-  const elapsed = Math.min(Date.now() - state.cycleStart, AUTO_REFRESH_MS);
-  bar.style.setProperty("--cycle", `${AUTO_REFRESH_MS}ms`);
+  drawFreshness(
+    bar,
+    state.cycleStart.getTime(),
+    AUTO_REFRESH_MS
+  );
+}
+
+function drawFreshness(
+  bar,
+  cycleStart,
+  cycleMs
+) {
+  const elapsed = Math.min(Date.now() - cycleStart, cycleMs);
+  bar.style.setProperty("--cycle", `${cycleMs}ms`);
   bar.style.setProperty("--delay", `${-elapsed}ms`);
   bar.innerHTML = Array.from(
     { length: FRESHNESS_SEGMENTS },
-    (_, i) => `<i style="--off:${AUTO_REFRESH_MS * (FRESHNESS_SEGMENTS - i) / FRESHNESS_SEGMENTS}ms"></i>`
+    (_, i) => `<i style="--off:${cycleMs * (FRESHNESS_SEGMENTS - i) / FRESHNESS_SEGMENTS}ms"></i>`
   ).join("");
 }
 
@@ -2919,6 +2932,7 @@ function renderGitFetch() {
   $("git-fetch-auto").checked = status?.auto !== false;
   // Cite l'intervalle du serveur, connu après les textes statiques.
   $("git-fetch-auto").closest("label").title = t("gitFetch.autoTitle");
+  renderGitFetchFreshness();
   el.className = "git-fetch-status";
   el.title = "";
   if (running || status?.running) {
@@ -2933,6 +2947,27 @@ function renderGitFetch() {
     el.textContent = t("gitFetch.failed", { time: time(status.last.at) });
     el.title = t("gitFetch.failedTitle", { message: status.last.message, success: status.lastSuccess ? time(status.lastSuccess) : t("gitFetch.noSuccess") });
   }
+}
+
+// Même barre que l'actualisation auto, calée sur le prochain fetch automatique du serveur. Redessinée
+// seulement quand cette échéance change : l'état relu toutes les 30 s ne relance pas l'animation.
+function renderGitFetchFreshness() {
+  const bar = $("git-fetch-freshness");
+  const nextAt = state.gitFetch.running ? null : state.gitFetch.status?.nextAt;
+  bar.hidden = !nextAt;
+  // Une animation masquée repart de zéro à l'affichage : elle sera redessinée.
+  if (!nextAt) delete bar.dataset.nextAt;
+  if (!nextAt || bar.dataset.nextAt === nextAt) return;
+  bar.dataset.nextAt = nextAt;
+  // Relit l'état juste après l'échéance, sans attendre la relecture des 30 s, pour relancer la barre.
+  clearTimeout(state.gitFetch.nextTimer);
+  state.gitFetch.nextTimer = setTimeout(loadGitFetchStatus, Math.max(0, new Date(nextAt) - Date.now()) + 3000);
+  const cycleMs = state.config.gitFetchIntervalS * 1000;
+  drawFreshness(
+    bar,
+    new Date(nextAt).getTime() - cycleMs,
+    cycleMs
+  );
 }
 
 function aiFixButton(mr) {

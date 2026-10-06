@@ -11,7 +11,8 @@ import shlex
 import shutil
 import subprocess
 import threading
-from datetime import datetime, timezone
+import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 FETCH_TIMEOUT_S = 60
@@ -42,6 +43,10 @@ class GitActions:
         self._last_success_at = None
         self._auto = True
         self._wake = threading.Event()
+        # Échéance du prochain fetch automatique, en temps monotone : chaque fetch, d'où qu'il vienne,
+        # la repousse d'un intervalle.
+        self._next_due = 0.0
+        self._next_at = None
 
     @classmethod
     def detect(
@@ -75,22 +80,22 @@ class GitActions:
 
     def _fetch_forever(self):
         while True:
-            if self.auto:
+            with self._state_lock:
+                auto = self._auto
+                delay = self._next_due - time.monotonic()
+            if auto and delay <= 0:
                 self.fetch()
-            self._wake.wait(self._fetch_interval_s)
+                continue
+            self._wake.wait(delay if auto else None)
             self._wake.clear()
-
-    @property
-    def auto(self):
-        with self._state_lock:
-            return self._auto
 
     def set_auto(self, enabled):
         """Réactivé, le fetch automatique part aussitôt, sans attendre la fin de l'intervalle."""
         with self._state_lock:
             self._auto = enabled
-        if enabled:
-            self._wake.set()
+            if enabled:
+                self._next_due = 0.0
+        self._wake.set()
 
     def fetch(self):
         """Lance un fetch, ou attend celui en cours et en renvoie le résultat : deux demandes rapprochées
@@ -107,6 +112,8 @@ class GitActions:
                 self._fetches += 1
                 self._running = False
                 self._last = result
+                self._next_due = time.monotonic() + self._fetch_interval_s
+                self._next_at = (datetime.now(timezone.utc) + timedelta(seconds=self._fetch_interval_s)).isoformat()
                 if result["ok"]:
                     self._last_success_at = result["at"]
             return result
@@ -125,8 +132,10 @@ class GitActions:
 
     def status(self):
         with self._state_lock:
+            periodic = self._auto and self._fetch_interval_s > 0 and not self._running
             return {
                 "auto": self._auto,
+                "nextAt": self._next_at if periodic else None,
                 "running": self._running,
                 "last": self._last,
                 "lastSuccess": self._last_success_at,

@@ -93,7 +93,9 @@ Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut
   pour aucun), même sans page ouverte, et dès que la page voit une MR recevoir des commits, apparaître
   ou disparaître, ou la branche du pipeline avancer. La case **Fetch auto** de l'en-tête suspend ces
   fetchs automatiques, pour le serveur donc pour tous les onglets, jusqu'à ce qu'on la recoche ou que
-  le serveur redémarre. Le bouton **git fetch** lance un fetch tout de suite ; à côté, l'heure du
+  le serveur redémarre. Tout fetch, même manuel ou sur changement, relance les 5 minutes ; comme pour
+  l'actualisation auto, une barre sous la case montre le temps qui reste avant le prochain. Le bouton
+  **git fetch** lance un fetch tout de suite ; à côté, l'heure du
   dernier fetch, ou son échec en rouge (le survol donne le message de git et l'heure du dernier fetch
   réussi). Les `origin/<branche>` restent ainsi à jour pendant une coupure
   de GitLab : on peut relire et committer, puis pousser à son retour.
