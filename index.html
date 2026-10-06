@@ -73,9 +73,9 @@
   }
   * { box-sizing: border-box; }
   /* Toute la page est en rem, sur une base proportionnelle à la largeur de la fenêtre : ce qui tient à 100 %
-     sur un écran tient sur tous, et reste lisible sur un grand sans zoom (13 px jusqu'en 1440, ~17 px en 1920,
-     ~23 px en 2560). A− / A+ l'ajustent, sans le zoom du navigateur qui vaut pour tout le site. */
-  html { font-size: calc(clamp(13px, 0.9vw, 28px) * var(--text-scale, 1)); }
+     sur un écran tient sur tous, et reste lisible sur un grand sans zoom (13 px jusqu'en 1620, ~15 px en 1920,
+     ~20 px en 2560). A− / A+ l'ajustent, sans le zoom du navigateur qui vaut pour tout le site. */
+  html { font-size: calc(clamp(13px, 0.8vw, 28px) * var(--text-scale, 1)); }
   body {
     margin: 0;
     background: var(--bg);
@@ -227,7 +227,7 @@
     box-shadow: var(--shadow);
   }
   table.mrs th, table.mrs td {
-    padding: 0.7rem 0.85rem; border-bottom: 1px solid var(--border);
+    padding: 0.6rem 0.5rem; border-bottom: 1px solid var(--border);
     text-align: center; vertical-align: middle;
   }
   /* Valeurs centrées comme leurs en-têtes, sauf le titre de la MR : un texte long se lit à gauche. */
@@ -319,9 +319,10 @@
     background: var(--blue-bg); color: var(--blue-fg); border: 0; cursor: pointer;
   }
   .label:hover { filter: brightness(0.96); }
-  .mr-cell .title-row { display: flex; align-items: flex-start; gap: 0.8rem; }
-  .mr-cell .title-row .title { flex: 1; }
-  .mr-cell .title-actions { flex: none; display: flex; align-items: center; gap: 0.5rem; }
+  /* Les actions sur leur propre ligne, sous le titre : à côté, elles écrasaient le titre et élargissaient la
+     colonne au point de pousser les dernières hors de l'écran. */
+  .mr-cell .title-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-top: 0.4rem; }
+  .mr-cell .title-actions:empty { display: none; }
   .mr-cell .title-actions .pill { font-size: 0.85rem; }
   .ai-fix {
     flex: none; white-space: nowrap; font-size: 0.9rem; font-weight: 600; border-radius: 0.5rem; padding: 0.35em 0.9em;
@@ -2870,8 +2871,9 @@ function mrCell(mr) {
     .map(l => `<button type="button" class="label" data-add-label="${escapeHtml(l)}" title="${escapeHtml(t("label.add"))}">${escapeHtml(l)}</button>`)
     .join("");
   const conflicts = mr.has_conflicts && mr.state !== "merged" ? " " + pill("red", t("conflicts"), t("conflicts.title"), mr.web_url) : "";
-  return `<div class="title-row"><div class="title">${mr.draft ? '<span class="draft">Draft</span>' : ""}<a href="${escapeHtml(mr.web_url)}" target="_blank" rel="noopener">${escapeHtml(mr.title.replace(/^Draft:\s*/i, ""))}</a>${conflicts}</div><div class="title-actions">${stalledPill(mr)}${changesRequestedPill(mr)}${approvalPill(mr)}${gitViewButton(mr)}${aiFixButton(mr)}</div></div>
+  return `<div class="title">${mr.draft ? '<span class="draft">Draft</span>' : ""}<a href="${escapeHtml(mr.web_url)}" target="_blank" rel="noopener">${escapeHtml(mr.title.replace(/^Draft:\s*/i, ""))}</a>${conflicts}</div>
     <div class="sub"><span class="iid">!${mr.iid}</span> · <code>${escapeHtml(mr.source_branch)}</code> → <code>${escapeHtml(mr.target_branch)}</code>${diffStat(mr)}</div>
+    <div class="title-actions">${stalledPill(mr)}${changesRequestedPill(mr)}${approvalPill(mr)}${gitViewButton(mr)}${aiFixButton(mr)}</div>
     ${labels ? `<div class="labels">${labels}</div>` : ""}`;
 }
 
