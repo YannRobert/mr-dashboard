@@ -959,7 +959,7 @@ const I18N = {
     "gitFetch.failed": p => `fetch en échec à ${p.time}`,
     "gitFetch.failedTitle": p => `${p.message}\nDernier fetch réussi : ${p.success}`,
     "gitFetch.noSuccess": "aucun",
-    "gitView.title": p => `Ouvrir ${p.viewer} sur la branche ${p.branch}`,
+    "gitView.title": p => `Ouvrir ${p.viewer} sur ${p.branch}, comparée à ${p.target}`,
     "gitView.failed": p => `Ouverture de ${p.viewer} impossible : ${p.message}`,
     "threads.title": p => `${p.n} thread${plural(p.n)} non résolu${plural(p.n)} sur ${p.total}`,
     "approved": p => (p.n > 1 ? `Approuvée ×${p.n}` : "Approuvée"),
@@ -1200,7 +1200,7 @@ const I18N = {
     "gitFetch.failed": p => `fetch failed at ${p.time}`,
     "gitFetch.failedTitle": p => `${p.message}\nLast successful fetch: ${p.success}`,
     "gitFetch.noSuccess": "none",
-    "gitView.title": p => `Open ${p.viewer} on branch ${p.branch}`,
+    "gitView.title": p => `Open ${p.viewer} on ${p.branch}, compared with ${p.target}`,
     "gitView.failed": p => `Could not open ${p.viewer}: ${p.message}`,
     "threads.title": p => `${p.n} unresolved thread${pluralEn(p.n)} out of ${p.total}`,
     "approved": p => (p.n > 1 ? `Approved ×${p.n}` : "Approved"),
@@ -2839,12 +2839,13 @@ function diffStat(mr) {
 // indicateur qualité imparfait ou un thread non résolu. Le prompt ne cite que ce qui l'est, avec les
 // valeurs affichées dans le tableau.
 function gitViewButton(mr) {
-  const viewer = state.config?.gitViewer;
-  if (!viewer || mr.state === "merged") return "";
-  return `<button type="button" class="git-view" data-git-view="${mr.iid}" title="${escapeHtml(t("gitView.title", { viewer, branch: mr.source_branch }))}">${escapeHtml(viewer)}</button>`;
+  if (mr.state === "merged") return "";
+  return (state.config?.gitViewers ?? [])
+    .map(viewer => `<button type="button" class="git-view" data-git-view="${mr.iid}" data-git-viewer="${escapeHtml(viewer)}" title="${escapeHtml(t("gitView.title", { viewer, branch: mr.source_branch, target: mr.target_branch }))}">${escapeHtml(viewer)}</button>`)
+    .join("");
 }
 
-async function openGitViewer(button, mr) {
+async function openGitViewer(button, viewer, mr) {
   button.disabled = true;
   try {
     await api(
@@ -2852,11 +2853,11 @@ async function openGitViewer(button, mr) {
       {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-MR-Dashboard": "1" },
-        body: JSON.stringify({ iid: mr.iid, branch: mr.source_branch, target: mr.target_branch }),
+        body: JSON.stringify({ viewer, iid: mr.iid, branch: mr.source_branch, target: mr.target_branch }),
       }
     );
   } catch (error) {
-    alert(t("gitView.failed", { viewer: state.config.gitViewer, message: error.message }));
+    alert(t("gitView.failed", { viewer, message: error.message }));
   } finally {
     button.disabled = false;
   }
@@ -3850,7 +3851,7 @@ document.addEventListener("click", e => {
   }
   const gitView = e.target.closest("[data-git-view]");
   if (gitView) {
-    openGitViewer(gitView, state.mrs.find(mr => String(mr.iid) === gitView.dataset.gitView));
+    openGitViewer(gitView, gitView.dataset.gitViewer, state.mrs.find(mr => String(mr.iid) === gitView.dataset.gitView));
     return;
   }
   const aiFix = e.target.closest("[data-ai-fix]");

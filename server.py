@@ -18,13 +18,14 @@ Actions locales, en POST :
     /git/fetch  git fetch du clone local, qui tourne aussi tout seul toutes les --git-fetch-interval
                 secondes ; GET /git/status en donne le dernier résultat (cf. git_actions.py)
     /git/auto   active ou suspend le fetch automatique : {"enabled": true|false}
-    /git/view   ouvre la branche d'une MR dans la visionneuse --git-viewer, par le terminal --git-terminal
+    /git/view   ouvre une MR dans l'une des visionneuses --git-viewers : {"viewer", "iid", "branch", "target"} ;
+                celles en mode texte s'ouvrent dans le terminal --git-terminal
 
 Usage — d'ordinaire via scripts/mr-dashboard/start.sh, qui lit ces options dans un profil
 (scripts/mr-dashboard/profiles/<nom>.conf) :
     python3 scripts/mr-dashboard/server.py --gitlab-project <groupe/projet> --pipeline-branch <branche> \
         --sonar-project <clé> --sonar-job <job> --pit-job <job> --pit-marker <marqueur> \
-        --repo-dir <clone local du projet> --git-fetch-interval 300 --git-viewer 'gitk origin/{target}..origin/{branch}' --git-terminal none --port 8766
+        --repo-dir <clone local du projet> --git-fetch-interval 300 --git-viewers meld,gitk --port 8766
     python3 scripts/mr-dashboard/server.py --gitlab-project <groupe/projet> --pipeline-branch main \
         --no-sonar --no-pit   # projet sans analyse Sonar ni mutation testing
 
@@ -50,18 +51,17 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import quote, unquote, urlsplit
 
-from git_actions import GitActions, GitError, resolve
+from git_actions import VIEWERS, GitActions, GitError, resolve
 from orca_launcher import OrcaError, OrcaLauncher
 
 DEFAULT_PORT = 8765
 DEFAULT_GIT_FETCH_INTERVAL_S = 300
-# Les commits de la MR, et le commit de la cible d'où elle part pour situer la divergence.
-# Ouvert sur les commits de la branche de la MR, extraite dans le worktree où il est lancé.
-DEFAULT_GIT_VIEWER = "lazygit log"
+# Un bouton par visionneuse présente sur le poste, dans cet ordre ; les commandes sont dans git_actions.VIEWERS.
+DEFAULT_GIT_VIEWERS = "meld,tig"
 # Terminaux essayés dans l'ordre, le premier présent sur le poste l'emporte : onglet WezTerm, dans son
 # domaine par défaut qui doit être WSL (--domain y lancerait la visionneuse deux fois), ou
 # onglet d'une fenêtre Windows Terminal réservée aux MR, agrandie au maximum à sa création, où WSL lance la
-# visionneuse sans shell. Tous deux s'ouvrent dans le worktree de la branche.
+# visionneuse sans shell. Tous deux s'ouvrent dans le répertoire où tourne la visionneuse.
 DEFAULT_GIT_TERMINALS = (
     "wezterm.exe start --new-tab --cwd {repo} --",
     "wt.exe --maximized -w mr-dashboard new-tab wsl.exe -d {distro} --cd {repo} --exec",
@@ -320,6 +320,7 @@ def make_handler(
 
         def git_view(self, payload):
             try:
+                viewer = str(payload["viewer"])
                 iid = int(payload["iid"])
                 branch = str(payload["branch"])
                 target = str(payload["target"])
@@ -328,6 +329,7 @@ def make_handler(
                 return
             try:
                 result = git.view(
+                    viewer,
                     iid,
                     branch,
                     target
@@ -467,11 +469,9 @@ def require_unless_disabled(
 
 
 def git_terminal(option):
-    if option == "none":
-        return ""
     if option:
         return option
-    # Aucun terminal présent : None, et pas de bouton.
+    # Aucun terminal présent : None, et pas de bouton pour les visionneuses en mode texte.
     return next((terminal for terminal in DEFAULT_GIT_TERMINALS if resolve(shlex.split(terminal))), None)
 
 
@@ -504,13 +504,14 @@ def main():
         help=f"secondes entre deux git fetch automatiques du clone local, 0 pour aucun (défaut : {DEFAULT_GIT_FETCH_INTERVAL_S})"
     )
     parser.add_argument(
-        "--git-viewer",
-        default=DEFAULT_GIT_VIEWER,
-        help=f"commande qui ouvre la branche d'une MR, où {{branch}}, {{target}} et {{repo}} sont remplacés (défaut : {DEFAULT_GIT_VIEWER})"
+        "--git-viewers",
+        default=DEFAULT_GIT_VIEWERS,
+        help=f"visionneuses proposées, séparées par des virgules, parmi {', '.join(VIEWERS)} ; vide pour aucune "
+             f"(défaut : {DEFAULT_GIT_VIEWERS})"
     )
     parser.add_argument(
         "--git-terminal",
-        help="terminal qui ouvre la visionneuse, suivi de sa commande ; none pour une visionneuse graphique "
+        help="terminal qui ouvre les visionneuses en mode texte, suivi de leur commande "
              f"(défaut : le premier présent parmi {' | '.join(DEFAULT_GIT_TERMINALS)})"
     )
     parser.add_argument("--quiet", action="store_true", help="ne pas journaliser chaque requête")
@@ -532,7 +533,7 @@ def main():
     orca = OrcaLauncher.detect(args.repo_dir)
     git = GitActions.detect(
         args.repo_dir,
-        args.git_viewer,
+        [name.strip() for name in args.git_viewers.split(",") if name.strip()],
         git_terminal(args.git_terminal),
         args.git_fetch_interval
     )
@@ -559,7 +560,7 @@ def main():
             "targetBranch": args.target_branch or args.pipeline_branch,
             "signalsCommand": signals_command(args),
             "orcaEnabled": orca is not None,
-            "gitViewer": git.viewer_name,
+            "gitViewers": git.viewer_names,
             "gitFetchIntervalS": args.git_fetch_interval,
         },
     }

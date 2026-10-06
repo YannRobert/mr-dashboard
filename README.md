@@ -84,7 +84,7 @@ c'est le navigateur ou Windows qui bloque, pas le dashboard :
    *Ne pas déranger* (ou l'*Assistant de concentration*) désactivé ;
 3. décocher puis recocher la case pour renvoyer la notification de test.
 
-## Dépôt local : fetch et visionneuse
+## Dépôt local : fetch et visionneuses
 
 Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut), toujours dans son
 **worktree principal**, d'où qu'il soit lancé.
@@ -99,29 +99,29 @@ Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut
   dernier fetch, ou son échec en rouge (le survol donne le message de git et l'heure du dernier fetch
   réussi). Les `origin/<branche>` restent ainsi à jour pendant une coupure
   de GitLab : on peut relire et committer, puis pousser à son retour.
-- **Visionneuse** : un bouton par MR ouverte lance `GIT_VIEWER` — par défaut `lazygit log`, sur les
-  commits de la MR — dans le worktree où sa branche est extraite s'il y en a un (on peut y corriger et
-  pousser), sinon dans son worktree de revue `<clone>-MR<iid>`, à côté du worktree principal, comme
-  pour une revue (cf. `GIT.md`) : créé au besoin, détaché sur `origin/<branche>`, et ramené sur le
-  dernier commit poussé à chaque ouverture tant qu'il est détaché et sans modification. Le worktree
-  principal n'est jamais touché, et aucun worktree n'est supprimé.
-- Une visionneuse qui s'utilise dans un terminal s'ouvre par `GIT_TERMINAL`. Par défaut, le premier
+- **Visionneuses** : chaque MR ouverte a un bouton par visionneuse de `GIT_VIEWERS` présente sur le
+  poste — par défaut `meld,tig`. Une branche absente en local est d'abord fetchée.
+  - **meld** : les fichiers modifiés par la MR depuis le point où elle part de sa cible
+    (`git difftool --dir-diff --tool=meld origin/<cible>...origin/<branche>`, comme l'onglet
+    *Changes* de GitLab), à parcourir un par un, diff côte à côte. Installation :
+    `sudo apt install meld`.
+  - **tig** : les commits de la MR absents de sa cible (`tig origin/<cible>..origin/<branche>`) ;
+    `Entrée` sur un commit affiche son diff, `q` revient en arrière. Installation : `sudo apt install tig`.
+  - **lazygit** et **gitk** restent disponibles. lazygit s'ouvre sur la branche extraite : dans le
+    worktree où elle l'est s'il y en a un (on peut y corriger et pousser), sinon dans son worktree de
+    revue `<clone>-MR<iid>`, à côté du worktree principal, comme pour une revue (cf. `GIT.md`) : créé
+    au besoin, détaché sur `origin/<branche>`, et ramené sur le dernier commit poussé à chaque
+    ouverture tant qu'il est détaché et sans modification. Les autres comparent des références depuis
+    le worktree principal, qui n'est jamais modifié ; aucun worktree n'est supprimé.
+- Les visionneuses en mode texte (tig, lazygit) s'ouvrent par `GIT_TERMINAL`. Par défaut, le premier
   présent sur le poste : un onglet WezTerm, dans son domaine par défaut, qui doit donc être WSL
   (`config.default_domain = 'WSL:Ubuntu-24.04'` dans `.wezterm.lua` ; `--domain` y lancerait la
-  visionneuse deux fois)
-  (`wezterm.exe start --new-tab --cwd {repo} --`), sinon un onglet d'une fenêtre
-  Windows Terminal réservée aux MR et agrandie au maximum à sa création, où WSL la lance sans shell
-  (`wt.exe --maximized -w mr-dashboard new-tab wsl.exe -d {distro} --cd {repo} --exec`).
-  `GIT_TERMINAL=none` pour une visionneuse graphique comme
-  `gitk --boundary origin/{target}..origin/{branch}`. `{branch}`,
-  `{target}` et `{repo}` sont remplacés par les branches source et cible et le worktree. Une branche
-  absente en local est d'abord fetchée. La visionneuse et le terminal sont cherchés dans le
-  `PATH`, puis dans `~/go/bin` et `~/.local/bin` — un WezTerm portable s'y relie
-  (`ln -s /mnt/c/…/wezterm.exe ~/.local/bin/wezterm.exe`) ; introuvable, ou terminal introuvable : pas de bouton.
-- **Relire une MR fichier par fichier dans lazygit** : panneau *Branches* (`3`), onglet *Remotes*
-  (`]`), `Entrée` sur `origin` ; sur la branche cible (`origin/develop`), `W` puis *Diff* la prend
-  pour base ; sur la branche de la MR, `Entrée` liste ses fichiers modifiés, à parcourir un par un,
-  diff à droite. `W` puis *Exit diff mode* pour en sortir.
+  visionneuse deux fois) (`wezterm.exe start --new-tab --cwd {repo} --`), sinon un onglet d'une
+  fenêtre Windows Terminal réservée aux MR et agrandie au maximum à sa création, où WSL la lance sans
+  shell (`wt.exe --maximized -w mr-dashboard new-tab wsl.exe -d {distro} --cd {repo} --exec`).
+  Visionneuses et terminal sont cherchés dans le `PATH`, puis dans `~/go/bin` et `~/.local/bin` — un
+  WezTerm portable s'y relie (`ln -s /mnt/c/…/wezterm.exe ~/.local/bin/wezterm.exe`) ; visionneuse
+  introuvable, ou terminal introuvable pour une visionneuse en mode texte : pas de bouton.
 - Un `git fetch` ou `git pull` lancé à la main pendant un fetch automatique peut répondre
   « cannot lock ref » : le relancer.
 

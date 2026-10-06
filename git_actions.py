@@ -1,13 +1,14 @@
-"""Actions git sur le clone local du projet suivi : fetch, et ouverture d'une branche dans une visionneuse.
+"""Actions git sur le clone local du projet suivi : fetch, et ouverture d'une MR dans une visionneuse.
 
 Tant que le fetch automatique est activé, il tourne aussi tout seul à intervalle régulier : les branches
 distantes restent à jour même sans page ouverte, et le restent pendant une coupure de GitLab — on peut
 alors relire et committer sur origin/<branche>, puis pousser à son retour.
 
-Le fetch se fait dans le worktree principal, retrouvé depuis n'importe quel worktree du clone. La
-visionneuse s'ouvre dans le worktree où la branche de la MR est extraite s'il y en a un, sinon dans son
-worktree de revue, <clone>-MR<iid> à côté du principal, détaché sur origin/<branche> — jamais par un
-checkout dans le principal, qui porte le travail en cours.
+Le fetch se fait dans le worktree principal, retrouvé depuis n'importe quel worktree du clone. Les
+visionneuses qui comparent origin/<cible> et origin/<branche> y tournent aussi ; celles qui montrent la
+branche extraite s'ouvrent dans le worktree où elle l'est s'il y en a un, sinon dans son worktree de
+revue, <clone>-MR<iid> à côté du principal, détaché sur origin/<branche> — jamais par un checkout dans
+le principal, qui porte le travail en cours.
 """
 import os
 import shlex
@@ -17,6 +18,7 @@ import threading
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import NamedTuple
 
 FETCH_TIMEOUT_S = 60
 # Jamais d'invite d'identifiants : sans terminal pour y répondre, git attendrait jusqu'au délai.
@@ -27,17 +29,37 @@ class GitError(Exception):
     pass
 
 
+class Viewer(NamedTuple):
+    command: str
+    # S'utilise dans un terminal, ouvert par la commande terminal de GitActions.
+    terminal: bool
+    # Montre la branche extraite plutôt que de comparer des références : ouverte dans son worktree.
+    worktree: bool
+
+
+# {branch} et {target} : branches source et cible de la MR. Le programme de la commande doit être
+# présent sur le poste pour que son bouton soit proposé.
+VIEWERS = {
+    # Les fichiers modifiés par la MR depuis le point où elle part de sa cible, un par un.
+    "meld": Viewer("git difftool --dir-diff --no-prompt --tool=meld origin/{target}...origin/{branch}", False, False),
+    "tig": Viewer("tig origin/{target}..origin/{branch}", True, False),
+    "lazygit": Viewer("lazygit log", True, True),
+    "gitk": Viewer("gitk --boundary origin/{target}..origin/{branch}", False, False),
+}
+REQUIRED_PROGRAMS = {"meld": "meld"}
+
+
 class GitActions:
 
     def __init__(
             self,
             repo_root,
-            viewer,
+            viewers,
             terminal,
             fetch_interval_s
     ):
         self._repo_root = repo_root
-        self._viewer = viewer
+        self._viewers = viewers
         self._terminal = terminal
         self._fetch_interval_s = fetch_interval_s
         self._fetch_lock = threading.Lock()
@@ -57,33 +79,41 @@ class GitActions:
     def detect(
             cls,
             repo_dir,
-            viewer,
+            viewer_names,
             terminal,
             fetch_interval_s
     ):
-        """terminal, vide pour une visionneuse graphique, ouvre celle qui s'utilise dans un terminal ;
-        None quand il en faudrait un et qu'aucun n'est présent."""
+        """viewer_names : visionneuses de VIEWERS proposées, dans l'ordre des boutons ; terminal : celui
+        qui ouvre les visionneuses en mode texte, None si aucun n'est présent."""
         common_dir = subprocess.run(
             ["git", "-C", str(repo_dir), "rev-parse", "--path-format=absolute", "--git-common-dir"],
             capture_output=True,
             text=True,
             check=True
         ).stdout.strip()
-        viewer_args = resolve(shlex.split(viewer))
-        terminal_args = shlex.split(terminal or "")
-        # Visionneuse ou terminal absent du poste : le bouton n'est pas proposé.
-        if terminal is None or (terminal_args and not resolve(terminal_args)):
-            viewer_args = None
+        unknown = [name for name in viewer_names if name not in VIEWERS]
+        if unknown:
+            raise ValueError(f"visionneuse inconnue : {', '.join(unknown)} (connues : {', '.join(VIEWERS)})")
+        terminal_args = resolve(shlex.split(terminal or ""))
+        viewers = {}
+        # Visionneuse, ou terminal qu'il lui faut, absent du poste : son bouton n'est pas proposé.
+        for name in viewer_names:
+            viewer = VIEWERS[name]
+            args = resolve(shlex.split(viewer.command))
+            required = REQUIRED_PROGRAMS.get(name)
+            if not args or (required and not resolve([required])) or (viewer.terminal and not terminal_args):
+                continue
+            viewers[name] = (viewer, args)
         return cls(
             Path(common_dir).parent,
-            viewer_args,
-            terminal_args,
+            viewers,
+            terminal_args or [],
             fetch_interval_s
         )
 
     @property
-    def viewer_name(self):
-        return Path(self._viewer[0]).name if self._viewer else None
+    def viewer_names(self):
+        return list(self._viewers)
 
     def start_periodic_fetch(self):
         if self._fetch_interval_s <= 0:
@@ -155,19 +185,22 @@ class GitActions:
 
     def view(
             self,
+            viewer_name,
             iid,
             branch,
             target
     ):
         """Ouvre la visionneuse sur la branche de la MR, rapportée à sa branche cible, sans l'attendre."""
-        if not self._viewer:
-            raise GitError("visionneuse introuvable sur ce poste")
+        if viewer_name not in self._viewers:
+            raise GitError(f"visionneuse {viewer_name} introuvable sur ce poste")
+        viewer, viewer_args = self._viewers[viewer_name]
+        terminal = self._terminal if viewer.terminal else []
         for name in (branch, target):
             if self._git(["check-ref-format", "--branch", name]).returncode != 0:
                 raise GitError(f"nom de branche invalide : {name}")
         # Le terminal Windows découpe sa ligne de commande sur « ; » : une branche qui en contient
         # pourrait y glisser une commande à lui.
-        if self._terminal and Path(self._terminal[0]).name == "wt.exe" and any(";" in name for name in (branch, target)):
+        if terminal and Path(terminal[0]).name == "wt.exe" and any(";" in name for name in (branch, target)):
             raise GitError("nom de branche non pris en charge par le terminal : « ; »")
         # Branche poussée depuis le dernier fetch : on va la chercher, elle seule.
         missing = [name for name in (branch, target) if not self._has_remote_branch(name)]
@@ -181,9 +214,9 @@ class GitActions:
         repo = self._worktree_of(branch) or self._review_worktree(
             iid,
             branch
-        )
+        ) if viewer.worktree else str(self._repo_root)
         values = {"branch": branch, "target": target, "repo": repo, "distro": os.environ.get("WSL_DISTRO_NAME", "")}
-        command = [arg.format(**values) for arg in [*self._terminal, *self._viewer]]
+        command = [arg.format(**values) for arg in [*terminal, *viewer_args]]
         try:
             subprocess.Popen(
                 command,
