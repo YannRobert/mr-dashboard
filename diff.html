@@ -166,6 +166,26 @@
     background: var(--surface); font: 0.8rem/1.4 "Inter", system-ui, sans-serif; white-space: normal; text-align: left;
   }
   .note-thread.resolved { border-left-color: var(--muted); }
+  /* Commenter : un clic sur un numéro de ligne, Maj+clic pour une plage. */
+  #diff-files.can-comment td.d2h-code-side-linenumber, #diff-files.can-comment td.d2h-code-linenumber { cursor: pointer; }
+  #diff-files.can-comment td.d2h-code-side-linenumber:hover, #diff-files.can-comment td.d2h-code-linenumber:hover { color: var(--accent); }
+  tr.note-selected > td { box-shadow: inset 0 0 0 999px color-mix(in srgb, var(--accent) 16%, transparent); }
+  .note-editor {
+    position: sticky; left: 0; box-sizing: border-box; max-width: min(46rem, calc(var(--note-column, 100%) - 1rem)); margin: 0.35rem 0.5rem;
+    display: flex; flex-direction: column; gap: 0.4rem; padding: 0.4rem 0.6rem;
+    border: 1px solid var(--border-strong); border-left: 3px solid var(--accent); border-radius: 0.5rem;
+    background: var(--surface); font: 0.8rem/1.4 "Inter", system-ui, sans-serif; white-space: normal; text-align: left;
+  }
+  .note-editor textarea {
+    box-sizing: border-box; width: 100%; min-height: 5rem; resize: vertical; padding: 0.35rem 0.5rem;
+    font: 0.85rem/1.4 Menlo, Consolas, monospace; color: var(--text); background: var(--bg);
+    border: 1px solid var(--border-strong); border-radius: 0.35rem;
+  }
+  .note-editor-actions { display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; }
+  .note-editor-actions button { border-radius: 0.5rem; font-size: 0.8rem; }
+  .note-editor-actions button[type="submit"] { color: var(--accent-fg); background: var(--accent); border-color: var(--accent); }
+  .note-editor-actions button:disabled { opacity: 0.5; cursor: default; }
+  .note-editor-error { margin-right: auto; color: var(--red-fg); overflow-wrap: anywhere; }
   .note-thread > summary { display: flex; gap: 0.5rem; align-items: baseline; padding: 0.3rem 0.6rem; cursor: pointer; color: var(--muted); }
   .note-thread > summary a { margin-left: auto; }
   .note-thread .badge { font-size: 0.7rem; font-weight: 600; padding: 0 0.4em; border-radius: 0.3rem; border: 1px solid currentColor; }
@@ -274,7 +294,14 @@
       generalComments: n => `${n} commentaire${n > 1 ? "s" : ""} de la MR, hors diff notes`,
       notesCount: n => `${n} diff note${n > 1 ? "s" : ""} dans la MR`,
       placedNotes: n => `${n} diff note${n > 1 ? "s" : ""} placée${n > 1 ? "s" : ""} dans le diff affiché`,
-      notesTitle: "Afficher les diff notes GitLab sous les lignes commentées ; désactivé, la page ne les charge pas",
+      notesTitle: "Afficher les diff notes GitLab sous les lignes commentées ; désactivé, la page ne les charge pas. "
+        + "Activé, sur tout le diff à jour : un clic sur un numéro de ligne la commente, Maj+clic pour une plage",
+      newNote: p => p.first === p.last ? `Nouvelle diff note, ligne ${p.last}` : `Nouvelle diff note, lignes ${p.first} à ${p.last}`,
+      notePlaceholder: "Markdown GitLab — Ctrl+Entrée pour publier, Échap pour annuler",
+      publishNote: "Publier dans GitLab",
+      cancelNote: "Annuler",
+      publishing: "Publication…",
+      publishFailed: p => `Publication impossible : ${p}`,
       notesLoading: "Chargement des discussions GitLab…",
       notesFailed: p => `Discussions GitLab indisponibles : ${p}`,
       notesElsewhere: n => `${n} diff note${n > 1 ? "s" : ""} hors du diff affiché`,
@@ -325,7 +352,14 @@
       generalComments: n => `${n} MR comment${n > 1 ? "s" : ""}, besides diff notes`,
       notesCount: n => `${n} diff note${n > 1 ? "s" : ""} in the MR`,
       placedNotes: n => `${n} diff note${n > 1 ? "s" : ""} placed in the displayed diff`,
-      notesTitle: "Show the GitLab diff notes under the commented lines; off, the page does not load them",
+      notesTitle: "Show the GitLab diff notes under the commented lines; off, the page does not load them. "
+        + "On, over the whole up-to-date diff: click a line number to comment on it, Shift+click for a range",
+      newNote: p => p.first === p.last ? `New diff note, line ${p.last}` : `New diff note, lines ${p.first} to ${p.last}`,
+      notePlaceholder: "GitLab Markdown — Ctrl+Enter to publish, Esc to cancel",
+      publishNote: "Publish to GitLab",
+      cancelNote: "Cancel",
+      publishing: "Publishing…",
+      publishFailed: p => `Publishing failed: ${p}`,
       notesLoading: "Loading GitLab discussions…",
       notesFailed: p => `GitLab discussions unavailable: ${p}`,
       notesElsewhere: n => `${n} diff note${n > 1 ? "s" : ""} outside the displayed diff`,
@@ -371,9 +405,13 @@
   // Commentaires de la MR qui ne portent sur aucune ligne, chargés avec les diff notes.
   let generalDiscussions = null;
   let discussionsError = null;
-  // Dernier commit poussé selon GitLab : la position d'une note encore valable y est recalée à chaque push,
-  // celle d'une note obsolète reste sur un commit plus ancien.
-  let latestHead = null;
+  // Dernière version GitLab de la MR : la position d'une note encore valable est recalée sur son dernier
+  // commit à chaque push, celle d'une note obsolète reste sur un commit plus ancien. Une nouvelle note
+  // s'y positionne.
+  let latestVersion = null;
+  // Lignes à commenter : leur tableau (un côté en côte à côte), la ligne cliquée puis celle de Maj+clic,
+  // et l'éditeur ouvert sous la dernière.
+  let selection = null;
   // Fil de commentaire courant de la navigation ‹ ›, en indice dans l'ordre du diff ; -1 : aucun encore.
   let currentNote = -1;
 
@@ -433,6 +471,7 @@
       button.setAttribute("aria-pressed", String(button.dataset.format === format));
     }
     if (diffText === null) return;
+    selection = null;
     const main = document.getElementById("diff");
     const listScroll = document.getElementById("commit-list")?.scrollTop ?? null;
     main.innerHTML = `<aside id="side"><section id="commits" hidden></section><div id="split" role="separator" aria-orientation="horizontal" title="${escapeHtml(texts.splitTitle)}"></div><div id="files"></div></aside><div id="diff-files"></div>`;
@@ -463,6 +502,7 @@
     showFileList(container);
     if (readNotesEnabled()) placeNotes(container);
     if (readEnabled(COMMENTS_KEY)) placeComments(container);
+    container.classList.toggle("can-comment", canComment());
   }
 
   // La liste dessinée par diff2html passe dans le panneau ; chaque fichier y montre son nom, puis son répertoire.
@@ -828,7 +868,7 @@
       const position = discussion.notes[0].position;
       const place = notePlace(position);
       const where = place.path;
-      if (latestHead && position.head_sha !== latestHead) {
+      if (latestVersion && position.head_sha !== latestVersion.head_commit_sha) {
         elsewhere.push(threadHtml(discussion, `${where} — ${texts.outdated}`));
         continue;
       }
@@ -865,6 +905,147 @@
     container.addEventListener("toggle", event => {
       if (event.target.classList?.contains("note-thread")) alignSpacers(pairs);
     }, true);
+  }
+
+  // Une note se pose sur le diff que GitLab connaît : celui de sa dernière version, que la page montre
+  // en entier, sans plage de commits, quand le clone local est à jour.
+  function canComment() {
+    return readNotesEnabled() && discussions !== null && !range && !mr.merge && !!latestVersion
+      && commits?.at(-1)?.sha === latestVersion.head_commit_sha;
+  }
+
+  // Numéros d'une ligne du diff : l'ancien pour une ligne supprimée, le nouveau pour une ligne ajoutée,
+  // les deux pour une ligne inchangée ; type au sens de GitLab, « new » pour une ligne ajoutée, sinon « old ».
+  function lineOf(row) {
+    const number = (r, selector) => Number(r?.querySelector(selector)?.textContent.trim()) || null;
+    const sideDiff = row.closest(".d2h-file-side-diff");
+    const cell = row.querySelector(sideDiff ? "td.d2h-code-side-linenumber" : "td.d2h-code-linenumber");
+    if (!cell) return null;
+    let old;
+    let current;
+    if (sideDiff) {
+      const index = [...row.parentElement.children].indexOf(row);
+      const [left, right] = [...sideDiff.parentElement.querySelectorAll(".d2h-file-side-diff tbody")].map(t => t.children[index]);
+      old = number(left, "td.d2h-code-side-linenumber");
+      current = number(right, "td.d2h-code-side-linenumber");
+    } else {
+      old = number(row, ".line-num1");
+      current = number(row, ".line-num2");
+    }
+    if (cell.classList.contains("d2h-ins")) return current && { old: null, new: current, type: "new" };
+    if (cell.classList.contains("d2h-del")) return old && { old, new: null, type: "old" };
+    if (cell.classList.contains("d2h-cntx")) return old && current && { old, new: current, type: "old" };
+    return null;
+  }
+
+  function selectedRows() {
+    const rows = [...selection.tbody.children];
+    const [from, to] = [rows.indexOf(selection.anchor), rows.indexOf(selection.end)].sort((a, b) => a - b);
+    return rows.slice(from, to + 1).filter(row => lineOf(row));
+  }
+
+  function selectLine(row, extend) {
+    if (!canComment() || !lineOf(row)) return;
+    const draft = selection?.editor?.noteRow.querySelector("textarea").value ?? "";
+    if (extend && selection?.tbody === row.parentElement) selection.end = row;
+    else {
+      closeEditor();
+      selection = { tbody: row.parentElement, anchor: row, end: row };
+    }
+    openEditor(draft);
+  }
+
+  function closeEditor() {
+    if (!selection) return;
+    for (const row of selection.tbody.querySelectorAll("tr.note-selected")) row.classList.remove("note-selected");
+    selection.editor?.noteRow.remove();
+    selection.editor?.spacer?.remove();
+    selection.editor?.observer.disconnect();
+    selection = null;
+  }
+
+  function openEditor(draft) {
+    for (const row of selection.tbody.querySelectorAll("tr.note-selected")) row.classList.remove("note-selected");
+    selection.editor?.noteRow.remove();
+    selection.editor?.spacer?.remove();
+    selection.editor?.observer.disconnect();
+    const rows = selectedRows();
+    rows.forEach(row => row.classList.add("note-selected"));
+    const [first, last] = [lineOf(rows[0]), lineOf(rows.at(-1))];
+    const side = last.new ? "new" : "old";
+    const label = texts.newNote({ first: first[side] ?? first.new ?? first.old, last: last[side] });
+    const pair = insertNoteRow(
+      rows.at(-1),
+      `<form class="note-editor"><div class="note-meta">${escapeHtml(label)}</div>`
+      + `<textarea placeholder="${escapeHtml(texts.notePlaceholder)}"></textarea>`
+      + `<div class="note-editor-actions"><span class="note-editor-error"></span>`
+      + `<button type="button" data-editor-cancel>${escapeHtml(texts.cancelNote)}</button>`
+      + `<button type="submit">${escapeHtml(texts.publishNote)}</button></div></form>`
+    );
+    const noteRow = pair?.noteRow ?? rows.at(-1).nextElementSibling;
+    // Le champ grandit à la saisie : la ligne vide d'en face suit.
+    const observer = new ResizeObserver(() => {
+      if (pair) pair.spacer.firstElementChild.style.height = `${noteRow.offsetHeight}px`;
+    });
+    observer.observe(noteRow);
+    selection.editor = { noteRow, spacer: pair?.spacer, observer };
+    const textarea = noteRow.querySelector("textarea");
+    textarea.value = draft;
+    textarea.focus();
+  }
+
+  async function sha1(text) {
+    const digest = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(text));
+    return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, "0")).join("");
+  }
+
+  // Position au format de l'API GitLab, sur la dernière version de la MR ; une plage désigne ses deux
+  // extrémités par leur line_code, empreinte du chemin suivie des deux numéros, 0 pour celui qui manque.
+  async function notePosition(rows) {
+    const paths = wrapperPaths(rows[0].closest(".d2h-file-wrapper"));
+    const [first, last] = [lineOf(rows[0]), lineOf(rows.at(-1))];
+    const position = {
+      base_sha: latestVersion.base_commit_sha,
+      start_sha: latestVersion.start_commit_sha,
+      head_sha: latestVersion.head_commit_sha,
+      old_path: paths[0],
+      new_path: paths.at(-1),
+      old_line: last.old,
+      new_line: last.new,
+    };
+    if (rows.length === 1) return position;
+    const hash = await sha1(position.new_path);
+    const end = line => ({ line_code: `${hash}_${line.old ?? 0}_${line.new ?? 0}`, type: line.type, old_line: line.old, new_line: line.new });
+    return { ...position, line_range: { start: end(first), end: end(last) } };
+  }
+
+  async function publishNote(form) {
+    const body = form.querySelector("textarea").value;
+    if (!body.trim()) return;
+    const current = selection;
+    const rows = selectedRows();
+    const error = form.querySelector(".note-editor-error");
+    const buttons = form.querySelectorAll("button, textarea");
+    buttons.forEach(b => { b.disabled = true; });
+    error.textContent = texts.publishing;
+    try {
+      const response = await fetch("gitlab/discussion", {
+        method: "POST",
+        headers: { "X-MR-Dashboard": "1", "Content-Type": "application/json" },
+        body: JSON.stringify({ iid: Number(mr.iid), body, position: await notePosition(rows) }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.message ?? result.error ?? `HTTP ${response.status}`);
+      discussions.push(result);
+      rows.forEach(row => row.classList.replace("note-selected", "note-line"));
+      current.editor.noteRow.firstElementChild.innerHTML = threadHtml(result);
+      if (selection === current) selection = null;
+      renderNotesToggle();
+      renderNotesNav();
+    } catch (failure) {
+      buttons.forEach(b => { b.disabled = false; });
+      error.textContent = texts.publishFailed(Array.isArray(failure.message) ? failure.message.join(", ") : failure.message);
+    }
   }
 
   const seenKey = () => `mr-dashboard.diffSeen.${mr.iid}`;
@@ -904,7 +1085,7 @@
       const project = await gitlabProject();
       const versions = JSON.parse(await fetchText(`gitlab/projects/${project}/merge_requests/${mr.iid}/versions`));
       const heads = new Map(versions.map(v => [v.head_commit_sha, v.created_at]));
-      latestHead = versions.reduce((a, b) => (a && a.created_at > b.created_at ? a : b), null)?.head_commit_sha ?? null;
+      latestVersion = versions.reduce((a, b) => (a && a.created_at > b.created_at ? a : b), null);
       let first = 0;
       const found = [];
       commits.forEach((c, i) => {
@@ -1042,6 +1223,16 @@
   }
 
   document.getElementById("diff").addEventListener("click", e => {
+    const lineNumber = e.target.closest("#diff-files td.d2h-code-side-linenumber, #diff-files td.d2h-code-linenumber");
+    if (lineNumber) {
+      if (e.shiftKey) getSelection()?.removeAllRanges();
+      selectLine(lineNumber.parentElement, e.shiftKey);
+      return;
+    }
+    if (e.target.closest("[data-editor-cancel]")) {
+      closeEditor();
+      return;
+    }
     if (e.target.closest("[data-range='new']")) {
       anchor = seenAtOpen + 1;
       selectRange([seenAtOpen + 1, commits.length - 1]);
@@ -1070,6 +1261,17 @@
     }
   });
 
+  document.getElementById("diff").addEventListener("submit", e => {
+    if (!e.target.matches(".note-editor")) return;
+    e.preventDefault();
+    publishNote(e.target);
+  });
+  document.getElementById("diff").addEventListener("keydown", e => {
+    const form = e.target.closest?.(".note-editor");
+    if (!form) return;
+    if (e.key === "Escape") closeEditor();
+    else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) form.requestSubmit();
+  });
   document.getElementById("format").addEventListener("click", e => {
     const button = e.target.closest("[data-format]");
     if (!button) return;

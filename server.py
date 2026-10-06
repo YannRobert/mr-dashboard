@@ -10,7 +10,8 @@ La page (index.html) ne parle qu'à ce serveur, qui relaie deux préfixes :
 
 Le relais est nécessaire pour Sonar, qui ne renvoie aucun en-tête CORS : un navigateur ne peut pas
 l'interroger directement. Il sert aussi à garder les deux tokens hors du navigateur. Seul GET est
-relayé, et le serveur n'écoute que sur 127.0.0.1.
+relayé, et le serveur n'écoute que sur 127.0.0.1 : la seule écriture dans GitLab est l'action
+/gitlab/discussion ci-dessous, qui valide sa requête avant de la transmettre.
 
 Actions locales, en POST :
     /orca/fix   ouvre dans Orca une session Claude Code avec le prompt de correction d'une MR
@@ -18,6 +19,8 @@ Actions locales, en POST :
     /git/fetch  git fetch du clone local, qui tourne aussi tout seul toutes les --git-fetch-interval
                 secondes ; GET /git/status en donne le dernier résultat (cf. git_actions.py)
     /git/auto   active ou suspend le fetch automatique : {"enabled": true|false}
+    /gitlab/discussion  ouvre une discussion sur une ou plusieurs lignes du diff d'une MR du projet
+                suivi : {"iid", "body", "position"}, position au format de l'API GitLab
     /git/diff   GET ?branch=&target= : diff d'une MR depuis le point où elle part de sa cible, affiché
                 par diff.html ; ?iid=&head=&merge=&target= pour une MR mergée, retrouvée par ses commits ;
                 &first=&last= pour ce qu'ont apporté ensemble ses commits de first à last
@@ -122,6 +125,7 @@ class UpstreamPool:
             return self._send(
                 target,
                 connection,
+                "GET",
                 path,
                 headers
             )
@@ -131,25 +135,47 @@ class UpstreamPool:
             return self._send(
                 target,
                 self._connect(target),
+                "GET",
                 path,
                 headers
             )
+
+    def post(
+            self,
+            url,
+            headers,
+            body
+    ):
+        """POST, et renvoie (statut, corps, en-têtes) ; toujours sur une connexion neuve, sans nouvel
+        essai : une requête qui écrit ne se rejoue pas à l'aveugle."""
+        target = urlsplit(url)
+        return self._send(
+            target,
+            self._connect(target),
+            "POST",
+            target.path,
+            headers,
+            body
+        )
 
     def _send(
             self,
             target,
             connection,
+            method,
             path,
-            headers
+            headers,
+            body=None
     ):
         try:
             connection.request(
-                "GET",
+                method,
                 path,
+                body=body,
                 headers=headers
             )
             response = connection.getresponse()
-            body = response.read()
+            content = response.read()
         except BaseException:
             connection.close()
             raise
@@ -160,7 +186,7 @@ class UpstreamPool:
                 target,
                 connection
             )
-        return response.status, body, response.headers
+        return response.status, content, response.headers
 
     def _acquire(self, target):
         now = time.monotonic()
@@ -268,7 +294,12 @@ def make_handler(
         def do_POST(self):
             if not self.host_allowed():
                 return
-            actions = {"/orca/fix": self.orca_fix, "/git/fetch": self.git_fetch, "/git/auto": self.git_auto}
+            actions = {
+                "/orca/fix": self.orca_fix,
+                "/git/fetch": self.git_fetch,
+                "/git/auto": self.git_auto,
+                "/gitlab/discussion": self.gitlab_discussion
+            }
             action = actions.get(self.path)
             if not action:
                 self.close_connection = True
@@ -329,6 +360,31 @@ def make_handler(
                 return
             git.set_auto(enabled)
             self.send_json(200, git.status())
+
+        def gitlab_discussion(self, payload):
+            request = discussion_request(payload)
+            if not request:
+                self.send_json(400, {"message": "requête invalide"})
+                return
+            iid, body = request
+            project = quote(settings["public"]["gitlabProject"], safe="")
+            try:
+                status, content, upstream_headers = upstream.post(
+                    f"{settings['gitlab_host']}/api/v4/projects/{project}/merge_requests/{iid}/discussions",
+                    {"PRIVATE-TOKEN": settings["gitlab_token"], "Content-Type": "application/json"},
+                    body
+                )
+            except (OSError, http.client.HTTPException) as error:
+                self.send_json(
+                    502,
+                    {"message": f"relay failed: {error}"}
+                )
+                return
+            self.send_body(
+                status,
+                content,
+                upstream_headers
+            )
 
         def git_diff(self, query):
             first, last = (query.get(name, [None])[0] for name in ("first", "last"))
@@ -443,6 +499,63 @@ def make_handler(
                 super().log_message(fmt, *args)
 
     return Handler
+
+
+def discussion_request(payload):
+    """(iid, corps JSON pour GitLab) d'une demande de discussion sur le diff, None si elle est invalide.
+
+    Seuls les champs attendus passent, au type attendu : la page ne peut rien faire écrire d'autre à
+    GitLab qu'un commentaire de ligne sur une MR du projet suivi.
+    """
+    if not isinstance(payload, dict):
+        return None
+    iid, body, position = payload.get("iid"), payload.get("body"), payload.get("position")
+    if not isinstance(iid, int) or isinstance(iid, bool) or iid <= 0:
+        return None
+    if not isinstance(body, str) or not body.strip() or not isinstance(position, dict):
+        return None
+    if not all(is_sha(position.get(name)) for name in ("base_sha", "start_sha", "head_sha")):
+        return None
+    if not all(isinstance(position.get(name), str) and position[name] for name in ("old_path", "new_path")):
+        return None
+    lines = {name: position.get(name) for name in ("old_line", "new_line")}
+    if not all(line is None or is_line(line) for line in lines.values()):
+        return None
+    if lines == {"old_line": None, "new_line": None}:
+        return None
+    clean = {
+        "position_type": "text",
+        **{name: position[name] for name in ("base_sha", "start_sha", "head_sha", "old_path", "new_path")},
+        **{name: line for name, line in lines.items() if line is not None}
+    }
+    line_range = position.get("line_range")
+    if line_range is not None:
+        ends = [line_range.get(end) if isinstance(line_range, dict) else None for end in ("start", "end")]
+        if not all(range_end(end) for end in ends):
+            return None
+        clean["line_range"] = {name: range_end(end) for name, end in zip(("start", "end"), ends)}
+    return iid, json.dumps({"body": body, "position": clean}).encode()
+
+
+def is_sha(value):
+    return isinstance(value, str) and len(value) in (40, 64) and all(c in "0123456789abcdef" for c in value)
+
+
+def is_line(value):
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+
+def range_end(end):
+    """Une extrémité de line_range réduite à ses champs, None si elle est invalide."""
+    if not isinstance(end, dict) or end.get("type") not in ("old", "new"):
+        return None
+    line_code = end.get("line_code")
+    if not isinstance(line_code, str) or len(line_code) > 200:
+        return None
+    lines = {name: end.get(name) for name in ("old_line", "new_line")}
+    if not all(line is None or is_line(line) for line in lines.values()):
+        return None
+    return {"line_code": line_code, "type": end["type"], **{n: v for n, v in lines.items() if v is not None}}
 
 
 def signals_command(args):

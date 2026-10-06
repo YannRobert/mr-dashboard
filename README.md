@@ -126,7 +126,7 @@ Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut
   navigateur), coloration syntaxique, thème du dashboard. Texte à la taille de celui du dashboard, réglage
   A− / A+ de celui-ci compris, plus 25 % par défaut, ajustable de 80 à 300 % par ses propres **A− / A+**
   (retenu dans le navigateur) : le zoom du navigateur vaut pour tout `localhost:8765` et
-  agrandirait aussi le dashboard. Lecture seule : on commente dans GitLab, à un clic. Au-delà de 5 Mo
+  agrandirait aussi le dashboard. On répond aux discussions dans GitLab, à un clic. Au-delà de 5 Mo
   de diff, la page renvoie vers GitLab. L'affichage vient de
   [diff2html](https://github.com/rtfpessoa/diff2html) (MIT), copié dans `vendor/diff2html/` pour
   marcher sans réseau ; pour le mettre à jour, y remplacer `diff2html-ui-slim.min.js` et
@@ -137,6 +137,11 @@ Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut
   diff note à la suivante. **🗨 Commentaires** affiche à part, en tête du diff, les commentaires de la
   MR qui ne portent sur aucune ligne. Désactivés — par défaut, choix retenus par le navigateur —, ils
   ne chargent rien de plus ; les commandes gardent leur place quel que soit leur état.
+- Diff notes affichées, sur tout le diff (sans plage de commits) et un clone local à jour du dernier
+  push : un clic sur un numéro de ligne ouvre un éditeur dessous, Maj+clic l'étend à une plage ;
+  **Publier dans GitLab** (Ctrl+Entrée) y crée la discussion. C'est la seule écriture du serveur dans
+  GitLab : l'action `/gitlab/discussion` ne transmet qu'un commentaire de ligne sur une MR du projet
+  suivi.
 - Un `git fetch` ou `git pull` lancé à la main pendant un fetch automatique peut répondre
   « cannot lock ref » : le relancer.
 
