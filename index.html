@@ -349,7 +349,8 @@
   .mr-action.ai-fix:hover { border-color: var(--red-fg); background: var(--red-bg); }
   .mr-action.placeholder { visibility: hidden; }
   .actions-row { display: flex; gap: 0.2rem; }
-  .actions-row > .mr-action:first-child { flex: 1; }
+  /* Diff et commentaires : deux cases de même taille, pictogramme centré. */
+  .actions-row > .mr-action { flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center; min-height: 1.7em; padding: 0; }
   a.mr-action { text-decoration: none; border: 1px solid var(--border-strong); border-radius: 0.5rem; background: var(--surface); text-align: center; }
   dialog.ai-prompt {
     width: min(1200px, calc(100vw - 32px)); padding: 1.2rem; border: 1px solid var(--border);
@@ -1004,8 +1005,8 @@ const I18N = {
     "gitFetch.failed": p => `fetch en échec à ${p.time}`,
     "gitFetch.failedTitle": p => `${p.message}\nDernier fetch réussi : ${p.success}`,
     "gitFetch.noSuccess": "aucun",
-    "gitDiff.title": p => `Afficher dans un onglet le diff de ${p.branch}, comparée à ${p.target}, calculé sur le dépôt local`,
-    "comments.title": "Afficher dans un onglet les commentaires de la MR qui ne portent sur aucune ligne, rendus comme dans GitLab",
+    "gitDiff.title": "git diff de cette MR",
+    "comments.title": "Afficher les commentaires",
     "threads.title": p => `${p.n} thread${plural(p.n)} non résolu${plural(p.n)} sur ${p.total}`,
     "approved": p => (p.n > 1 ? `Approuvée ×${p.n}` : "Approuvée"),
     "approved.title": p => `Approuvée par ${p.names}`,
@@ -1248,8 +1249,8 @@ const I18N = {
     "gitFetch.failed": p => `fetch failed at ${p.time}`,
     "gitFetch.failedTitle": p => `${p.message}\nLast successful fetch: ${p.success}`,
     "gitFetch.noSuccess": "none",
-    "gitDiff.title": p => `Show in a tab the diff of ${p.branch} compared with ${p.target}, computed on the local repository`,
-    "comments.title": "Show in a tab the MR comments that are not on a line, rendered as in GitLab",
+    "gitDiff.title": "git diff of this MR",
+    "comments.title": "Show comments",
     "threads.title": p => `${p.n} unresolved thread${pluralEn(p.n)} out of ${p.total}`,
     "approved": p => (p.n > 1 ? `Approved ×${p.n}` : "Approved"),
     "approved.title": p => `Approved by ${p.names}`,
@@ -2923,8 +2924,12 @@ function diffStat(mr) {
 // MR mergée : retrouvée par son merge commit, sa branche source est d'ordinaire supprimée.
 function gitDiffButton(mr) {
   if (mr.state === "merged" && !mr.merge_commit_sha) return "";
-  return `<button type="button" class="mr-action" data-git-diff="${mr.iid}" title="${escapeHtml(t("gitDiff.title", { branch: mr.source_branch, target: mr.target_branch }))}">diff</button>`;
+  return `<button type="button" class="mr-action" data-git-diff="${mr.iid}" title="${escapeHtml(t("gitDiff.title"))}" aria-label="diff">${DIFF_ICON}</button>`;
 }
+
+// Une page, un + au-dessus d'un − : un fichier modifié.
+const DIFF_ICON = `<svg viewBox="0 0 16 16" width="1.15em" height="1.15em" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">`
+  + `<path d="M3.5 1.5h6l3 3v10h-9z"/><path d="M8 4.8v4M6 6.8h4" stroke="var(--green-fg)"/><path d="M6 11.5h4" stroke="var(--red-fg)"/></svg>`;
 
 function commentsLink(mr) {
   const query = new URLSearchParams({ iid: mr.iid, lang: state.lang });
