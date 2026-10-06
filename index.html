@@ -290,8 +290,11 @@
   table.mrs td.signal .stack { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; }
 
   .mr-cell { min-width: 22rem; }
-  .mr-cell .title { font-weight: 600; font-size: 1.05rem; line-height: 1.35; }
-  .mr-cell .title a { color: var(--text); }
+  /* Titre sur une seule ligne, sans peser sur la largeur de la colonne (contain) : réduit par fitTitles,
+     puis tronqué par « … » s'il ne tient toujours pas ; complet au survol. */
+  .mr-cell .title { display: flex; align-items: baseline; gap: 6px; contain: inline-size; font-weight: 600; font-size: 1.05rem; line-height: 1.35; }
+  .mr-cell .title a { flex: 0 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--text); }
+  .mr-cell .title > :not(a) { flex: none; }
   .mr-cell .title a:hover { color: var(--link); }
   .mr-cell .title .draft {
     font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;
@@ -649,6 +652,7 @@ const AVATAR_COLORS_KEY = "mr-dashboard.avatar-colors";
 const THEME_KEY = "mr-dashboard.theme";
 const TEXT_SCALE_KEY = "mr-dashboard.textScale";
 const TEXT_SCALES = [0.7, 0.8, 0.9, 1, 1.1, 1.25, 1.5];
+const TITLE_MIN_SCALE = 0.8;
 // Préfixe commun à toutes les clés ci-dessus : le bouton balai efface tout ce qui le porte, et seulement ça.
 const STORAGE_PREFIX = "mr-dashboard.";
 const NOTIFIER_LOCK = "mr-dashboard.notifier";
@@ -2767,6 +2771,17 @@ function render() {
   $("list").innerHTML = visible.length
     ? visible.map(renderRow).join("")
     : `<tr><td class="empty" colspan="${columns.length}">${escapeHtml(t(mergedLoading ? "summary.mergedLoading" : "empty"))}</td></tr>`;
+  fitTitles();
+}
+
+// Un titre trop long pour sa ligne voit sa police réduite juste assez pour y tenir, jusqu'à
+// TITLE_MIN_SCALE : au-delà, le « … » de la feuille de style prend le relais.
+function fitTitles() {
+  for (const link of document.querySelectorAll("#list .mr-cell .title a")) {
+    link.style.fontSize = "";
+    if (link.scrollWidth <= link.clientWidth) continue;
+    link.style.fontSize = `${Math.max(TITLE_MIN_SCALE, Math.floor(link.clientWidth / link.scrollWidth * 1000) / 1000)}em`;
+  }
 }
 
 function openSummary(
@@ -2869,7 +2884,7 @@ function mrCell(mr) {
     .map(l => `<button type="button" class="label" data-add-label="${escapeHtml(l)}" title="${escapeHtml(t("label.add"))}">${escapeHtml(l)}</button>`)
     .join("");
   const conflicts = mr.has_conflicts && mr.state !== "merged" ? " " + pill("red", t("conflicts"), t("conflicts.title"), mr.web_url) : "";
-  return `<div class="title"><a href="${escapeHtml(mr.web_url)}" target="_blank" rel="noopener">${escapeHtml(mr.title.replace(/^Draft:\s*/i, ""))}</a>${mr.draft ? ' <span class="draft">Draft</span>' : ""}${conflicts}</div>
+  return `<div class="title"><a href="${escapeHtml(mr.web_url)}" target="_blank" rel="noopener" title="${escapeHtml(mr.title.replace(/^Draft:\s*/i, ""))}">${escapeHtml(mr.title.replace(/^Draft:\s*/i, ""))}</a>${mr.draft ? '<span class="draft">Draft</span>' : ""}${conflicts}</div>
     <div class="sub"><span class="iid">!${mr.iid}</span> · <code>${escapeHtml(mr.source_branch)}</code> → <code>${escapeHtml(mr.target_branch)}</code>${diffStat(mr)}</div>
     <div class="title-actions">${stalledPill(mr)}${changesRequestedPill(mr)}${approvalPill(mr)}${gitDiffButton(mr)}${aiFixButton(mr)}</div>
     ${labels ? `<div class="labels">${labels}</div>` : ""}`;
@@ -3956,6 +3971,14 @@ document.addEventListener("keydown", e => {
 });
 window.addEventListener("scroll", maybeLoadMoreMerged, { passive: true });
 window.addEventListener("resize", maybeLoadMoreMerged);
+// Largeur de la colonne changée (fenêtre, zoom, taille du texte) : les titres sont réajustés. Leur
+// réduction ne touche que la hauteur du tableau, qui ne relance donc rien.
+let fittedTableWidth = 0;
+new ResizeObserver(([entry]) => {
+  if (entry.contentRect.width === fittedTableWidth) return;
+  fittedTableWidth = entry.contentRect.width;
+  fitTitles();
+}).observe(document.querySelector("table.mrs"));
 $("clear-storage").addEventListener("click", clearStorage);
 $("refresh").addEventListener("click", () => (mergedView() ? loadMerged({ force: true }) : refresh()));
 $("autoRefresh").addEventListener("change", e => {
