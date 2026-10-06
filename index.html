@@ -399,20 +399,17 @@
   .ca-legend-item svg { width: 1.2em; height: 0.9em; overflow: visible; }
   .pill {
     display: inline-flex; align-items: center; gap: 0.45em;
-    font-size: 1rem; font-weight: 700; border-radius: 999px; padding: 0.28em 0.8em;
+    font-size: 1rem; font-weight: 700; border-radius: 999px; padding: 0.28em 0.7em;
     white-space: nowrap; font-variant-numeric: tabular-nums;
     box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 18%, transparent);
   }
-  .pill::before {
-    content: ""; width: 0.5em; height: 0.5em; border-radius: 50%; background: var(--dot, currentColor);
-  }
   a.pill:hover { text-decoration: none; filter: brightness(0.96); }
-  .pill.red { background: var(--red-bg); color: var(--red-fg); --dot: var(--red-dot); }
-  .pill.orange { background: var(--orange-bg); color: var(--orange-fg); --dot: var(--orange-dot); }
-  .pill.green { background: var(--green-bg); color: var(--green-fg); --dot: var(--green-dot); }
-  .pill.grey { background: var(--grey-bg); color: var(--grey-fg); --dot: var(--grey-dot); font-weight: 500; }
+  .pill.red { background: var(--red-bg); color: var(--red-fg); }
+  .pill.orange { background: var(--orange-bg); color: var(--orange-fg); }
+  .pill.green { background: var(--green-bg); color: var(--green-fg); }
+  .pill.grey { background: var(--grey-bg); color: var(--grey-fg); font-weight: 500; }
   .pill.loading {
-    color: var(--grey-fg); font-weight: 500; --dot: var(--grey-dot);
+    color: var(--grey-fg); font-weight: 500;
     background: linear-gradient(90deg, var(--grey-bg) 25%, var(--surface-2) 50%, var(--grey-bg) 75%) 0 0 / 200% 100%;
     animation: shimmer 1.4s linear infinite;
   }
@@ -682,11 +679,11 @@ const PIPELINE_RANK = {
 // Ordre des colonnes, et pour chacune : valeur de tri (null = inconnue) et sens du premier clic.
 // Les signaux trient par gravité décroissante au premier clic, pour faire remonter les alertes.
 // Libellé et aide de chaque colonne viennent des traductions : col.<clé> et help.<clé>.
-  // Actions dans leur colonne, empilées : sous le titre, elles ajoutaient une troisième ligne à chaque MR.
-  { key: "actions", sortable: false, cellClass: "actions-cell", render: mr => `<div class="actions">${gitDiffButton(mr)}${aiFixButton(mr) || aiFixPlaceholder()}</div>` },
 const COLUMNS = [
   { key: "title", firstDir: "asc", cellClass: "mr-cell", value: mr => mr.title.replace(/^Draft:\s*/i, ""), render: mrCell },
   { key: "author", firstDir: "asc", cellClass: "nowrap", value: mr => mr.author?.name ?? null, render: authorCell },
+  // Actions dans leur colonne, empilées : sous le titre, elles ajoutaient une troisième ligne à chaque MR.
+  { key: "actions", sortable: false, cellClass: "actions-cell", render: mr => `<div class="actions">${gitDiffButton(mr)}${aiFixButton(mr) || aiFixPlaceholder()}</div>` },
   { key: "commits", firstDir: "desc", num: true, cellClass: "num", value: commitsCount, render: commitsCell },
   { key: "comments", firstDir: "desc", num: true, cellClass: "num", value: mr => mr.user_notes_count, render: mr => String(mr.user_notes_count) },
   { key: "threads", firstDir: "desc", num: true, cellClass: "num",
@@ -891,10 +888,10 @@ const I18N = {
     "group.review": "Revue",
     "group.quality": "Qualité",
     "group.target": "Retard sur la cible",
-    "col.actions": "Actions",
     "group.time": "Durées",
     "col.title": "MR",
     "col.author": "Auteur",
+    "col.actions": "Actions",
     "col.commits": "Commits",
     "col.comments": "Commentaires",
     "col.threads": "Threads\nnon résolus",
@@ -1134,10 +1131,10 @@ const I18N = {
     "group.review": "Review",
     "group.quality": "Quality",
     "group.target": "Behind target",
-    "col.actions": "Actions",
     "group.time": "Times",
     "col.title": "MR",
     "col.author": "Author",
+    "col.actions": "Actions",
     "col.commits": "Commits",
     "col.comments": "Comments",
     "col.threads": "Unresolved\nthreads",
@@ -2834,10 +2831,10 @@ function renderHeaders() {
     .join("");
   $("headers").innerHTML = `<tr class="groups">${groups}</tr><tr class="columns">` + shownColumns().map(column => {
     const active = state.filters.sort === column.key;
-    if (column.sortable === false) return `<th class="${groupClass(column.key)}" title="${escapeHtml(help)}"><span class="col-label">${escapeHtml(t(`col.${column.key}`))}</span></th>`;
     const arrow = active ? (state.filters.dir === "asc" ? "▲" : "▼") : "";
     const ariaSort = active ? ` aria-sort="${state.filters.dir === "asc" ? "ascending" : "descending"}"` : "";
     const help = has(`help.${column.key}`) ? t(`help.${column.key}`) : "";
+    if (column.sortable === false) return `<th class="${groupClass(column.key)}" title="${escapeHtml(help)}"><span class="col-label">${escapeHtml(t(`col.${column.key}`))}</span></th>`;
     return `<th class="${column.num ? "num" : ""} ${groupClass(column.key)}"${ariaSort} title="${escapeHtml(help)}">` +
       `<button type="button" data-sort="${column.key}"><span class="col-label">${escapeHtml(t(`col.${column.key}`)).replace(/\n/g, "<br>")}</span><span class="arrow">${arrow}</span></button></th>`;
   }).join("") + "</tr>";
@@ -3039,11 +3036,11 @@ function renderGitFetchFreshness() {
   );
 }
 
-// indicateur qualité imparfait ou un thread non résolu. Le prompt ne cite que ce qui l'est, avec les
-// valeurs affichées dans le tableau.
 // ---------- Prompt de correction ----------
 
 // Le bouton n'apparaît que s'il y a quelque chose à corriger : une branche en retard ou en conflit, un
+// indicateur qualité imparfait ou un thread non résolu. Le prompt ne cite que ce qui l'est, avec les
+// valeurs affichées dans le tableau.
 // Place du bouton gardée quand il n'y a rien à corriger : « diff » reste au même endroit d'une ligne à l'autre.
 const aiFixPlaceholder = () => `<button type="button" class="mr-action ai-fix placeholder" tabindex="-1" aria-hidden="true">${escapeHtml(t("aiFix"))}</button>`;
 
@@ -3826,10 +3823,10 @@ function stageIcon(group) {
 // étroite. Les jours gardent leur mot, court dans les deux langues.
 const durationFormat = unit => new Intl.NumberFormat(locale(), { style: "unit", unit, unitDisplay: "long" });
 
-  const sign = seconds < 0 ? "- " : "";
 // Entre 1 h et 3 h, « 2h59 » : l'heure arrondie (« 3h ») y écraserait une précision encore utile.
 function relative(iso) {
   const seconds = (new Date(iso) - gitlabNow()) / 1000;
+  const sign = seconds < 0 ? "- " : "";
   const minutes = Math.floor(Math.abs(seconds) / 60);
   if (minutes < 1) return `${sign}< 1 min`;
   if (minutes < 60) return `${sign}${minutes} min`;
