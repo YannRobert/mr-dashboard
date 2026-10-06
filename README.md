@@ -134,7 +134,8 @@ Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut
 - **💬 Commentaires**, dans l'en-tête du diff, affiche les discussions GitLab de la MR sous les lignes
   commentées, résolues repliées. Une note posée sur un code qui a changé depuis, ou hors de la plage de
   commits affichée, va dans « discussions hors du diff affiché », en tête du diff. Désactivé — par
-  défaut, choix retenu par le navigateur —, la page ne charge rien de plus.
+  défaut, choix retenu par le navigateur —, la page ne charge rien de plus. **‹ ›** passent d'un commentaire du diff au
+  suivant.
 - Un `git fetch` ou `git pull` lancé à la main pendant un fetch automatique peut répondre
   « cannot lock ref » : le relancer.
 

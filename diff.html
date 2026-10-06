@@ -78,6 +78,13 @@
   .format button:first-child { border-radius: 0.5rem 0 0 0.5rem; }
   .format button:last-child { border-radius: 0 0.5rem 0.5rem 0; border-left: none; }
   #notes-toggle { border-radius: 0.5rem; }
+  .notes-nav { display: flex; align-items: center; gap: 0.25rem; }
+  .notes-nav[hidden] { display: none; }
+  .notes-nav button { border-radius: 0.5rem; padding: 0.3em 0.6em; }
+  .notes-nav button:disabled { opacity: 0.4; cursor: default; }
+  .notes-nav output { min-width: 3.2em; text-align: center; font-size: 0.85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .note-thread { scroll-margin-top: calc(var(--header-height, 0px) + 3rem); }
+  .note-thread.current { outline: 2px solid var(--accent); outline-offset: 1px; }
   .format button[aria-pressed="true"], #notes-toggle[aria-pressed="true"] {
     color: var(--accent-fg); border-color: transparent; font-weight: 600;
     background: linear-gradient(135deg, var(--accent), var(--accent-2));
@@ -206,6 +213,11 @@
       <button type="button" data-text-step="1">A+</button>
     </div>
     <button type="button" id="notes-toggle" aria-pressed="false"></button>
+    <div class="notes-nav" id="notes-nav" hidden>
+      <button type="button" data-note-step="-1">‹</button>
+      <output id="note-position"></output>
+      <button type="button" data-note-step="1">›</button>
+    </div>
     <a id="gitlab" target="_blank" rel="noopener" hidden></a>
   </div>
 </header>
@@ -263,6 +275,8 @@
       lines: p => p.first === p.last ? `ligne ${p.last}` : `lignes ${p.first} à ${p.last}`,
       replies: n => `${n} réponse${n > 1 ? "s" : ""}`,
       openInGitlab: "GitLab",
+      previousNote: "Commentaire précédent dans le diff",
+      nextNote: "Commentaire suivant dans le diff",
     },
     en: {
       title: p => `Diff of !${p.iid}`,
@@ -307,6 +321,8 @@
       lines: p => p.first === p.last ? `line ${p.last}` : `lines ${p.first} to ${p.last}`,
       replies: n => `${n} repl${n > 1 ? "ies" : "y"}`,
       openInGitlab: "GitLab",
+      previousNote: "Previous comment in the diff",
+      nextNote: "Next comment in the diff",
     },
   };
   const params = new URLSearchParams(location.search);
@@ -341,6 +357,8 @@
   // Dernier commit poussé selon GitLab : la position d'une note encore valable y est recalée à chaque push,
   // celle d'une note obsolète reste sur un commit plus ancien.
   let latestHead = null;
+  // Fil de commentaire courant de la navigation ‹ ›, en indice dans l'ordre du diff ; -1 : aucun encore.
+  let currentNote = -1;
 
   function escapeHtml(text) {
     return String(text).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -619,6 +637,32 @@
     render();
   }
 
+  // Fils placés dans le diff, dans l'ordre de lecture ; ceux de l'encart « hors du diff » n'en sont pas.
+  const placedNotes = () => [...document.querySelectorAll("#diff-files tr.note-row .note-thread")];
+
+  function renderNotesNav() {
+    const nav = document.getElementById("notes-nav");
+    const count = readNotesEnabled() ? placedNotes().length : 0;
+    nav.hidden = count === 0;
+    if (!count) return;
+    const [previous, next] = nav.querySelectorAll("[data-note-step]");
+    previous.title = texts.previousNote;
+    next.title = texts.nextNote;
+    previous.disabled = currentNote <= 0;
+    next.disabled = currentNote >= count - 1;
+    document.getElementById("note-position").textContent = `${currentNote < 0 ? "–" : currentNote + 1} / ${count}`;
+  }
+
+  function goToNote(step) {
+    const notes = placedNotes();
+    if (!notes.length) return;
+    currentNote = Math.min(Math.max(currentNote + step, 0), notes.length - 1);
+    notes.forEach((note, i) => note.classList.toggle("current", i === currentNote));
+    notes[currentNote].open = true;
+    notes[currentNote].scrollIntoView({ block: "start" });
+    renderNotesNav();
+  }
+
   // Côté et lignes d'une note : le nouveau fichier quand elle porte sur une ligne ajoutée ou inchangée,
   // l'ancien quand elle porte sur une ligne supprimée. Plusieurs lignes : de la première à celle commentée.
   function notePlace(position) {
@@ -771,6 +815,8 @@
     if (elsewhere.length) {
       container.insertAdjacentHTML("afterbegin", `<details class="notes-elsewhere"><summary>${escapeHtml(texts.notesElsewhere(elsewhere.length))}</summary>${elsewhere.join("")}</details>`);
     }
+    currentNote = -1;
+    renderNotesNav();
     // Un fil replié ou déplié change de hauteur : la ligne vide d'en face suit.
     container.addEventListener("toggle", event => {
       if (event.target.classList?.contains("note-thread")) alignSpacers(pairs);
@@ -1005,7 +1051,12 @@
     else {
       renderNotesToggle();
       render();
+      renderNotesNav();
     }
+  });
+  document.getElementById("notes-nav").addEventListener("click", e => {
+    const button = e.target.closest("[data-note-step]");
+    if (button) goToNote(Number(button.dataset.noteStep));
   });
   renderHeader();
   renderNotesToggle();
