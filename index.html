@@ -90,8 +90,8 @@
   /* Deux lignes : identité et préférences d'affichage, puis commandes d'actualisation ; chacune revient à la
      ligne pour son compte, sans mélanger les deux ensembles. */
   header {
-    display: flex; flex-direction: column; gap: 0.7rem;
-    padding: 1.1rem 1.5rem 0.9rem;
+    display: flex; flex-direction: column; gap: 0.4rem;
+    padding: 0.6rem 1.2rem 0.5rem;
     background: var(--surface); border-bottom: 1px solid var(--border);
     position: relative;
   }
@@ -100,59 +100,59 @@
     background: linear-gradient(90deg, var(--accent), var(--accent-2));
   }
   header .brand {
-    width: 2.5rem; height: 2.5rem; border-radius: 0.6rem; flex: none;
-    display: grid; place-items: center; font-weight: 800; font-size: 1.1rem;
+    width: 2rem; height: 2rem; border-radius: 0.5rem; flex: none;
+    display: grid; place-items: center; font-weight: 800; font-size: 0.9rem;
     color: #fff; background: linear-gradient(135deg, var(--accent), var(--accent-2));
   }
-  header .header-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.8rem 1.4rem; }
+  header .header-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1.1rem; }
   /* Commandes d'actualisation alignées à droite, sous les préférences d'affichage. */
   header .header-row.commands { justify-content: flex-end; }
   /* Commandes de l'en-tête à la taille du texte du tableau : elles ne doivent pas l'emporter sur les données. */
-  header button { font-size: 0.9rem; }
+  header button { font-size: 0.75rem; }
   /* Le slogan sous le nom, à hauteur de la pastille « MR » : moins de place en largeur. */
   header h1 { margin: 0; display: flex; flex-direction: column; font-size: 1.4rem; font-weight: 700; letter-spacing: -0.01em; }
-  header h1 .name { font-size: 1.15rem; line-height: 1.15; }
+  header h1 .name { font-size: 1rem; line-height: 1.15; }
   /* Le M et le R de « MisteR » reprennent le dégradé des boutons principaux. */
   header h1 .initial {
     font-weight: inherit; color: var(--accent);
     background: linear-gradient(135deg, var(--accent), var(--accent-2));
     -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
   }
-  header h1 .tagline { font-size: 0.85rem; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+  header h1 .tagline { font-size: 0.72rem; font-weight: 500; color: var(--muted); letter-spacing: 0; }
   .summary-bar .project {
-    font-size: 0.85rem; color: var(--muted); background: var(--surface-2);
-    border: 1px solid var(--border); border-radius: 999px; padding: 0.15em 0.7em;
+    font-size: 0.75rem; color: var(--muted); background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 999px; padding: 0.1em 0.6em;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
   header .spacer { flex: 1; }
   /* Trois zones distinctes, séparées par un filet : état des données, commandes d'actualisation, langue. */
   header .divider { width: 1px; align-self: stretch; background: var(--border); }
-  header .status { display: flex; align-items: center; gap: 0.8rem; }
+  header .status { display: flex; align-items: center; gap: 0.6rem; }
   /* Hauteur réservée pour trois lignes (heure, date, progression ou échec) : sans elle, la ligne de
      progression apparue au rafraîchissement agrandissait l'en-tête et décalait toute la page. */
-  header .meta { color: var(--muted); font-size: 0.9rem; text-align: left; line-height: 1.35; min-height: calc(3 * 1.35em); min-width: 34ch; font-variant-numeric: tabular-nums; }
+  header .meta { color: var(--muted); font-size: 0.75rem; text-align: left; line-height: 1.35; min-height: calc(3 * 1.35em); min-width: 34ch; font-variant-numeric: tabular-nums; }
   header .meta > span { display: block; white-space: nowrap; }
   header .meta .progress { color: var(--accent); }
   header .meta .failed { color: var(--orange-fg); font-weight: 600; }
-  header .git-fetch-control { display: inline-flex; align-items: center; gap: 0.9rem; }
+  header .git-fetch-control { display: inline-flex; align-items: center; gap: 0.7rem; }
   header .git-fetch-control[hidden] { display: none; }
   /* Largeur réservée au plus long des états : le texte qui change ne décale pas les boutons voisins. */
-  header .git-fetch-status { color: var(--muted); font-size: 0.85rem; line-height: 1.35; white-space: nowrap; min-width: 26ch; font-variant-numeric: tabular-nums; }
+  header .git-fetch-status { color: var(--muted); font-size: 0.72rem; line-height: 1.35; white-space: nowrap; min-width: 26ch; font-variant-numeric: tabular-nums; }
   header .git-fetch-status.running { color: var(--accent); }
   header .git-fetch-status.failed { color: var(--red-fg); font-weight: 600; }
   header .refresh-controls {
-    display: inline-flex; align-items: center; gap: 0.9rem;
-    padding: 0.3rem 0.3rem 0.3rem 0.8rem; border: 1px solid var(--border); border-radius: 0.7rem; background: var(--surface-2);
+    display: inline-flex; align-items: center; gap: 0.7rem;
+    padding: 0.25rem 0.25rem 0.5rem 0.6rem; border: 1px solid var(--border); border-radius: 0.6rem; background: var(--surface-2);
   }
   header label.auto {
-    display: inline-flex; gap: 0.4em; align-items: center; color: var(--muted); font-size: 0.8rem; cursor: pointer;
+    display: inline-flex; gap: 0.4em; align-items: center; color: var(--muted); font-size: 0.68rem; cursor: pointer;
   }
-  header label.auto input { accent-color: var(--accent); width: 0.95rem; height: 0.95rem; margin: 0; cursor: pointer; }
+  header label.auto input { accent-color: var(--accent); width: 0.8rem; height: 0.8rem; margin: 0; cursor: pointer; }
   /* Fraîcheur des données : 5 segments, un par minute, qui s'éteignent jusqu'à la prochaine actualisation
      auto ; vert jusqu'à 2 min, rouge à 4 min. Animation CSS pure, relancée à chaque actualisation : aucun
      calcul pendant l'attente. */
   header .refresh-controls { position: relative; }
-  .freshness { position: absolute; left: 0.8rem; right: 0.8rem; bottom: 3px; height: 4px; display: flex; gap: 3px; pointer-events: none; }
+  .freshness { position: absolute; left: 0.6rem; right: 0.6rem; bottom: 2px; height: 3px; display: flex; gap: 3px; pointer-events: none; }
   .freshness[hidden], header label.auto[hidden] { display: none; }
   .freshness i {
     flex: 1; border-radius: 999px; background: var(--green-dot);
@@ -166,15 +166,15 @@
   @keyframes freshness-off { to { opacity: 0.15; } }
   .lang-switch, .view-switch { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 0.5rem; overflow: hidden; }
   .lang-switch button, .view-switch button {
-    border: 0; border-radius: 0; padding: 0.35em 0.65em; font-size: 0.85rem; font-weight: 600;
+    border: 0; border-radius: 0; padding: 0.25em 0.55em; font-size: 0.72rem; font-weight: 600;
     color: var(--muted); background: var(--surface);
   }
   .lang-switch button:disabled { opacity: 0.4; cursor: default; }
-  .text-size output { align-self: center; min-width: 3.4em; text-align: center; font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .text-size output { align-self: center; min-width: 3.4em; text-align: center; font-size: 0.68rem; color: var(--muted); font-variant-numeric: tabular-nums; }
   .lang-switch button[aria-pressed="true"], .view-switch button[aria-pressed="true"] { color: var(--accent-fg); background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
   button {
     font: inherit; color: var(--text); background: var(--surface);
-    border: 1px solid var(--border-strong); border-radius: 0.5rem; padding: 0.35em 0.9em; cursor: pointer;
+    border: 1px solid var(--border-strong); border-radius: 0.5rem; padding: 0.25em 0.75em; cursor: pointer;
   }
   button.primary {
     color: var(--accent-fg); border-color: transparent; font-weight: 600;
@@ -185,13 +185,13 @@
 
   .filters {
     display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;
-    margin: 1rem 1.5rem 0; padding: 0.7rem;
+    margin: 0.6rem 1.2rem 0; padding: 0.45rem;
     background: var(--surface); border: 1px solid var(--border); border-radius: 0.8rem;
     box-shadow: var(--shadow);
   }
   .filters input[type=search], .filters select {
-    font: inherit; font-size: 0.95rem; color: var(--text); background: var(--surface-2);
-    border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.4em 0.65em;
+    font: inherit; font-size: 0.85rem; color: var(--text); background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.3em 0.55em;
     transition: border-color .15s, box-shadow .15s;
   }
   .filters input[type=search]:hover, .filters select:hover { border-color: var(--border-strong); }
@@ -204,8 +204,8 @@
       url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239aa0ad' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E"); }
   .filters label.check[hidden] { display: none; }
   .filters label.check {
-    display: inline-flex; gap: 0.45em; align-items: center; color: var(--muted); font-size: 0.95rem;
-    padding: 0.35em 0.7em; border-radius: 0.5rem; cursor: pointer;
+    display: inline-flex; gap: 0.45em; align-items: center; color: var(--muted); font-size: 0.85rem;
+    padding: 0.25em 0.6em; border-radius: 0.5rem; cursor: pointer;
   }
   .filters label.check:hover { background: var(--surface-2); }
   .filters input[type=checkbox] { accent-color: var(--accent); width: 1em; height: 1em; }
@@ -213,22 +213,22 @@
   .active-labels .label { cursor: pointer; }
   .active-labels .label::after { content: " ×"; }
 
-  .summary-bar { display: flex; flex-wrap: wrap; gap: 0.5rem 0.8rem; align-items: center; padding: 0.9rem 1.5rem 0.6rem; }
+  .summary-bar { display: flex; flex-wrap: wrap; gap: 0.5rem 0.8rem; align-items: center; padding: 0.5rem 1.2rem 0.4rem; }
   .summary { flex: 1; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
-  .summary .gitlab-list { margin-left: auto; font-size: 0.9rem; }
+  .summary .gitlab-list { margin-left: auto; font-size: 0.8rem; }
   .stat {
     display: inline-flex; align-items: baseline; gap: 0.4em;
-    font-size: 0.9rem; color: var(--muted);
-    background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 0.2em 0.8em;
+    font-size: 0.8rem; color: var(--muted);
+    background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 0.15em 0.7em;
   }
-  .stat b { color: var(--text); font-size: 1rem; font-variant-numeric: tabular-nums; }
+  .stat b { color: var(--text); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
   .stat.alert b { color: var(--orange-fg); }
   .stat.loading { border-style: dashed; }
 
   /* Pas d'overflow ici : il ferait du conteneur l'ancêtre de défilement des en-têtes collants, qui
      défileraient alors avec la page. Un tableau plus large que la fenêtre fait défiler la page. */
-  .table-wrap { padding: 0 1.5rem 2rem; }
-  .merged-more { margin: -1rem 1.5rem 2rem; text-align: center; font-size: 0.9rem; }
+  .table-wrap { padding: 0 1.2rem 1.2rem; }
+  .merged-more { margin: -0.6rem 1.2rem 1.2rem; text-align: center; font-size: 0.9rem; }
   .merged-more[hidden] { display: none; }
   table.mrs {
     width: 100%; border-collapse: separate; border-spacing: 0;
@@ -418,20 +418,20 @@
   @media (prefers-reduced-motion: reduce) { .pill.loading { animation: none; } }
 
   .error-banner {
-    margin: 1rem 1.5rem 0; padding: 0.7rem 1rem; border-radius: 0.6rem;
+    margin: 0.6rem 1.2rem 0; padding: 0.7rem 1rem; border-radius: 0.6rem;
     background: var(--red-bg); color: var(--red-fg); border: 1px solid color-mix(in srgb, var(--red-fg) 25%, transparent);
   }
   .empty { padding: 3rem 1.5rem; color: var(--muted); text-align: center; }
 
   /* Dernier pipeline de la branche suivie : stages reliés comme dans GitLab, jobs listés sous chacun. */
-  .branch-pipeline { padding: 0 1.5rem 2rem; }
+  .branch-pipeline { padding: 0 1.2rem 1.2rem; }
   .branch-pipeline[hidden] { display: none; }
-  .bp-title { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 1.2rem; margin: 0 0 0.6rem; }
-  .branch-pipeline h2 { font-size: 1.05rem; margin: 0; color: var(--muted); font-weight: 600; }
+  .bp-title { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 1.2rem; margin: 0 0 0.4rem; }
+  .branch-pipeline h2 { font-size: 0.95rem; margin: 0; color: var(--muted); font-weight: 600; }
   .branch-pipeline h2 code { color: var(--text); }
   .bp-card {
     background: var(--surface); border: 1px solid var(--border); border-radius: 0.8rem;
-    box-shadow: var(--shadow); padding: 0.9rem 1.1rem; overflow-x: auto;
+    box-shadow: var(--shadow); padding: 0.55rem 0.9rem; overflow-x: auto;
   }
   .bp-card + .bp-card { margin-top: 0.8rem; }
   .bp-label {
