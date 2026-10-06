@@ -130,13 +130,14 @@
   header .status { display: flex; align-items: center; gap: 0.8rem; }
   /* Hauteur réservée pour trois lignes (heure, date, progression ou échec) : sans elle, la ligne de
      progression apparue au rafraîchissement agrandissait l'en-tête et décalait toute la page. */
-  header .meta { color: var(--muted); font-size: 0.9rem; text-align: left; line-height: 1.35; min-height: calc(3 * 1.35em); }
+  header .meta { color: var(--muted); font-size: 0.9rem; text-align: left; line-height: 1.35; min-height: calc(3 * 1.35em); min-width: 34ch; font-variant-numeric: tabular-nums; }
   header .meta > span { display: block; white-space: nowrap; }
   header .meta .progress { color: var(--accent); }
   header .meta .failed { color: var(--orange-fg); font-weight: 600; }
   header .git-fetch-control { display: inline-flex; align-items: center; gap: 0.9rem; }
   header .git-fetch-control[hidden] { display: none; }
-  header .git-fetch-status { color: var(--muted); font-size: 0.85rem; line-height: 1.35; white-space: nowrap; }
+  /* Largeur réservée au plus long des états : le texte qui change ne décale pas les boutons voisins. */
+  header .git-fetch-status { color: var(--muted); font-size: 0.85rem; line-height: 1.35; white-space: nowrap; min-width: 26ch; font-variant-numeric: tabular-nums; }
   header .git-fetch-status.running { color: var(--accent); }
   header .git-fetch-status.failed { color: var(--red-fg); font-weight: 600; }
   header .refresh-controls {
@@ -144,9 +145,9 @@
     padding: 0.3rem 0.3rem 0.3rem 0.8rem; border: 1px solid var(--border); border-radius: 0.7rem; background: var(--surface-2);
   }
   header label.auto {
-    display: inline-flex; gap: 0.4em; align-items: center; color: var(--text); font-size: 0.9rem; cursor: pointer;
+    display: inline-flex; gap: 0.4em; align-items: center; color: var(--muted); font-size: 0.8rem; cursor: pointer;
   }
-  header label.auto input { accent-color: var(--accent); width: 1.15rem; height: 1.15rem; margin: 0; cursor: pointer; }
+  header label.auto input { accent-color: var(--accent); width: 0.95rem; height: 0.95rem; margin: 0; cursor: pointer; }
   /* Fraîcheur des données : 5 segments, un par minute, qui s'éteignent jusqu'à la prochaine actualisation
      auto ; vert jusqu'à 2 min, rouge à 4 min. Animation CSS pure, relancée à chaque actualisation : aucun
      calcul pendant l'attente. */
@@ -295,7 +296,7 @@
   .mr-cell .title .draft {
     font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;
     color: var(--grey-fg); background: var(--grey-bg); border: 1px dashed var(--border-strong);
-    border-radius: 4px; padding: 1px 6px; margin-right: 6px; vertical-align: 2px;
+    border-radius: 4px; padding: 1px 6px; vertical-align: 2px;
   }
   .mr-cell .sub { color: var(--muted); font-size: 0.85rem; margin-top: 0.2rem; }
   .mr-cell .sub .iid { font-weight: 600; color: var(--accent); }
@@ -308,9 +309,11 @@
   .mr-cell .sub .diffstat .del { color: var(--red-fg); font-weight: 600; }
   .mr-cell .labels { margin-top: 0.35rem; }
 
-  .author { display: inline-flex; align-items: center; gap: 0.5em; white-space: nowrap; }
-  /* Prénom et nom sur deux lignes, coupés au premier espace : la colonne n'a que la largeur du plus long, le plus court centré sur lui. */
-  .author .author-name { display: flex; flex-direction: column; align-items: center; text-align: center; line-height: 1.2; }
+  /* Bloc pleine largeur calé à gauche malgré le centrage des cellules : pastilles alignées d'une ligne à
+     l'autre, et noms alignés sur un même bord juste après elles. */
+  .author { display: flex; align-items: center; gap: 0.5em; white-space: nowrap; text-align: left; }
+  /* Prénom et nom sur deux lignes, coupés au premier espace : la colonne n'a que la largeur du plus long. */
+  .author .author-name { display: flex; flex-direction: column; font-size: 0.85rem; line-height: 1.2; }
   .avatar {
     width: 1.8em; height: 1.8em; border-radius: 50%; flex: none;
     display: grid; place-items: center; font-size: 0.78rem; font-weight: 700; color: var(--avatar-fg);
@@ -2866,7 +2869,7 @@ function mrCell(mr) {
     .map(l => `<button type="button" class="label" data-add-label="${escapeHtml(l)}" title="${escapeHtml(t("label.add"))}">${escapeHtml(l)}</button>`)
     .join("");
   const conflicts = mr.has_conflicts && mr.state !== "merged" ? " " + pill("red", t("conflicts"), t("conflicts.title"), mr.web_url) : "";
-  return `<div class="title">${mr.draft ? '<span class="draft">Draft</span>' : ""}<a href="${escapeHtml(mr.web_url)}" target="_blank" rel="noopener">${escapeHtml(mr.title.replace(/^Draft:\s*/i, ""))}</a>${conflicts}</div>
+  return `<div class="title"><a href="${escapeHtml(mr.web_url)}" target="_blank" rel="noopener">${escapeHtml(mr.title.replace(/^Draft:\s*/i, ""))}</a>${mr.draft ? ' <span class="draft">Draft</span>' : ""}${conflicts}</div>
     <div class="sub"><span class="iid">!${mr.iid}</span> · <code>${escapeHtml(mr.source_branch)}</code> → <code>${escapeHtml(mr.target_branch)}</code>${diffStat(mr)}</div>
     <div class="title-actions">${stalledPill(mr)}${changesRequestedPill(mr)}${approvalPill(mr)}${gitDiffButton(mr)}${aiFixButton(mr)}</div>
     ${labels ? `<div class="labels">${labels}</div>` : ""}`;
