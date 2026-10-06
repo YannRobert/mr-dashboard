@@ -8,13 +8,14 @@
 <script>
   // Thème du dashboard et taille du texte, posés avant le premier rendu.
   try {
-    const scale = Number(localStorage.getItem("mr-dashboard.diffTextScale"));
-    document.documentElement.style.setProperty("--text-scale", scale || 2);
+    const scale = Number(localStorage.getItem("mr-dashboard.textScale"));
+    if (scale) document.documentElement.style.setProperty("--text-scale", scale);
+    const ratio = Number(localStorage.getItem("mr-dashboard.diffTextRatio"));
+    if (ratio) document.documentElement.style.setProperty("--diff-ratio", ratio);
     const theme = localStorage.getItem("mr-dashboard.theme");
     document.documentElement.dataset.theme = theme === "light" || theme === "dark" ? theme
       : matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   } catch (ignored) {
-    document.documentElement.style.setProperty("--text-scale", 2);
     document.documentElement.dataset.theme = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   }
 </script>
@@ -48,10 +49,10 @@
     --accent-fg: #0f1020;
     --red-bg: #3d1a1a; --red-fg: #ffb4ab;
   }
-  /* Taille du texte de la page, réglée par A− / A+ sans toucher au zoom du navigateur, qui vaut pour tout le
-     site et agrandirait donc aussi le dashboard. À 100 %, celle du dashboard ; 200 % par défaut, le code se
-     lisant de plus près qu'un tableau. */
-  html { font-size: calc(100% * var(--text-scale, 1)); }
+  /* Taille du texte : celle du dashboard (même base, même réglage A− / A+), multipliée par celle de la page, réglée
+     par ses propres A− / A+ — 125 % par défaut, le code se lisant de plus près qu'un tableau. Sans le zoom du
+     navigateur, qui vaut pour tout le site et agrandirait aussi le dashboard. */
+  html { font-size: calc(clamp(13px, 0.9vw, 28px) * var(--text-scale, 1) * var(--diff-ratio, 1.25)); }
   body {
     margin: 0;
     background: var(--bg);
@@ -138,16 +139,17 @@
 <script src="vendor/diff2html/diff2html-ui-slim.min.js"></script>
 <script>
   const FORMAT_KEY = "mr-dashboard.diffFormat";
-  const TEXT_SCALE_KEY = "mr-dashboard.diffTextScale";
-  const TEXT_SCALES = [0.8, 0.9, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3];
-  const DEFAULT_TEXT_SCALE = 2;
+  const DASHBOARD_TEXT_SCALE_KEY = "mr-dashboard.textScale";
+  const TEXT_SCALE_KEY = "mr-dashboard.diffTextRatio";
+  const TEXT_SCALES = [0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3];
+  const DEFAULT_TEXT_SCALE = 1.25;
   const TEXTS = {
     fr: {
       title: p => `Diff de !${p.iid}`,
       branches: p => `<code>${p.branch}</code> comparée à <code>${p.target}</code>, depuis leur point de divergence`,
       sideBySide: "Côte à côte",
       lineByLine: "Ligne à ligne",
-      textSize: "Taille du texte du diff, sans toucher au zoom du navigateur ni donc au dashboard",
+      textSize: "Taille du texte du diff, par rapport à celle du dashboard ; sans toucher au zoom du navigateur ni donc au dashboard",
       smaller: "Texte plus petit",
       larger: "Texte plus grand",
       gitlab: "Ouvrir dans GitLab",
@@ -161,7 +163,7 @@
       branches: p => `<code>${p.branch}</code> compared with <code>${p.target}</code>, from where they diverge`,
       sideBySide: "Side by side",
       lineByLine: "Line by line",
-      textSize: "Diff text size, leaving the browser zoom, hence the dashboard, untouched",
+      textSize: "Diff text size, relative to the dashboard's; leaves the browser zoom, hence the dashboard, untouched",
       smaller: "Smaller text",
       larger: "Larger text",
       gitlab: "Open in GitLab",
@@ -212,7 +214,7 @@
   }
 
   function applyTextScale(scale) {
-    document.documentElement.style.setProperty("--text-scale", scale);
+    document.documentElement.style.setProperty("--diff-ratio", scale);
     document.getElementById("text-scale").textContent = `${Math.round(scale * 100)} %`;
     for (const button of document.querySelectorAll("[data-text-step]")) {
       const next = TEXT_SCALES.indexOf(scale) + Number(button.dataset.textStep);
@@ -356,6 +358,14 @@
   document.getElementById("text-size").addEventListener("click", e => {
     const button = e.target.closest("[data-text-step]");
     if (button) changeTextScale(Number(button.dataset.textStep));
+  });
+  // A− / A+ du dashboard, ou de la page dans un autre onglet : appliqués aussitôt.
+  addEventListener("storage", e => {
+    if (e.key === DASHBOARD_TEXT_SCALE_KEY) {
+      if (e.newValue) document.documentElement.style.setProperty("--text-scale", e.newValue);
+      else document.documentElement.style.removeProperty("--text-scale");
+    }
+    if (e.key === DASHBOARD_TEXT_SCALE_KEY || e.key === TEXT_SCALE_KEY) applyTextScale(readTextScale());
   });
   renderHeader();
   load();

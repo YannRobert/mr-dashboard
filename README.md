@@ -66,6 +66,9 @@ ensemble — puis `start.sh <nom>`.
   navigateur. Sur ses propres MR, la notification reste affichée et revient toutes les 15 minutes tant
   qu'un problème reste ouvert.
 - `?lang=en` pour forcer l'anglais.
+- Le texte grandit avec la largeur de la fenêtre : à 100 % de zoom, le tableau tient sur tout écran.
+  **A− / A+**, dans l'en-tête, l'ajustent de 70 à 150 % (retenu dans le navigateur, repris par la page
+  de diff) ; préférer ce réglage au zoom du navigateur, qui vaut pour tous les onglets du dashboard.
 - **Ouvertes | Mergées**, dans l'en-tête : la vue des MR mergées (`?view=merged`) relit l'histoire des
   MR fermées sur une période de merge (7, 30 — par défaut —, 90 jours ou toutes), pour comprendre
   après coup pourquoi certaines ont duré. Ni pipeline, ni qualité, ni retard : durée totale,
@@ -104,8 +107,9 @@ Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut
   GitLab), calculé sur le dépôt local : il reste disponible pendant une coupure de GitLab. Liste des
   fichiers dans un panneau latéral toujours visible (nom, puis répertoire ; le fichier lu y est
   surligné ; largeur réglable par son coin bas droit), côte à côte ou ligne à ligne (retenu dans le
-  navigateur), coloration syntaxique, thème du dashboard. Texte à 200 % de celui du dashboard par défaut,
-  ajustable de 80 à 300 % par **A− / A+** (retenu dans le navigateur) : le zoom du navigateur vaut pour tout `localhost:8765` et
+  navigateur), coloration syntaxique, thème du dashboard. Texte à la taille de celui du dashboard, réglage
+  A− / A+ de celui-ci compris, plus 25 % par défaut, ajustable de 80 à 300 % par ses propres **A− / A+**
+  (retenu dans le navigateur) : le zoom du navigateur vaut pour tout `localhost:8765` et
   agrandirait aussi le dashboard. Lecture seule : les commentaires se font dans GitLab, à un clic. Au-delà de 5 Mo
   de diff, la page renvoie vers meld. L'affichage vient de
   [diff2html](https://github.com/rtfpessoa/diff2html) (MIT), copié dans `vendor/diff2html/` pour

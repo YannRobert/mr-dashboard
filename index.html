@@ -7,8 +7,11 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%234f46e5'/%3E%3Cstop offset='1' stop-color='%237c3aed'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='15' fill='url(%23g)'/%3E%3Ctext x='32' y='43' text-anchor='middle' font-family='system-ui,Segoe UI,Arial,sans-serif' font-size='30' font-weight='800' fill='%23fff'%3EMR%3C/text%3E%3C/svg%3E">
 <title>MisteR Dashboard : le dashboard des Merge Requests</title>
 <script>
-  // Thème posé avant le premier rendu, pour ne pas afficher la page en clair puis la basculer en sombre.
+  // Thème et taille du texte posés avant le premier rendu, pour ne pas afficher la page en clair puis la basculer
+  // en sombre, ni à une taille puis à une autre.
   try {
+    const textScale = Number(localStorage.getItem("mr-dashboard.textScale"));
+    if (textScale) document.documentElement.style.setProperty("--text-scale", textScale);
     const theme = localStorage.getItem("mr-dashboard.theme");
     document.documentElement.dataset.theme = theme === "light" || theme === "dark" ? theme
       : matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
@@ -69,9 +72,10 @@
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 28px -10px rgba(0, 0, 0, .6);
   }
   * { box-sizing: border-box; }
-  /* Toute la page est en rem : la taille de base suit la largeur d'écran (16 px en 1366, ~20 px en
-     1920, ~25 px en 2560, 30 px au-delà), pour rester lisible sur un grand écran sans zoom manuel. */
-  html { font-size: clamp(16px, 0.75vw + 6px, 30px); }
+  /* Toute la page est en rem, sur une base proportionnelle à la largeur de la fenêtre : ce qui tient à 100 %
+     sur un écran tient sur tous, et reste lisible sur un grand sans zoom (13 px jusqu'en 1440, ~17 px en 1920,
+     ~23 px en 2560). A− / A+ l'ajustent, sans le zoom du navigateur qui vaut pour tout le site. */
+  html { font-size: calc(clamp(13px, 0.9vw, 28px) * var(--text-scale, 1)); }
   body {
     margin: 0;
     background: var(--bg);
@@ -157,6 +161,8 @@
     border: 0; border-radius: 0; padding: 0.35em 0.65em; font-size: 0.85rem; font-weight: 600;
     color: var(--muted); background: var(--surface);
   }
+  .lang-switch button:disabled { opacity: 0.4; cursor: default; }
+  .text-size output { align-self: center; min-width: 3.4em; text-align: center; font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
   .lang-switch button[aria-pressed="true"], .view-switch button[aria-pressed="true"] { color: var(--accent-fg); background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
   button {
     font: inherit; color: var(--text); background: var(--surface);
@@ -513,6 +519,11 @@
     <button type="button" data-theme-choice="light" aria-label="Clair" data-i18n-aria-label="theme.light" data-i18n-title="theme.light"><span aria-hidden="true">☀</span></button>
     <button type="button" data-theme-choice="dark" aria-label="Sombre" data-i18n-aria-label="theme.dark" data-i18n-title="theme.dark"><span aria-hidden="true">☾</span></button>
   </div>
+  <div class="lang-switch text-size" role="group" aria-label="Taille du texte" data-i18n-aria-label="textSize.group" data-i18n-title="textSize.title">
+    <button type="button" data-text-step="-1" aria-label="Texte plus petit" data-i18n-aria-label="textSize.smaller">A−</button>
+    <output id="text-scale"></output>
+    <button type="button" data-text-step="1" aria-label="Texte plus grand" data-i18n-aria-label="textSize.larger">A+</button>
+  </div>
   <span class="divider" aria-hidden="true"></span>
   <button type="button" id="clear-storage" class="icon-button" aria-label="Effacer les données locales" data-i18n-aria-label="clearStorage" data-i18n-title="clearStorage.title"><span aria-hidden="true">🧹</span></button>
 </header>
@@ -627,6 +638,8 @@ const NOTIFY_KEY = "mr-dashboard.notify";
 const NOTIFIED_KEY = "mr-dashboard.notified";
 const AVATAR_COLORS_KEY = "mr-dashboard.avatar-colors";
 const THEME_KEY = "mr-dashboard.theme";
+const TEXT_SCALE_KEY = "mr-dashboard.textScale";
+const TEXT_SCALES = [0.7, 0.8, 0.9, 1, 1.1, 1.25, 1.5];
 // Préfixe commun à toutes les clés ci-dessus : le bouton balai efface tout ce qui le porte, et seulement ça.
 const STORAGE_PREFIX = "mr-dashboard.";
 const NOTIFIER_LOCK = "mr-dashboard.notifier";
@@ -787,6 +800,10 @@ const I18N = {
     "theme.auto.title": "Suivre le thème clair ou sombre du système",
     "theme.light": "Thème clair",
     "theme.dark": "Thème sombre",
+    "textSize.group": "Taille du texte",
+    "textSize.title": "Taille du texte, reprise par la page de diff ; sans toucher au zoom du navigateur",
+    "textSize.smaller": "Texte plus petit",
+    "textSize.larger": "Texte plus grand",
     "clearStorage": "Effacer les données locales",
     "clearStorage.title": "Efface tout ce que le dashboard a enregistré dans ce navigateur (dernières données affichées, historique des builds, notifications déjà envoyées, préférences), puis recharge la page",
     "clearStorage.confirm": "Effacer toutes les données enregistrées par le dashboard dans ce navigateur ? Les notifications seront désactivées et la page rechargée.",
@@ -1029,6 +1046,10 @@ const I18N = {
     "theme.auto.title": "Follow the system light or dark theme",
     "theme.light": "Light theme",
     "theme.dark": "Dark theme",
+    "textSize.group": "Text size",
+    "textSize.title": "Text size, also used by the diff page; leaves the browser zoom untouched",
+    "textSize.smaller": "Smaller text",
+    "textSize.larger": "Larger text",
     "clearStorage": "Clear local data",
     "clearStorage.title": "Clears everything the dashboard saved in this browser (last displayed data, build history, notifications already sent, preferences), then reloads the page",
     "clearStorage.confirm": "Clear all data saved by the dashboard in this browser? Notifications will be turned off and the page reloaded.",
@@ -1793,6 +1814,35 @@ function saveTheme(theme) {
 function applyTheme() {
   document.documentElement.dataset.theme = state.theme === "auto" ? (systemDark.matches ? "dark" : "light") : state.theme;
   for (const el of document.querySelectorAll("[data-theme-choice]")) el.setAttribute("aria-pressed", String(el.dataset.themeChoice === state.theme));
+}
+
+function readTextScale() {
+  try {
+    const scale = Number(localStorage.getItem(TEXT_SCALE_KEY));
+    return TEXT_SCALES.includes(scale) ? scale : 1;
+  } catch (ignored) {
+    return 1;
+  }
+}
+
+function applyTextScale() {
+  const scale = readTextScale();
+  document.documentElement.style.setProperty("--text-scale", scale);
+  $("text-scale").textContent = `${Math.round(scale * 100)} %`;
+  for (const button of document.querySelectorAll("[data-text-step]")) {
+    const next = TEXT_SCALES.indexOf(scale) + Number(button.dataset.textStep);
+    button.disabled = next < 0 || next >= TEXT_SCALES.length;
+  }
+}
+
+function changeTextScale(step) {
+  const scale = TEXT_SCALES[TEXT_SCALES.indexOf(readTextScale()) + step];
+  if (scale === undefined) return;
+  try {
+    if (scale === 1) localStorage.removeItem(TEXT_SCALE_KEY);
+    else localStorage.setItem(TEXT_SCALE_KEY, String(scale));
+  } catch (ignored) { /* stockage indisponible : la taille reste celle par défaut */ }
+  applyTextScale();
 }
 
 // Prochaine actualisation auto = début de la dernière + AUTO_REFRESH_MS : un « Rafraîchir » manuel relance le cycle.
@@ -3852,6 +3902,11 @@ document.addEventListener("click", e => {
     setLang(lang.dataset.lang);
     return;
   }
+  const textStep = e.target.closest("[data-text-step]");
+  if (textStep) {
+    changeTextScale(Number(textStep.dataset.textStep));
+    return;
+  }
   const theme = e.target.closest("[data-theme-choice]");
   if (theme) {
     state.theme = theme.dataset.themeChoice;
@@ -3942,6 +3997,7 @@ window.addEventListener("storage", e => {
     state.theme = readTheme();
     applyTheme();
   }
+  if (e.key === TEXT_SCALE_KEY) applyTextScale();
 });
 systemDark.addEventListener("change", applyTheme);
 setInterval(renderStatus, 30 * 1000);
@@ -3954,6 +4010,7 @@ $("ai-close").addEventListener("click", () => $("ai-dialog").close());
 
 applyStaticTexts();
 applyTheme();
+applyTextScale();
 $("autoRefresh").checked = state.autoRefresh;
 scheduleAutoRefresh();
 if ("Notification" in window) {
