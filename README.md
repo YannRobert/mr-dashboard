@@ -84,9 +84,30 @@ c'est le navigateur ou Windows qui bloque, pas le dashboard :
    *Ne pas déranger* (ou l'*Assistant de concentration*) désactivé ;
 3. décocher puis recocher la case pour renvoyer la notification de test.
 
+## Dépôt local : fetch et visionneuse
+
+Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut), toujours dans son
+**worktree principal**, d'où qu'il soit lancé.
+
+- **Fetch** : `git fetch --prune origin` toutes les 5 minutes (`GIT_FETCH_INTERVAL`, en secondes, `0`
+  pour aucun), même sans page ouverte, et dès que la page voit une MR recevoir des commits, apparaître
+  ou disparaître, ou la branche du pipeline avancer. La case **Fetch auto** de l'en-tête suspend ces
+  fetchs automatiques, pour le serveur donc pour tous les onglets, jusqu'à ce qu'on la recoche ou que
+  le serveur redémarre. Le bouton **git fetch** lance un fetch tout de suite ; à côté, l'heure du
+  dernier fetch, ou son échec en rouge (le survol donne le message de git et l'heure du dernier fetch
+  réussi). Les `origin/<branche>` restent ainsi à jour pendant une coupure
+  de GitLab : on peut relire et committer, puis pousser à son retour.
+- **Visionneuse** : un bouton par MR ouverte lance `GIT_VIEWER` sur sa branche — par défaut
+  `gitk --boundary origin/{target}..origin/{branch}`, les commits de la MR et le commit de la cible
+  d'où elle part. `{branch}` et `{target}` sont remplacés par les branches source et cible, sans
+  passer par un shell. Une branche absente en local est d'abord fetchée. Sous WSL, la fenêtre
+  s'affiche par WSLg. Visionneuse introuvable sur le poste : pas de bouton.
+- Un `git fetch` ou `git pull` lancé à la main pendant un fetch automatique peut répondre
+  « cannot lock ref » : le relancer.
+
 ## Après une modification
 
 - `index.html` est relu à chaque requête : recharger la page suffit.
-- `server.py` ou `orca_launcher.py` : `stop.sh` puis `start.sh`.
+- `server.py`, `orca_launcher.py` ou `git_actions.py` : `stop.sh` puis `start.sh`.
 - Le serveur sert l'`index.html` du dépôt (ou du worktree) d'où il a été lancé : pour tester la
   version d'un worktree, relancer le serveur depuis ce worktree.

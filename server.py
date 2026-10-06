@@ -12,14 +12,19 @@ Le relais est nécessaire pour Sonar, qui ne renvoie aucun en-tête CORS : un na
 l'interroger directement. Il sert aussi à garder les deux tokens hors du navigateur. Seul GET est
 relayé, et le serveur n'écoute que sur 127.0.0.1.
 
-Seule écriture : POST /orca/fix ouvre dans Orca une session Claude Code avec le prompt de correction
-d'une MR (cf. orca_launcher.py), quand le serveur tourne dans WSL et qu'Orca est installé.
+Actions locales, en POST :
+    /orca/fix   ouvre dans Orca une session Claude Code avec le prompt de correction d'une MR
+                (cf. orca_launcher.py), quand le serveur tourne dans WSL et qu'Orca est installé
+    /git/fetch  git fetch du clone local, qui tourne aussi tout seul toutes les --git-fetch-interval
+                secondes ; GET /git/status en donne le dernier résultat (cf. git_actions.py)
+    /git/auto   active ou suspend le fetch automatique : {"enabled": true|false}
+    /git/view   ouvre la branche d'une MR dans la visionneuse --git-viewer
 
 Usage — d'ordinaire via scripts/mr-dashboard/start.sh, qui lit ces options dans un profil
 (scripts/mr-dashboard/profiles/<nom>.conf) :
     python3 scripts/mr-dashboard/server.py --gitlab-project <groupe/projet> --pipeline-branch <branche> \
         --sonar-project <clé> --sonar-job <job> --pit-job <job> --pit-marker <marqueur> \
-        --repo-dir <clone local du projet> --port 8766
+        --repo-dir <clone local du projet> --git-fetch-interval 300 --git-viewer 'gitk origin/{target}..origin/{branch}' --port 8766
     python3 scripts/mr-dashboard/server.py --gitlab-project <groupe/projet> --pipeline-branch main \
         --no-sonar --no-pit   # projet sans analyse Sonar ni mutation testing
 
@@ -45,9 +50,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import quote, unquote, urlsplit
 
+from git_actions import GitActions, GitError
 from orca_launcher import OrcaError, OrcaLauncher
 
 DEFAULT_PORT = 8765
+DEFAULT_GIT_FETCH_INTERVAL_S = 300
+# Les commits de la MR, et le commit de la cible d'où elle part pour situer la divergence.
+DEFAULT_GIT_VIEWER = "gitk --boundary origin/{target}..origin/{branch}"
 DEFAULT_SONAR_HOST = "https://sonarqube.example.com"
 DEFAULT_GITLAB_HOST = "https://gitlab.example.com"
 DEFAULT_GITLAB_TOKEN_HOST = "gitlab.example.com"
@@ -202,7 +211,8 @@ class UpstreamPool:
 
 def make_handler(
         settings,
-        orca
+        orca,
+        git
 ):
     upstream = UpstreamPool()
 
@@ -218,6 +228,8 @@ def make_handler(
                 self.send_file(STATIC_DIR / "index.html", "text/html; charset=utf-8")
             elif self.path == "/config":
                 self.send_json(200, settings["public"])
+            elif self.path == "/git/status":
+                self.send_json(200, git.status())
             elif self.path.startswith("/gitlab/"):
                 self.relay(
                     settings["gitlab_host"] + "/api/v4/" + self.path[len("/gitlab/"):],
@@ -242,7 +254,9 @@ def make_handler(
         def do_POST(self):
             if not self.host_allowed():
                 return
-            if self.path != "/orca/fix":
+            actions = {"/orca/fix": self.orca_fix, "/git/fetch": self.git_fetch, "/git/auto": self.git_auto, "/git/view": self.git_view}
+            action = actions.get(self.path)
+            if not action:
                 self.close_connection = True
                 self.send_json(404, {"message": "introuvable"})
                 return
@@ -257,7 +271,14 @@ def make_handler(
                 self.send_json(413, {"message": "requête trop volumineuse"})
                 return
             try:
-                payload = json.loads(self.rfile.read(length))
+                payload = json.loads(self.rfile.read(length) or b"{}")
+            except ValueError:
+                self.send_json(400, {"message": "requête invalide"})
+                return
+            action(payload)
+
+        def orca_fix(self, payload):
+            try:
                 iid = int(payload["iid"])
                 prompt = str(payload["prompt"])
             except (ValueError, KeyError, TypeError):
@@ -272,6 +293,35 @@ def make_handler(
                     prompt
                 )
             except OrcaError as error:
+                self.send_json(502, {"message": str(error)})
+                return
+            self.send_json(200, result)
+
+        def git_fetch(self, payload):
+            git.fetch()
+            self.send_json(200, git.status())
+
+        def git_auto(self, payload):
+            enabled = payload.get("enabled") if isinstance(payload, dict) else None
+            if not isinstance(enabled, bool):
+                self.send_json(400, {"message": "requête invalide"})
+                return
+            git.set_auto(enabled)
+            self.send_json(200, git.status())
+
+        def git_view(self, payload):
+            try:
+                branch = str(payload["branch"])
+                target = str(payload["target"])
+            except (KeyError, TypeError):
+                self.send_json(400, {"message": "requête invalide"})
+                return
+            try:
+                result = git.view(
+                    branch,
+                    target
+                )
+            except GitError as error:
                 self.send_json(502, {"message": str(error)})
                 return
             self.send_json(200, result)
@@ -425,7 +475,18 @@ def main():
         "--repo-dir",
         type=Path,
         default=STATIC_DIR,
-        help="clone local du projet suivi, où Orca ouvre la session de correction (défaut : ce dépôt)"
+        help="clone local du projet suivi, où Orca ouvre la session de correction et où tournent les actions git (défaut : ce dépôt)"
+    )
+    parser.add_argument(
+        "--git-fetch-interval",
+        type=int,
+        default=DEFAULT_GIT_FETCH_INTERVAL_S,
+        help=f"secondes entre deux git fetch automatiques du clone local, 0 pour aucun (défaut : {DEFAULT_GIT_FETCH_INTERVAL_S})"
+    )
+    parser.add_argument(
+        "--git-viewer",
+        default=DEFAULT_GIT_VIEWER,
+        help=f"commande qui ouvre la branche d'une MR, où {{branch}} et {{target}} sont remplacés (défaut : {DEFAULT_GIT_VIEWER})"
     )
     parser.add_argument("--quiet", action="store_true", help="ne pas journaliser chaque requête")
     args = parser.parse_args()
@@ -444,6 +505,11 @@ def main():
 
     sonar_token = os.environ.get("SONAR_TOKEN")
     orca = OrcaLauncher.detect(args.repo_dir)
+    git = GitActions.detect(
+        args.repo_dir,
+        args.git_viewer,
+        args.git_fetch_interval
+    )
     if not sonar_token and not args.no_sonar:
         print("⚠️  SONAR_TOKEN absent : les pastilles Sonar resteront grises.")
     settings = {
@@ -467,15 +533,19 @@ def main():
             "targetBranch": args.target_branch or args.pipeline_branch,
             "signalsCommand": signals_command(args),
             "orcaEnabled": orca is not None,
+            "gitViewer": git.viewer_name,
+            "gitFetchIntervalS": args.git_fetch_interval,
         },
     }
     server = ThreadingHTTPServer(
         ("127.0.0.1", args.port),
         make_handler(
             settings,
-            orca
+            orca,
+            git
         )
     )
+    git.start_periodic_fetch()
     print(f"MisteR Dashboard, le dashboard des Merge Requests : http://localhost:{args.port}")
     try:
         server.serve_forever()

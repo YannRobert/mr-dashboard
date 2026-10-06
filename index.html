@@ -123,6 +123,11 @@
   header .meta > span { display: block; white-space: nowrap; }
   header .meta .progress { color: var(--accent); }
   header .meta .failed { color: var(--orange-fg); font-weight: 600; }
+  header .git-fetch-control { display: inline-flex; align-items: center; gap: 0.9rem; }
+  header .git-fetch-control[hidden] { display: none; }
+  header .git-fetch-status { color: var(--muted); font-size: 0.85rem; line-height: 1.35; white-space: nowrap; }
+  header .git-fetch-status.running { color: var(--accent); }
+  header .git-fetch-status.failed { color: var(--red-fg); font-weight: 600; }
   header .refresh-controls {
     display: inline-flex; align-items: center; gap: 0.9rem;
     padding: 0.3rem 0.3rem 0.3rem 0.8rem; border: 1px solid var(--border); border-radius: 0.7rem; background: var(--surface-2);
@@ -318,6 +323,9 @@
     box-shadow: 0 2px 8px -2px color-mix(in srgb, var(--accent) 55%, transparent);
   }
   .ai-fix:hover { filter: brightness(1.08); }
+  .git-view { flex: none; white-space: nowrap; font-size: 0.85rem; font-weight: 600; padding: 0.3em 0.7em; color: var(--muted); }
+  .git-view:hover { color: var(--text); border-color: var(--faint); }
+  .git-view:disabled { cursor: progress; opacity: 0.6; }
   dialog.ai-prompt {
     width: min(1200px, calc(100vw - 32px)); padding: 1.2rem; border: 1px solid var(--border);
     border-radius: 0.8rem; background: var(--surface); color: var(--text); box-shadow: var(--shadow);
@@ -485,6 +493,14 @@
     <div class="freshness" id="freshness" hidden aria-hidden="true"></div>
   </div>
   <span class="divider" aria-hidden="true"></span>
+  <div class="git-fetch-control" id="git-fetch-control" hidden>
+    <span class="git-fetch-status" id="git-fetch-status" role="status" aria-live="polite"></span>
+    <div class="refresh-controls" role="group" aria-label="Fetch du dépôt local" data-i18n-aria-label="gitFetch.group">
+      <label class="auto" data-i18n-title="gitFetch.autoTitle"><input type="checkbox" id="git-fetch-auto" checked autocomplete="off"> <span data-i18n="gitFetch.auto">Fetch auto</span></label>
+      <button type="button" id="git-fetch" class="primary" data-i18n-title="gitFetch.title">git fetch</button>
+    </div>
+  </div>
+  <span class="divider" id="git-fetch-divider" aria-hidden="true" hidden></span>
   <label class="auto" id="notify-control" data-i18n-title="notify.title"><input type="checkbox" id="notify" autocomplete="off"> <span data-i18n="notify">Notifications</span></label>
   <span class="divider" aria-hidden="true"></span>
   <div class="lang-switch" role="group" aria-label="Langue" data-i18n-aria-label="lang.group">
@@ -723,6 +739,8 @@ const state = {
   buildHistoryLoading: false,
   branchPipelineTimer: null,
   configLoaded: false,
+  // Dernier état du fetch local rapporté par le serveur, et MR + cible vues au dernier fetch déclenché.
+  gitFetch: { status: null, running: false, seen: null },
   mrs: [],
   // undefined tant que rien n'est chargé, null si la branche n'a aucun pipeline.
   branchPipeline: undefined,
@@ -930,6 +948,18 @@ const I18N = {
     "diff.title": p => `${p.files} fichier${plural(p.files)} modifié${plural(p.files)}, ${p.additions} ligne${plural(p.additions)} ajoutée${plural(p.additions)}, ${p.deletions} supprimée${plural(p.deletions)}`,
     "aiFix": "Correct with IA",
     "aiFix.title": "Afficher un prompt Claude Code pour corriger cette MR",
+    "gitFetch.title": "Lancer tout de suite un git fetch du dépôt local",
+    "gitFetch.group": "Fetch du dépôt local",
+    "gitFetch.auto": "Fetch auto",
+    "gitFetch.autoTitle": () => `Fetch le dépôt local à chaque changement repéré sur GitLab${gitFetchIntervalText(" et toutes les ", " minutes")}, même page fermée`,
+    "gitFetch.running": "fetch en cours…",
+    "gitFetch.never": "jamais fetché",
+    "gitFetch.ok": p => `fetché à ${p.time}`,
+    "gitFetch.failed": p => `fetch en échec à ${p.time}`,
+    "gitFetch.failedTitle": p => `${p.message}\nDernier fetch réussi : ${p.success}`,
+    "gitFetch.noSuccess": "aucun",
+    "gitView.title": p => `Ouvrir ${p.viewer} sur la branche ${p.branch}`,
+    "gitView.failed": p => `Ouverture de ${p.viewer} impossible : ${p.message}`,
     "threads.title": p => `${p.n} thread${plural(p.n)} non résolu${plural(p.n)} sur ${p.total}`,
     "approved": p => (p.n > 1 ? `Approuvée ×${p.n}` : "Approuvée"),
     "approved.title": p => `Approuvée par ${p.names}`,
@@ -1159,6 +1189,18 @@ const I18N = {
     "diff.title": p => `${p.files} file${pluralEn(p.files)} changed, ${p.additions} line${pluralEn(p.additions)} added, ${p.deletions} deleted`,
     "aiFix": "Fix with AI",
     "aiFix.title": "Show a Claude Code prompt to fix this MR",
+    "gitFetch.title": "Run a git fetch of the local repository now",
+    "gitFetch.group": "Local repository fetch",
+    "gitFetch.auto": "Auto-fetch",
+    "gitFetch.autoTitle": () => `Fetches the local repository on every change seen on GitLab${gitFetchIntervalText(" and every ", " minutes")}, even with the page closed`,
+    "gitFetch.running": "fetching…",
+    "gitFetch.never": "never fetched",
+    "gitFetch.ok": p => `fetched at ${p.time}`,
+    "gitFetch.failed": p => `fetch failed at ${p.time}`,
+    "gitFetch.failedTitle": p => `${p.message}\nLast successful fetch: ${p.success}`,
+    "gitFetch.noSuccess": "none",
+    "gitView.title": p => `Open ${p.viewer} on branch ${p.branch}`,
+    "gitView.failed": p => `Could not open ${p.viewer}: ${p.message}`,
     "threads.title": p => `${p.n} unresolved thread${pluralEn(p.n)} out of ${p.total}`,
     "approved": p => (p.n > 1 ? `Approved ×${p.n}` : "Approved"),
     "approved.title": p => `Approved by ${p.names}`,
@@ -1279,6 +1321,7 @@ function setLang(lang) {
   writeFiltersToUrl();
   applyStaticTexts();
   renderStatus();
+  renderGitFetch();
   populateFilterOptions();
   render();
 }
@@ -1489,6 +1532,8 @@ async function ensureConfig() {
   if (!state.configLoaded) {
     state.config = (await api("/config")).body;
     state.configLoaded = true;
+    renderGitFetch();
+    loadGitFetchStatus();
   }
   applyDefaultTarget();
   $("project").textContent = state.config.gitlabProject;
@@ -1632,6 +1677,7 @@ function applySnapshot(snapshot) {
   renderStatus();
   notifyProblems();
   scheduleBranchPipelinePoll();
+  fetchIfRepoChanged();
 }
 
 // Sauvegarde best effort : stockage plein ou bloqué ⇒ on retire l'ancienne plutôt que de rejouer plus tard
@@ -2759,7 +2805,7 @@ function mrCell(mr) {
     .map(l => `<button type="button" class="label" data-add-label="${escapeHtml(l)}" title="${escapeHtml(t("label.add"))}">${escapeHtml(l)}</button>`)
     .join("");
   const conflicts = mr.has_conflicts && mr.state !== "merged" ? " " + pill("red", t("conflicts"), t("conflicts.title"), mr.web_url) : "";
-  return `<div class="title-row"><div class="title">${mr.draft ? '<span class="draft">Draft</span>' : ""}<a href="${escapeHtml(mr.web_url)}" target="_blank" rel="noopener">${escapeHtml(mr.title.replace(/^Draft:\s*/i, ""))}</a>${conflicts}</div><div class="title-actions">${stalledPill(mr)}${changesRequestedPill(mr)}${approvalPill(mr)}${aiFixButton(mr)}</div></div>
+  return `<div class="title-row"><div class="title">${mr.draft ? '<span class="draft">Draft</span>' : ""}<a href="${escapeHtml(mr.web_url)}" target="_blank" rel="noopener">${escapeHtml(mr.title.replace(/^Draft:\s*/i, ""))}</a>${conflicts}</div><div class="title-actions">${stalledPill(mr)}${changesRequestedPill(mr)}${approvalPill(mr)}${gitViewButton(mr)}${aiFixButton(mr)}</div></div>
     <div class="sub"><span class="iid">!${mr.iid}</span> · <code>${escapeHtml(mr.source_branch)}</code> → <code>${escapeHtml(mr.target_branch)}</code>${diffStat(mr)}</div>
     ${labels ? `<div class="labels">${labels}</div>` : ""}`;
 }
@@ -2779,6 +2825,116 @@ function diffStat(mr) {
 // Le bouton n'apparaît que s'il y a quelque chose à corriger : une branche en retard ou en conflit, un
 // indicateur qualité imparfait ou un thread non résolu. Le prompt ne cite que ce qui l'est, avec les
 // valeurs affichées dans le tableau.
+function gitViewButton(mr) {
+  const viewer = state.config?.gitViewer;
+  if (!viewer || mr.state === "merged") return "";
+  return `<button type="button" class="git-view" data-git-view="${mr.iid}" title="${escapeHtml(t("gitView.title", { viewer, branch: mr.source_branch }))}">${escapeHtml(viewer)}</button>`;
+}
+
+async function openGitViewer(button, mr) {
+  button.disabled = true;
+  try {
+    await api(
+      "/git/view",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-MR-Dashboard": "1" },
+        body: JSON.stringify({ branch: mr.source_branch, target: mr.target_branch }),
+      }
+    );
+  } catch (error) {
+    alert(t("gitView.failed", { viewer: state.config.gitViewer, message: error.message }));
+  } finally {
+    button.disabled = false;
+  }
+}
+
+// ---------- Fetch du dépôt local ----------
+
+// Fetch à la demande, ou dès qu'une MR a reçu des commits, est apparue ou a disparu, ou que la branche
+// du pipeline a avancé : la copie locale suit GitLab au plus près, et reste utilisable s'il tombe.
+const gitFetchEnabled = () => state.configLoaded && state.config?.gitFetchIntervalS !== undefined;
+
+const gitFetchIntervalText = (before, after) => {
+  const seconds = state.config?.gitFetchIntervalS;
+  return seconds > 0 ? `${before}${Math.round(seconds / 60)}${after}` : "";
+};
+
+// Suspendu, le fetch automatique l'est pour le serveur, donc pour tous les onglets : la page lit son
+// état au lieu de le garder dans le navigateur.
+function fetchIfRepoChanged() {
+  if (!gitFetchEnabled() || state.gitFetch.status?.auto === false) return;
+  const seen = [...state.mrs.map(mr => `${mr.iid}:${mr.sha}`).sort(), state.branchPipeline?.sha ?? ""].join(" ");
+  if (seen === state.gitFetch.seen) return;
+  state.gitFetch.seen = seen;
+  gitFetch();
+}
+
+async function gitFetch() {
+  state.gitFetch.running = true;
+  renderGitFetch();
+  try {
+    state.gitFetch.status = (await api("/git/fetch", { method: "POST", headers: { "X-MR-Dashboard": "1" } })).body;
+  } catch (error) {
+    state.gitFetch.status = { last: { at: new Date().toISOString(), ok: false, message: error.message }, lastSuccess: state.gitFetch.status?.lastSuccess };
+  } finally {
+    state.gitFetch.running = false;
+    renderGitFetch();
+  }
+}
+
+async function setGitFetchAuto(enabled) {
+  try {
+    state.gitFetch.status = (await api("/git/auto", {
+      method: "POST",
+      headers: { "X-MR-Dashboard": "1", "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    })).body;
+  } catch (error) {
+    alert(error.message);
+  }
+  renderGitFetch();
+}
+
+// Le serveur fetch aussi de lui-même à intervalle régulier : son état est relu pour le montrer.
+async function loadGitFetchStatus() {
+  if (!gitFetchEnabled() || state.gitFetch.running) return;
+  try {
+    state.gitFetch.status = (await api("/git/status")).body;
+    renderGitFetch();
+  } catch (error) {
+    console.error("Lecture de l'état du fetch impossible :", error);
+  }
+}
+
+function renderGitFetch() {
+  const enabled = gitFetchEnabled();
+  $("git-fetch-control").hidden = !enabled;
+  $("git-fetch-divider").hidden = !enabled;
+  if (!enabled) return;
+  const { status, running } = state.gitFetch;
+  const time = iso => new Date(iso).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
+  const el = $("git-fetch-status");
+  $("git-fetch").disabled = running || status?.running;
+  $("git-fetch-auto").checked = status?.auto !== false;
+  // Cite l'intervalle du serveur, connu après les textes statiques.
+  $("git-fetch-auto").closest("label").title = t("gitFetch.autoTitle");
+  el.className = "git-fetch-status";
+  el.title = "";
+  if (running || status?.running) {
+    el.classList.add("running");
+    el.textContent = t("gitFetch.running");
+  } else if (!status?.last) {
+    el.textContent = t("gitFetch.never");
+  } else if (status.last.ok) {
+    el.textContent = t("gitFetch.ok", { time: time(status.last.at) });
+  } else {
+    el.classList.add("failed");
+    el.textContent = t("gitFetch.failed", { time: time(status.last.at) });
+    el.title = t("gitFetch.failedTitle", { message: status.last.message, success: status.lastSuccess ? time(status.lastSuccess) : t("gitFetch.noSuccess") });
+  }
+}
+
 function aiFixButton(mr) {
   const s = signalsOf(mr);
   if (s.loading || mr.state === "merged") return "";
@@ -3346,6 +3502,7 @@ async function pollBranchPipeline() {
   try {
     state.branchPipeline = await fetchBranchPipeline();
     renderBranchPipeline();
+    fetchIfRepoChanged();
     // Sauvegardé à la date de la dernière mise à jour complète, et seulement si la sauvegarde est encore
     // celle qu'affiche cet onglet : un autre onglet a pu en écrire une plus récente depuis.
     if (readSnapshot()?.at.getTime() === state.refreshedAt?.getTime()) {
@@ -3656,6 +3813,11 @@ document.addEventListener("click", e => {
     setView(view.dataset.view);
     return;
   }
+  const gitView = e.target.closest("[data-git-view]");
+  if (gitView) {
+    openGitViewer(gitView, state.mrs.find(mr => String(mr.iid) === gitView.dataset.gitView));
+    return;
+  }
   const aiFix = e.target.closest("[data-ai-fix]");
   if (aiFix) {
     openAiFix(state.mrs.find(mr => String(mr.iid) === aiFix.dataset.aiFix));
@@ -3727,6 +3889,9 @@ window.addEventListener("storage", e => {
 });
 systemDark.addEventListener("change", applyTheme);
 setInterval(renderStatus, 30 * 1000);
+setInterval(loadGitFetchStatus, 30 * 1000);
+$("git-fetch").addEventListener("click", gitFetch);
+$("git-fetch-auto").addEventListener("change", e => setGitFetchAuto(e.target.checked));
 $("ai-copy").addEventListener("click", copyAiPrompt);
 $("ai-orca").addEventListener("click", openInOrca);
 $("ai-close").addEventListener("click", () => $("ai-dialog").close());

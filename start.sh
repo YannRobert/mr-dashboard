@@ -32,7 +32,7 @@ if [[ ! -f "$profile_file" ]]; then
     exit 1
 fi
 
-PORT= GITLAB_PROJECT= SONAR_ENABLED= SONAR_PROJECT= SONAR_JOB= PIT_ENABLED= PIT_JOB= PIT_MARKER= PIPELINE_BRANCH= TARGET_BRANCH= REPO_DIR=
+PORT= GITLAB_PROJECT= SONAR_ENABLED= SONAR_PROJECT= SONAR_JOB= PIT_ENABLED= PIT_JOB= PIT_MARKER= PIPELINE_BRANCH= TARGET_BRANCH= REPO_DIR= GIT_FETCH_INTERVAL= GIT_VIEWER=
 # shellcheck source=profiles/back.conf
 source "$profile_file"
 
@@ -61,6 +61,8 @@ fi
 [[ -n "$PIPELINE_BRANCH" ]] && args+=(--pipeline-branch "$PIPELINE_BRANCH")
 [[ -n "$TARGET_BRANCH" ]] && args+=(--target-branch "$TARGET_BRANCH")
 [[ -n "$REPO_DIR" ]] && args+=(--repo-dir "${REPO_DIR/#\~/$HOME}")
+[[ -n "$GIT_FETCH_INTERVAL" ]] && args+=(--git-fetch-interval "$GIT_FETCH_INTERVAL")
+[[ -n "$GIT_VIEWER" ]] && args+=(--git-viewer "$GIT_VIEWER")
 args+=("$@")
 
 # Port réellement utilisé : la dernière occurrence l'emporte, comme dans argparse.
