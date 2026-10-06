@@ -6,8 +6,10 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%234f46e5'/%3E%3Cstop offset='1' stop-color='%237c3aed'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='15' fill='url(%23g)'/%3E%3Ctext x='32' y='43' text-anchor='middle' font-family='system-ui,Segoe UI,Arial,sans-serif' font-size='30' font-weight='800' fill='%23fff'%3EMR%3C/text%3E%3C/svg%3E">
 <title>Diff de MR</title>
 <script>
-  // Thème du dashboard, posé avant le premier rendu.
+  // Thème du dashboard et taille du texte, posés avant le premier rendu.
   try {
+    const scale = Number(localStorage.getItem("mr-dashboard.diffTextScale"));
+    if (scale) document.documentElement.style.setProperty("--text-scale", scale);
     const theme = localStorage.getItem("mr-dashboard.theme");
     document.documentElement.dataset.theme = theme === "light" || theme === "dark" ? theme
       : matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
@@ -45,6 +47,9 @@
     --accent-fg: #0f1020;
     --red-bg: #3d1a1a; --red-fg: #ffb4ab;
   }
+  /* Taille du texte de la page, réglée par A− / A+ sans toucher au zoom du navigateur, qui vaut pour tout le
+     site et agrandirait donc aussi le dashboard. À 100 %, celle du dashboard. */
+  html { font-size: calc(100% * var(--text-scale, 1)); }
   body {
     margin: 0;
     background: var(--bg);
@@ -97,6 +102,17 @@
   .message { color: var(--muted); }
   .message.error { color: var(--red-fg); background: var(--red-bg); padding: 0.75rem 1rem; border-radius: 0.5rem; }
   .d2h-file-list-wrapper, .d2h-file-wrapper { border-radius: 0.5rem; }
+  /* diff2html fixe ses tailles en pixels, plus petites que le dashboard : ramenées à la taille de la page. */
+  .d2h-diff-table { font-size: 0.875rem; }
+  .d2h-file-header { height: auto; min-height: 2.2rem; align-items: center; }
+  .d2h-file-name-wrapper { font-size: 0.95rem; }
+  .d2h-file-stats { font-size: 0.875rem; }
+  .d2h-file-collapse { font-size: 0.8rem; }
+  .d2h-tag { font-size: 0.65rem; }
+  .text-size { display: flex; align-items: center; gap: 0.25rem; }
+  .text-size button { border-radius: 0.5rem; padding: 0.3em 0.6em; }
+  .text-size button:disabled { opacity: 0.4; cursor: default; }
+  .text-size output { min-width: 3.2em; text-align: center; font-size: 0.85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
   /* En-tête de fichier collé sous celui de la page, que le sien (stickyFileHeaders) passerait dessous. */
   .d2h-file-header { position: sticky; top: var(--header-height, 0); }
 </style>
@@ -109,18 +125,28 @@
     <button type="button" data-format="side-by-side" id="side-by-side"></button>
     <button type="button" data-format="line-by-line" id="line-by-line"></button>
   </div>
+  <div class="text-size" role="group" id="text-size">
+    <button type="button" data-text-step="-1">A−</button>
+    <output id="text-scale"></output>
+    <button type="button" data-text-step="1">A+</button>
+  </div>
   <a id="gitlab" target="_blank" rel="noopener" hidden></a>
 </header>
 <main id="diff"><p class="message" id="loading"></p></main>
 <script src="vendor/diff2html/diff2html-ui-slim.min.js"></script>
 <script>
   const FORMAT_KEY = "mr-dashboard.diffFormat";
+  const TEXT_SCALE_KEY = "mr-dashboard.diffTextScale";
+  const TEXT_SCALES = [0.8, 0.9, 1, 1.1, 1.25, 1.4, 1.6, 1.8, 2];
   const TEXTS = {
     fr: {
       title: p => `Diff de !${p.iid}`,
       branches: p => `<code>${p.branch}</code> comparée à <code>${p.target}</code>, depuis leur point de divergence`,
       sideBySide: "Côte à côte",
       lineByLine: "Ligne à ligne",
+      textSize: "Taille du texte du diff, sans toucher au zoom du navigateur ni donc au dashboard",
+      smaller: "Texte plus petit",
+      larger: "Texte plus grand",
       gitlab: "Ouvrir dans GitLab",
       loading: "Calcul du diff sur le dépôt local…",
       empty: "Aucune différence avec la branche cible.",
@@ -132,6 +158,9 @@
       branches: p => `<code>${p.branch}</code> compared with <code>${p.target}</code>, from where they diverge`,
       sideBySide: "Side by side",
       lineByLine: "Line by line",
+      textSize: "Diff text size, leaving the browser zoom, hence the dashboard, untouched",
+      smaller: "Smaller text",
+      larger: "Larger text",
       gitlab: "Open in GitLab",
       loading: "Computing the diff on the local repository…",
       empty: "No difference with the target branch.",
@@ -168,6 +197,34 @@
     try {
       localStorage.setItem(FORMAT_KEY, format);
     } catch (ignored) { /* stockage indisponible : le format n'est pas retenu */ }
+  }
+
+  function readTextScale() {
+    try {
+      const scale = Number(localStorage.getItem(TEXT_SCALE_KEY));
+      return TEXT_SCALES.includes(scale) ? scale : 1;
+    } catch (ignored) {
+      return 1;
+    }
+  }
+
+  function applyTextScale(scale) {
+    document.documentElement.style.setProperty("--text-scale", scale);
+    document.getElementById("text-scale").textContent = `${Math.round(scale * 100)} %`;
+    for (const button of document.querySelectorAll("[data-text-step]")) {
+      const next = TEXT_SCALES.indexOf(scale) + Number(button.dataset.textStep);
+      button.disabled = next < 0 || next >= TEXT_SCALES.length;
+    }
+    document.documentElement.style.setProperty("--header-height", `${document.querySelector("header").offsetHeight}px`);
+  }
+
+  function changeTextScale(step) {
+    const scale = TEXT_SCALES[TEXT_SCALES.indexOf(readTextScale()) + step];
+    if (scale === undefined) return;
+    try {
+      localStorage.setItem(TEXT_SCALE_KEY, String(scale));
+    } catch (ignored) { /* stockage indisponible : la taille vaut pour cet onglet seulement */ }
+    applyTextScale(scale);
   }
 
   function showMessage(text, error) {
@@ -253,6 +310,10 @@
     document.getElementById("branches").innerHTML = texts.branches({ branch: escapeHtml(mr.branch), target: escapeHtml(mr.target) });
     document.getElementById("side-by-side").textContent = texts.sideBySide;
     document.getElementById("line-by-line").textContent = texts.lineByLine;
+    document.getElementById("text-size").title = texts.textSize;
+    const [smaller, larger] = document.querySelectorAll("[data-text-step]");
+    smaller.setAttribute("aria-label", texts.smaller);
+    larger.setAttribute("aria-label", texts.larger);
     const gitlab = document.getElementById("gitlab");
     if (/^https:\/\//.test(mr.url)) {
       gitlab.href = `${mr.url}/diffs`;
@@ -260,8 +321,7 @@
       gitlab.hidden = false;
     }
     document.getElementById("loading").textContent = texts.loading;
-    const header = document.querySelector("header");
-    document.documentElement.style.setProperty("--header-height", `${header.offsetHeight}px`);
+    applyTextScale(readTextScale());
   }
 
   async function load() {
@@ -289,6 +349,10 @@
     if (!button) return;
     saveFormat(button.dataset.format);
     render();
+  });
+  document.getElementById("text-size").addEventListener("click", e => {
+    const button = e.target.closest("[data-text-step]");
+    if (button) changeTextScale(Number(button.dataset.textStep));
   });
   renderHeader();
   load();
