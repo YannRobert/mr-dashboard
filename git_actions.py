@@ -1,4 +1,4 @@
-"""Actions git sur le clone local du projet suivi : fetch, et ouverture d'une MR dans une visionneuse.
+"""Actions git sur le clone local du projet suivi : fetch, diff d'une MR et ouverture d'une MR dans une visionneuse.
 
 Tant que le fetch automatique est activé, il tourne aussi tout seul à intervalle régulier : les branches
 distantes restent à jour même sans page ouverte, et le restent pendant une coupure de GitLab — on peut
@@ -21,6 +21,8 @@ from pathlib import Path
 from typing import NamedTuple
 
 FETCH_TIMEOUT_S = 60
+DIFF_TIMEOUT_S = 30
+MAX_DIFF_BYTES = 5_000_000
 # Jamais d'invite d'identifiants : sans terminal pour y répondre, git attendrait jusqu'au délai.
 GIT_ENV = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
 
@@ -198,22 +200,18 @@ class GitActions:
             raise GitError(f"visionneuse {viewer_name} introuvable sur ce poste")
         viewer, viewer_args = self._viewers[viewer_name]
         terminal = self._terminal if viewer.terminal else []
-        for name in (branch, target):
-            if self._git(["check-ref-format", "--branch", name]).returncode != 0:
-                raise GitError(f"nom de branche invalide : {name}")
+        self._check_branch_names(
+            branch,
+            target
+        )
         # Le terminal Windows découpe sa ligne de commande sur « ; » : une branche qui en contient
         # pourrait y glisser une commande à lui.
         if terminal and Path(terminal[0]).name == "wt.exe" and any(";" in name for name in (branch, target)):
             raise GitError("nom de branche non pris en charge par le terminal : « ; »")
-        # Branche poussée depuis le dernier fetch : on va la chercher, elle seule.
-        missing = [name for name in (branch, target) if not self._has_remote_branch(name)]
-        if missing:
-            try:
-                completed = self._git(["fetch", "origin", *missing], timeout=FETCH_TIMEOUT_S)
-            except subprocess.TimeoutExpired as error:
-                raise GitError(f"aucune réponse de git fetch en {FETCH_TIMEOUT_S} s") from error
-            if completed.returncode != 0:
-                raise GitError(last_line(completed.stderr) or "branche introuvable sur origin")
+        self._fetch_missing(
+            branch,
+            target
+        )
         repo = self._worktree_of(branch) or self._review_worktree(
             iid,
             branch
@@ -232,6 +230,67 @@ class GitActions:
         except OSError as error:
             raise GitError(str(error)) from error
         return {"command": shlex.join(command)}
+
+    def diff(
+            self,
+            branch,
+            target
+    ):
+        """Diff de la MR depuis le point où elle part de sa cible, celui de l'onglet Changes de GitLab."""
+        self._check_branch_names(
+            branch,
+            target
+        )
+        self._fetch_missing(
+            branch,
+            target
+        )
+        try:
+            completed = subprocess.run(
+                [
+                    "git", "-C", str(self._repo_root), "diff", "--no-color", "--no-ext-diff", "--find-renames",
+                    f"refs/remotes/origin/{target}...refs/remotes/origin/{branch}",
+                ],
+                capture_output=True,
+                env=GIT_ENV,
+                timeout=DIFF_TIMEOUT_S
+            )
+        except subprocess.TimeoutExpired as error:
+            raise GitError(f"aucune réponse de git diff en {DIFF_TIMEOUT_S} s") from error
+        if completed.returncode != 0:
+            raise GitError(last_line(completed.stderr.decode(errors="replace")) or "git diff en échec")
+        # Au-delà, le navigateur peinerait à l'afficher : meld s'en charge mieux.
+        if len(completed.stdout) > MAX_DIFF_BYTES:
+            raise GitError(
+                f"diff de {len(completed.stdout) // 1_000_000} Mo, au-delà des {MAX_DIFF_BYTES // 1_000_000} Mo "
+                "affichables : l'ouvrir dans meld"
+            )
+        return completed.stdout.decode(errors="replace")
+
+    def _check_branch_names(
+            self,
+            branch,
+            target
+    ):
+        for name in (branch, target):
+            if self._git(["check-ref-format", "--branch", name]).returncode != 0:
+                raise GitError(f"nom de branche invalide : {name}")
+
+    def _fetch_missing(
+            self,
+            branch,
+            target
+    ):
+        """Branche poussée depuis le dernier fetch : on va la chercher, elle seule."""
+        missing = [name for name in (branch, target) if not self._has_remote_branch(name)]
+        if not missing:
+            return
+        try:
+            completed = self._git(["fetch", "origin", *missing], timeout=FETCH_TIMEOUT_S)
+        except subprocess.TimeoutExpired as error:
+            raise GitError(f"aucune réponse de git fetch en {FETCH_TIMEOUT_S} s") from error
+        if completed.returncode != 0:
+            raise GitError(last_line(completed.stderr) or "branche introuvable sur origin")
 
     def _worktree_of(self, branch):
         """Worktree où la branche est extraite : on peut y corriger et pousser sans rien déplacer."""

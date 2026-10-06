@@ -959,6 +959,7 @@ const I18N = {
     "gitFetch.failed": p => `fetch en échec à ${p.time}`,
     "gitFetch.failedTitle": p => `${p.message}\nDernier fetch réussi : ${p.success}`,
     "gitFetch.noSuccess": "aucun",
+    "gitDiff.title": p => `Afficher dans un onglet le diff de ${p.branch}, comparée à ${p.target}, calculé sur le dépôt local`,
     "gitView.title": p => `Ouvrir ${p.viewer} sur ${p.branch}, comparée à ${p.target}`,
     "gitView.failed": p => `Ouverture de ${p.viewer} impossible : ${p.message}`,
     "threads.title": p => `${p.n} thread${plural(p.n)} non résolu${plural(p.n)} sur ${p.total}`,
@@ -1200,6 +1201,7 @@ const I18N = {
     "gitFetch.failed": p => `fetch failed at ${p.time}`,
     "gitFetch.failedTitle": p => `${p.message}\nLast successful fetch: ${p.success}`,
     "gitFetch.noSuccess": "none",
+    "gitDiff.title": p => `Show in a tab the diff of ${p.branch} compared with ${p.target}, computed on the local repository`,
     "gitView.title": p => `Open ${p.viewer} on ${p.branch}, compared with ${p.target}`,
     "gitView.failed": p => `Could not open ${p.viewer}: ${p.message}`,
     "threads.title": p => `${p.n} unresolved thread${pluralEn(p.n)} out of ${p.total}`,
@@ -2840,9 +2842,22 @@ function diffStat(mr) {
 // valeurs affichées dans le tableau.
 function gitViewButton(mr) {
   if (mr.state === "merged") return "";
-  return (state.config?.gitViewers ?? [])
+  const diff = `<button type="button" class="git-view" data-git-diff="${mr.iid}" title="${escapeHtml(t("gitDiff.title", { branch: mr.source_branch, target: mr.target_branch }))}">diff</button>`;
+  return diff + (state.config?.gitViewers ?? [])
     .map(viewer => `<button type="button" class="git-view" data-git-view="${mr.iid}" data-git-viewer="${escapeHtml(viewer)}" title="${escapeHtml(t("gitView.title", { viewer, branch: mr.source_branch, target: mr.target_branch }))}">${escapeHtml(viewer)}</button>`)
     .join("");
+}
+
+function openGitDiff(mr) {
+  const query = new URLSearchParams({
+    iid: mr.iid,
+    title: mr.title.replace(/^Draft:\s*/i, ""),
+    branch: mr.source_branch,
+    target: mr.target_branch,
+    url: mr.web_url,
+    lang: state.lang,
+  });
+  window.open(`diff.html?${query}`, "_blank", "noopener");
 }
 
 async function openGitViewer(button, viewer, mr) {
@@ -3847,6 +3862,11 @@ document.addEventListener("click", e => {
   const view = e.target.closest("[data-view]");
   if (view) {
     setView(view.dataset.view);
+    return;
+  }
+  const gitDiff = e.target.closest("[data-git-diff]");
+  if (gitDiff) {
+    openGitDiff(state.mrs.find(mr => String(mr.iid) === gitDiff.dataset.gitDiff));
     return;
   }
   const gitView = e.target.closest("[data-git-view]");

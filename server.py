@@ -18,6 +18,8 @@ Actions locales, en POST :
     /git/fetch  git fetch du clone local, qui tourne aussi tout seul toutes les --git-fetch-interval
                 secondes ; GET /git/status en donne le dernier résultat (cf. git_actions.py)
     /git/auto   active ou suspend le fetch automatique : {"enabled": true|false}
+    /git/diff   GET ?branch=&target= : diff d'une MR depuis le point où elle part de sa cible, affiché
+                par diff.html
     /git/view   ouvre une MR dans l'une des visionneuses --git-viewers : {"viewer", "iid", "branch", "target"} ;
                 celles en mode texte s'ouvrent dans le terminal --git-terminal
 
@@ -49,7 +51,7 @@ import time
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import quote, unquote, urlsplit
+from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 from git_actions import VIEWERS, GitActions, GitError, resolve
 from orca_launcher import OrcaError, OrcaLauncher
@@ -79,6 +81,11 @@ UPSTREAM_IDLE_S = 30
 # La page charge 4 MR en parallèle, jusqu'à 3 requêtes chacune.
 UPSTREAM_MAX_IDLE_PER_HOST = 12
 STATIC_DIR = Path(__file__).resolve().parent
+# Bibliothèques servies depuis le dépôt plutôt qu'un CDN : la page de diff marche aussi sans réseau.
+VENDOR_FILES = {
+    "/vendor/diff2html/diff2html-ui-slim.min.js": "text/javascript; charset=utf-8",
+    "/vendor/diff2html/diff2html.min.css": "text/css; charset=utf-8",
+}
 SIGNALS_SCRIPT = STATIC_DIR.parent / "mr-ci-signals.py"
 REPO_ROOT = STATIC_DIR.parent.parent
 # Exigé sur le POST : un en-tête non standard impose au navigateur un preflight CORS, que ce serveur
@@ -237,8 +244,14 @@ def make_handler(
                 self.send_file(STATIC_DIR / "index.html", "text/html; charset=utf-8")
             elif self.path == "/config":
                 self.send_json(200, settings["public"])
+            elif self.path.startswith("/diff.html"):
+                self.send_file(STATIC_DIR / "diff.html", "text/html; charset=utf-8")
+            elif self.path in VENDOR_FILES:
+                self.send_file(STATIC_DIR / self.path.lstrip("/"), VENDOR_FILES[self.path])
             elif self.path == "/git/status":
                 self.send_json(200, git.status())
+            elif self.path.startswith("/git/diff?"):
+                self.git_diff(parse_qs(urlsplit(self.path).query))
             elif self.path.startswith("/gitlab/"):
                 self.relay(
                     settings["gitlab_host"] + "/api/v4/" + self.path[len("/gitlab/"):],
@@ -317,6 +330,21 @@ def make_handler(
                 return
             git.set_auto(enabled)
             self.send_json(200, git.status())
+
+        def git_diff(self, query):
+            branch, target = (query.get(name, [""])[0] for name in ("branch", "target"))
+            if not branch or not target:
+                self.send_json(400, {"message": "requête invalide"})
+                return
+            try:
+                diff = git.diff(
+                    branch,
+                    target
+                )
+            except GitError as error:
+                self.send_json(409, {"message": str(error)})
+                return
+            self.send_body(200, diff.encode(), {"Content-Type": "text/plain; charset=utf-8"})
 
         def git_view(self, payload):
             try:

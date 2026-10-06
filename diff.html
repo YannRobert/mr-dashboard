@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%234f46e5'/%3E%3Cstop offset='1' stop-color='%237c3aed'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='15' fill='url(%23g)'/%3E%3Ctext x='32' y='43' text-anchor='middle' font-family='system-ui,Segoe UI,Arial,sans-serif' font-size='30' font-weight='800' fill='%23fff'%3EMR%3C/text%3E%3C/svg%3E">
+<title>Diff de MR</title>
+<script>
+  // Thème du dashboard, posé avant le premier rendu.
+  try {
+    const theme = localStorage.getItem("mr-dashboard.theme");
+    document.documentElement.dataset.theme = theme === "light" || theme === "dark" ? theme
+      : matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  } catch (ignored) {
+    document.documentElement.dataset.theme = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+</script>
+<link rel="stylesheet" href="vendor/diff2html/diff2html.min.css">
+<style>
+  :root {
+    --bg: #f3f4f7;
+    --surface: #ffffff;
+    --border: #e4e6ec;
+    --border-strong: #d2d5de;
+    --text: #1b1d24;
+    --muted: #6a6f7d;
+    --link: #2356c7;
+    --accent: #4f46e5;
+    --accent-2: #7c3aed;
+    --accent-fg: #ffffff;
+    --red-bg: #fdecec; --red-fg: #b42318;
+    color-scheme: light;
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #111217;
+    --surface: #1a1c23;
+    --border: #2c2f3a;
+    --border-strong: #3a3e4b;
+    --text: #eceef3;
+    --muted: #9ba1b0;
+    --link: #86a9f7;
+    --accent: #818cf8;
+    --accent-2: #a78bfa;
+    --accent-fg: #0f1020;
+    --red-bg: #3d1a1a; --red-fg: #ffb4ab;
+  }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 1rem/1.45 "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  a { color: var(--link); }
+  header {
+    position: sticky; top: 0; z-index: 10;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem;
+    padding: 0.75rem 1rem; background: var(--surface); border-bottom: 1px solid var(--border);
+  }
+  header h1 { margin: 0; font-size: 1.05rem; flex: 1 1 20rem; min-width: 0; overflow-wrap: anywhere; }
+  .branches { color: var(--muted); font-size: 0.9rem; overflow-wrap: anywhere; }
+  .branches code { font-size: 0.85rem; }
+  .format { display: flex; gap: 0; }
+  button {
+    font: inherit; font-size: 0.9rem; color: var(--text); background: var(--surface);
+    border: 1px solid var(--border-strong); padding: 0.3em 0.8em; cursor: pointer;
+  }
+  .format button:first-child { border-radius: 0.5rem 0 0 0.5rem; }
+  .format button:last-child { border-radius: 0 0.5rem 0.5rem 0; border-left: none; }
+  .format button[aria-pressed="true"] {
+    color: var(--accent-fg); border-color: transparent; font-weight: 600;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  }
+  main { padding: 1rem; }
+  .message { color: var(--muted); }
+  .message.error { color: var(--red-fg); background: var(--red-bg); padding: 0.75rem 1rem; border-radius: 0.5rem; }
+  .d2h-file-list-wrapper, .d2h-file-wrapper { border-radius: 0.5rem; }
+  /* En-tête de fichier collé sous celui de la page, que le sien (stickyFileHeaders) passerait dessous. */
+  .d2h-file-header { position: sticky; top: var(--header-height, 0); }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title"></h1>
+  <span class="branches" id="branches"></span>
+  <div class="format" role="group" id="format">
+    <button type="button" data-format="side-by-side" id="side-by-side"></button>
+    <button type="button" data-format="line-by-line" id="line-by-line"></button>
+  </div>
+  <a id="gitlab" target="_blank" rel="noopener" hidden></a>
+</header>
+<main id="diff"><p class="message" id="loading"></p></main>
+<script src="vendor/diff2html/diff2html-ui-slim.min.js"></script>
+<script>
+  const FORMAT_KEY = "mr-dashboard.diffFormat";
+  const TEXTS = {
+    fr: {
+      title: p => `Diff de !${p.iid}`,
+      branches: p => `<code>${p.branch}</code> comparée à <code>${p.target}</code>, depuis leur point de divergence`,
+      sideBySide: "Côte à côte",
+      lineByLine: "Ligne à ligne",
+      gitlab: "Ouvrir dans GitLab",
+      loading: "Calcul du diff sur le dépôt local…",
+      empty: "Aucune différence avec la branche cible.",
+      failed: p => `Diff impossible : ${p}`,
+      invalid: "Lien incomplet : il manque la branche ou sa cible.",
+    },
+    en: {
+      title: p => `Diff of !${p.iid}`,
+      branches: p => `<code>${p.branch}</code> compared with <code>${p.target}</code>, from where they diverge`,
+      sideBySide: "Side by side",
+      lineByLine: "Line by line",
+      gitlab: "Open in GitLab",
+      loading: "Computing the diff on the local repository…",
+      empty: "No difference with the target branch.",
+      failed: p => `Could not compute the diff: ${p}`,
+      invalid: "Incomplete link: the branch or its target is missing.",
+    },
+  };
+  const params = new URLSearchParams(location.search);
+  const lang = params.get("lang") in TEXTS ? params.get("lang")
+    : (navigator.language || "").toLowerCase().startsWith("fr") ? "fr" : "en";
+  const texts = TEXTS[lang];
+  const mr = {
+    iid: params.get("iid") ?? "",
+    title: params.get("title") ?? "",
+    branch: params.get("branch") ?? "",
+    target: params.get("target") ?? "",
+    url: params.get("url") ?? "",
+  };
+  let diffText = null;
+
+  function escapeHtml(text) {
+    return String(text).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  }
+
+  function readFormat() {
+    try {
+      return localStorage.getItem(FORMAT_KEY) === "line-by-line" ? "line-by-line" : "side-by-side";
+    } catch (ignored) {
+      return "side-by-side";
+    }
+  }
+
+  function saveFormat(format) {
+    try {
+      localStorage.setItem(FORMAT_KEY, format);
+    } catch (ignored) { /* stockage indisponible : le format n'est pas retenu */ }
+  }
+
+  function showMessage(text, error) {
+    document.getElementById("diff").innerHTML = `<p class="message${error ? " error" : ""}">${escapeHtml(text)}</p>`;
+  }
+
+  function render() {
+    const format = readFormat();
+    for (const button of document.querySelectorAll("[data-format]")) {
+      button.setAttribute("aria-pressed", String(button.dataset.format === format));
+    }
+    if (diffText === null) return;
+    if (!diffText.trim()) {
+      showMessage(texts.empty);
+      return;
+    }
+    const container = document.getElementById("diff");
+    container.innerHTML = "";
+    const ui = new Diff2HtmlUI(
+      container,
+      diffText,
+      {
+        outputFormat: format,
+        drawFileList: true,
+        fileListToggle: true,
+        fileListStartVisible: true,
+        fileContentToggle: true,
+        matching: "lines",
+        synchronisedScroll: true,
+        stickyFileHeaders: false,
+        highlight: true,
+        colorScheme: document.documentElement.dataset.theme === "dark" ? "dark" : "light",
+      }
+    );
+    ui.draw();
+    ui.highlightCode();
+  }
+
+  function renderHeader() {
+    document.documentElement.lang = lang;
+    const title = mr.title ? `!${mr.iid} ${mr.title}` : texts.title(mr);
+    document.title = title;
+    document.getElementById("title").textContent = title;
+    document.getElementById("branches").innerHTML = texts.branches({ branch: escapeHtml(mr.branch), target: escapeHtml(mr.target) });
+    document.getElementById("side-by-side").textContent = texts.sideBySide;
+    document.getElementById("line-by-line").textContent = texts.lineByLine;
+    const gitlab = document.getElementById("gitlab");
+    if (/^https:\/\//.test(mr.url)) {
+      gitlab.href = `${mr.url}/diffs`;
+      gitlab.textContent = texts.gitlab;
+      gitlab.hidden = false;
+    }
+    document.getElementById("loading").textContent = texts.loading;
+    const header = document.querySelector("header");
+    document.documentElement.style.setProperty("--header-height", `${header.offsetHeight}px`);
+  }
+
+  async function load() {
+    if (!mr.branch || !mr.target) {
+      showMessage(texts.invalid, true);
+      return;
+    }
+    const query = new URLSearchParams({ branch: mr.branch, target: mr.target });
+    try {
+      const response = await fetch(`git/diff?${query}`);
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.message || `HTTP ${response.status}`);
+      }
+      diffText = await response.text();
+    } catch (error) {
+      showMessage(texts.failed(error.message), true);
+      return;
+    }
+    render();
+  }
+
+  document.getElementById("format").addEventListener("click", e => {
+    const button = e.target.closest("[data-format]");
+    if (!button) return;
+    saveFormat(button.dataset.format);
+    render();
+  });
+  renderHeader();
+  load();
+</script>
+</body>
+</html>

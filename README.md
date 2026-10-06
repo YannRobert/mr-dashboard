@@ -99,6 +99,15 @@ Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut
   dernier fetch, ou son échec en rouge (le survol donne le message de git et l'heure du dernier fetch
   réussi). Les `origin/<branche>` restent ainsi à jour pendant une coupure
   de GitLab : on peut relire et committer, puis pousser à son retour.
+- **diff** : chaque MR ouverte a un bouton qui affiche dans un nouvel onglet son diff depuis le point
+  où elle part de sa cible (`git diff origin/<cible>...origin/<branche>`, comme l'onglet *Changes* de
+  GitLab), calculé sur le dépôt local : il reste disponible pendant une coupure de GitLab. Liste des
+  fichiers repliable, côte à côte ou ligne à ligne (retenu dans le navigateur), coloration syntaxique,
+  thème du dashboard. Lecture seule : les commentaires se font dans GitLab, à un clic. Au-delà de 5 Mo
+  de diff, la page renvoie vers meld. L'affichage vient de
+  [diff2html](https://github.com/rtfpessoa/diff2html) (MIT), copié dans `vendor/diff2html/` pour
+  marcher sans réseau ; pour le mettre à jour, y remplacer `diff2html-ui-slim.min.js` et
+  `diff2html.min.css` par ceux de `https://cdn.jsdelivr.net/npm/diff2html@<version>/bundles/`.
 - **Visionneuses** : chaque MR ouverte a un bouton par visionneuse de `GIT_VIEWERS` présente sur le
   poste — par défaut `meld,tig diff,tig`. Une branche absente en local est d'abord fetchée.
   - **meld** : les fichiers modifiés par la MR depuis le point où elle part de sa cible
@@ -130,7 +139,7 @@ Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut
 
 ## Après une modification
 
-- `index.html` est relu à chaque requête : recharger la page suffit.
+- `index.html` et `diff.html` sont relus à chaque requête : recharger la page suffit.
 - `server.py`, `orca_launcher.py` ou `git_actions.py` : `stop.sh` puis `start.sh`.
 - Le serveur sert l'`index.html` du dépôt (ou du worktree) d'où il a été lancé : pour tester la
   version d'un worktree, relancer le serveur depuis ce worktree.
