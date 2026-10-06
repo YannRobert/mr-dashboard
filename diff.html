@@ -77,18 +77,21 @@
   }
   .format button:first-child { border-radius: 0.5rem 0 0 0.5rem; }
   .format button:last-child { border-radius: 0 0.5rem 0.5rem 0; border-left: none; }
-  #notes-toggle { border-radius: 0.5rem; }
+  .toggle { border-radius: 0.5rem; }
   .notes-nav { display: flex; align-items: center; gap: 0.25rem; }
-  .notes-nav[hidden] { display: none; }
+  /* Place gardée même masquée : afficher ‹ › ne décale pas les autres commandes. */
+  .notes-nav.off { visibility: hidden; }
   .notes-nav button { border-radius: 0.5rem; padding: 0.3em 0.6em; }
   .notes-nav button:disabled { opacity: 0.4; cursor: default; }
-  .notes-nav output { min-width: 3.2em; text-align: center; font-size: 0.85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .notes-nav output { min-width: 4.5em; text-align: center; font-size: 0.85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
   .note-thread { scroll-margin-top: calc(var(--header-height, 0px) + 3rem); }
   .note-thread.current { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .format button[aria-pressed="true"], #notes-toggle[aria-pressed="true"] {
+  .format button[aria-pressed="true"], .toggle[aria-pressed="true"] {
     color: var(--accent-fg); border-color: transparent; font-weight: 600;
     background: linear-gradient(135deg, var(--accent), var(--accent-2));
   }
+  /* Pas de gras à l'activation : un bouton qui s'élargit décale les commandes à sa gauche. */
+  .toggle[aria-pressed="true"] { font-weight: inherit; }
   main { padding: 1rem; }
   /* Liste des fichiers dans un panneau toujours visible, qui défile seul ; sa largeur se règle par son coin. */
   main.with-files { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 1rem; align-items: start; }
@@ -212,12 +215,13 @@
       <output id="text-scale"></output>
       <button type="button" data-text-step="1">A+</button>
     </div>
-    <button type="button" id="notes-toggle" aria-pressed="false"></button>
-    <div class="notes-nav" id="notes-nav" hidden>
+    <button type="button" class="toggle" id="notes-toggle" aria-pressed="false"></button>
+    <div class="notes-nav off" id="notes-nav">
       <button type="button" data-note-step="-1">‹</button>
       <output id="note-position"></output>
       <button type="button" data-note-step="1">›</button>
     </div>
+    <button type="button" class="toggle" id="comments-toggle" aria-pressed="false"></button>
     <a id="gitlab" target="_blank" rel="noopener" hidden></a>
   </div>
 </header>
@@ -229,6 +233,7 @@
   const TEXT_SCALE_KEY = "mr-dashboard.diffTextRatio";
   const COMMITS_SHARE_KEY = "mr-dashboard.diffCommitsShare";
   const NOTES_KEY = "mr-dashboard.diffNotes";
+  const COMMENTS_KEY = "mr-dashboard.diffComments";
   const TEXT_SCALES = [0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3];
   const DEFAULT_TEXT_SCALE = 1.25;
   const TEXTS = {
@@ -262,12 +267,17 @@
       lastPushTitle: "Les commits arrivés avec le dernier push",
       push: p => `Push · ${p.date} · ${p.count} commit${p.count > 1 ? "s" : ""}`,
       pushTitle: "Clic : les commits de ce push",
-      notes: "💬 Commentaires",
-      notesCount: n => `💬 Commentaires (${n})`,
-      notesTitle: "Afficher les discussions GitLab sous les lignes commentées ; désactivé, la page ne les charge pas",
-      notesLoading: "Chargement des commentaires…",
-      notesFailed: p => `Commentaires indisponibles : ${p}`,
-      notesElsewhere: n => `${n} discussion${n > 1 ? "s" : ""} hors du diff affiché`,
+      notes: "💬 Diff notes",
+      comments: "🗨 Commentaires",
+      commentsTitle: "Afficher en tête du diff les commentaires de la MR qui ne portent pas sur une ligne ; désactivé, la page ne les charge pas",
+      commentsCount: n => `${n} commentaire${n > 1 ? "s" : ""} hors diff notes`,
+      generalComments: n => `${n} commentaire${n > 1 ? "s" : ""} de la MR, hors diff notes`,
+      notesCount: n => `${n} diff note${n > 1 ? "s" : ""} dans la MR`,
+      placedNotes: n => `${n} diff note${n > 1 ? "s" : ""} placée${n > 1 ? "s" : ""} dans le diff affiché`,
+      notesTitle: "Afficher les diff notes GitLab sous les lignes commentées ; désactivé, la page ne les charge pas",
+      notesLoading: "Chargement des discussions GitLab…",
+      notesFailed: p => `Discussions GitLab indisponibles : ${p}`,
+      notesElsewhere: n => `${n} diff note${n > 1 ? "s" : ""} hors du diff affiché`,
       outdated: "obsolète : le code a changé depuis",
       outOfRange: "hors de la plage de commits affichée",
       notShown: "ligne absente du diff affiché",
@@ -275,8 +285,8 @@
       lines: p => p.first === p.last ? `ligne ${p.last}` : `lignes ${p.first} à ${p.last}`,
       replies: n => `${n} réponse${n > 1 ? "s" : ""}`,
       openInGitlab: "GitLab",
-      previousNote: "Commentaire précédent dans le diff",
-      nextNote: "Commentaire suivant dans le diff",
+      previousNote: "Diff note précédente",
+      nextNote: "Diff note suivante",
     },
     en: {
       title: p => `Diff of !${p.iid}`,
@@ -308,12 +318,17 @@
       lastPushTitle: "The commits that came with the last push",
       push: p => `Push · ${p.date} · ${p.count} commit${p.count > 1 ? "s" : ""}`,
       pushTitle: "Click: this push's commits",
-      notes: "💬 Comments",
-      notesCount: n => `💬 Comments (${n})`,
-      notesTitle: "Show the GitLab discussions under the commented lines; off, the page does not load them",
-      notesLoading: "Loading comments…",
-      notesFailed: p => `Comments unavailable: ${p}`,
-      notesElsewhere: n => `${n} discussion${n > 1 ? "s" : ""} outside the displayed diff`,
+      notes: "💬 Diff notes",
+      comments: "🗨 Comments",
+      commentsTitle: "Show at the top of the diff the MR comments that are not on a line; off, the page does not load them",
+      commentsCount: n => `${n} comment${n > 1 ? "s" : ""} besides diff notes`,
+      generalComments: n => `${n} MR comment${n > 1 ? "s" : ""}, besides diff notes`,
+      notesCount: n => `${n} diff note${n > 1 ? "s" : ""} in the MR`,
+      placedNotes: n => `${n} diff note${n > 1 ? "s" : ""} placed in the displayed diff`,
+      notesTitle: "Show the GitLab diff notes under the commented lines; off, the page does not load them",
+      notesLoading: "Loading GitLab discussions…",
+      notesFailed: p => `GitLab discussions unavailable: ${p}`,
+      notesElsewhere: n => `${n} diff note${n > 1 ? "s" : ""} outside the displayed diff`,
       outdated: "outdated: the code changed since",
       outOfRange: "outside the displayed range of commits",
       notShown: "line not in the displayed diff",
@@ -321,8 +336,8 @@
       lines: p => p.first === p.last ? `line ${p.last}` : `lines ${p.first} to ${p.last}`,
       replies: n => `${n} repl${n > 1 ? "ies" : "y"}`,
       openInGitlab: "GitLab",
-      previousNote: "Previous comment in the diff",
-      nextNote: "Next comment in the diff",
+      previousNote: "Previous diff note",
+      nextNote: "Next diff note",
     },
   };
   const params = new URLSearchParams(location.search);
@@ -353,6 +368,8 @@
   let loadSeq = 0;
   // Discussions de diff GitLab, chargées au premier affichage des commentaires ; null : pas encore.
   let discussions = null;
+  // Commentaires de la MR qui ne portent sur aucune ligne, chargés avec les diff notes.
+  let generalDiscussions = null;
   let discussionsError = null;
   // Dernier commit poussé selon GitLab : la position d'une note encore valable y est recalée à chaque push,
   // celle d'une note obsolète reste sur un commit plus ancien.
@@ -445,6 +462,7 @@
     ui.highlightCode();
     showFileList(container);
     if (readNotesEnabled()) placeNotes(container);
+    if (readEnabled(COMMENTS_KEY)) placeComments(container);
   }
 
   // La liste dessinée par diff2html passe dans le panneau ; chaque fichier y montre son nom, puis son répertoire.
@@ -584,26 +602,36 @@
     applyCommitsShare(null);
   });
 
-  function readNotesEnabled() {
+  function readEnabled(key) {
     try {
-      return localStorage.getItem(NOTES_KEY) === "on";
+      return localStorage.getItem(key) === "on";
     } catch (ignored) {
       return false;
     }
   }
 
-  function saveNotesEnabled(enabled) {
+  function saveEnabled(
+    key,
+    enabled
+  ) {
     try {
-      localStorage.setItem(NOTES_KEY, enabled ? "on" : "off");
+      localStorage.setItem(key, enabled ? "on" : "off");
     } catch (ignored) { /* stockage indisponible : le choix n'est pas retenu */ }
   }
 
+  const readNotesEnabled = () => readEnabled(NOTES_KEY);
+
+  // Libellés fixes, pour ne pas décaler les commandes voisines ; les nombres passent dans l'infobulle.
   function renderNotesToggle() {
-    const button = document.getElementById("notes-toggle");
-    const enabled = readNotesEnabled();
-    button.setAttribute("aria-pressed", String(enabled));
-    button.title = texts.notesTitle;
-    button.textContent = enabled && discussions ? texts.notesCount(discussions.length) : texts.notes;
+    const notes = document.getElementById("notes-toggle");
+    notes.setAttribute("aria-pressed", String(readNotesEnabled()));
+    notes.textContent = texts.notes;
+    notes.title = discussions ? `${texts.notesTitle} — ${texts.notesCount(discussions.length)}` : texts.notesTitle;
+    const comments = document.getElementById("comments-toggle");
+    comments.setAttribute("aria-pressed", String(readEnabled(COMMENTS_KEY)));
+    comments.textContent = texts.comments;
+    comments.title = generalDiscussions
+      ? `${texts.commentsTitle} — ${texts.commentsCount(generalDiscussions.length)}` : texts.commentsTitle;
   }
 
   // Toutes les pages : GitLab en sert 100 au plus par appel.
@@ -616,7 +644,7 @@
       pages = Number(response.headers.get("X-Total-Pages")) || 1;
       all.push(...await response.json());
     }
-    return all.filter(d => d.notes[0]?.type === "DiffNote" && d.notes[0].position?.position_type === "text");
+    return all;
   }
 
   async function ensureDiscussions() {
@@ -624,7 +652,9 @@
     document.getElementById("diff-files")
       ?.insertAdjacentHTML("afterbegin", `<p class="notes-status" id="notes-status">${escapeHtml(texts.notesLoading)}</p>`);
     try {
-      discussions = await loadDiscussions();
+      const all = await loadDiscussions();
+      discussions = all.filter(d => d.notes[0]?.type === "DiffNote" && d.notes[0].position?.position_type === "text");
+      generalDiscussions = all.filter(d => d.notes[0]?.type !== "DiffNote" && d.notes.some(n => !n.system));
     } catch (error) {
       discussionsError = error.message;
     }
@@ -642,15 +672,15 @@
 
   function renderNotesNav() {
     const nav = document.getElementById("notes-nav");
-    const count = readNotesEnabled() ? placedNotes().length : 0;
-    nav.hidden = count === 0;
-    if (!count) return;
+    const count = placedNotes().length;
+    nav.classList.toggle("off", !readNotesEnabled());
     const [previous, next] = nav.querySelectorAll("[data-note-step]");
     previous.title = texts.previousNote;
     next.title = texts.nextNote;
     previous.disabled = currentNote <= 0;
     next.disabled = currentNote >= count - 1;
     document.getElementById("note-position").textContent = `${currentNote < 0 ? "–" : currentNote + 1} / ${count}`;
+    document.getElementById("note-position").title = texts.placedNotes(count);
   }
 
   function goToNote(step) {
@@ -684,7 +714,9 @@
     const [first, ...replies] = discussion.notes.filter(n => !n.system);
     if (!first) return "";
     const resolved = discussion.notes.some(n => n.resolvable) && discussion.notes.every(n => !n.resolvable || n.resolved);
-    const place = notePlace(first.position);
+    const label = first.position
+      ? texts.lines(notePlace(first.position))
+      : new Date(first.created_at).toLocaleString(lang, { dateStyle: "short", timeStyle: "short" });
     const link = /^https:\/\//.test(mr.url)
       ? `<a href="${escapeHtml(`${mr.url}#note_${first.id}`)}" target="_blank" rel="noopener">${escapeHtml(texts.openInGitlab)}</a>` : "";
     const note = n => `<div class="note"><div class="note-meta"><strong>${escapeHtml(n.author?.name ?? "?")}</strong> · `
@@ -692,9 +724,21 @@
       + `<div class="note-body">${markdown(n.body)}</div></div>`;
     return `<details class="note-thread${resolved ? " resolved" : ""}"${resolved ? "" : " open"}>`
       + `<summary>${resolved ? `<span class="badge">${escapeHtml(texts.resolved)}</span>` : ""}`
-      + `<span>${escapeHtml(texts.lines(place))}${replies.length ? ` · ${escapeHtml(texts.replies(replies.length))}` : ""}</span>${link}</summary>`
+      + `<span>${escapeHtml(label)}${replies.length ? ` · ${escapeHtml(texts.replies(replies.length))}` : ""}</span>${link}</summary>`
       + (where ? `<div class="note-where">${escapeHtml(where)}</div>` : "")
       + [first, ...replies].map(note).join("") + `</details>`;
+  }
+
+  function placeComments(container) {
+    if (discussionsError) {
+      if (!readNotesEnabled()) {
+        container.insertAdjacentHTML("afterbegin", `<p class="message error">${escapeHtml(texts.notesFailed(discussionsError))}</p>`);
+      }
+      return;
+    }
+    if (!generalDiscussions?.length) return;
+    container.insertAdjacentHTML("afterbegin", `<details class="notes-elsewhere" open><summary>${escapeHtml(texts.generalComments(generalDiscussions.length))}</summary>`
+      + `${generalDiscussions.map(d => threadHtml(d)).join("")}</details>`);
   }
 
   // Le strict nécessaire du markdown GitLab pour lire une note : blocs de code, code en ligne, gras.
@@ -973,7 +1017,7 @@
       seenAtOpen = readSeen();
       await loadPushes();
     }
-    if (readNotesEnabled()) await ensureDiscussions();
+    if (readNotesEnabled() || readEnabled(COMMENTS_KEY)) await ensureDiscussions();
     await loadDiff();
   }
 
@@ -1046,7 +1090,18 @@
   });
   document.getElementById("notes-toggle").addEventListener("click", () => {
     const enabled = !readNotesEnabled();
-    saveNotesEnabled(enabled);
+    saveEnabled(NOTES_KEY, enabled);
+    if (enabled) showNotes();
+    else {
+      currentNote = -1;
+      renderNotesToggle();
+      render();
+      renderNotesNav();
+    }
+  });
+  document.getElementById("comments-toggle").addEventListener("click", () => {
+    const enabled = !readEnabled(COMMENTS_KEY);
+    saveEnabled(COMMENTS_KEY, enabled);
     if (enabled) showNotes();
     else {
       renderNotesToggle();

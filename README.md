@@ -131,11 +131,12 @@ Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut
   [diff2html](https://github.com/rtfpessoa/diff2html) (MIT), copié dans `vendor/diff2html/` pour
   marcher sans réseau ; pour le mettre à jour, y remplacer `diff2html-ui-slim.min.js` et
   `diff2html.min.css` par ceux de `https://cdn.jsdelivr.net/npm/diff2html@<version>/bundles/`.
-- **💬 Commentaires**, dans l'en-tête du diff, affiche les discussions GitLab de la MR sous les lignes
+- **💬 Diff notes**, dans l'en-tête du diff, affiche les diff notes GitLab de la MR sous les lignes
   commentées, résolues repliées. Une note posée sur un code qui a changé depuis, ou hors de la plage de
-  commits affichée, va dans « discussions hors du diff affiché », en tête du diff. Désactivé — par
-  défaut, choix retenu par le navigateur —, la page ne charge rien de plus. **‹ ›** passent d'un commentaire du diff au
-  suivant.
+  commits affichée, va dans « diff notes hors du diff affiché », en tête du diff. **‹ ›** passent d'une
+  diff note à la suivante. **🗨 Commentaires** affiche à part, en tête du diff, les commentaires de la
+  MR qui ne portent sur aucune ligne. Désactivés — par défaut, choix retenus par le navigateur —, ils
+  ne chargent rien de plus ; les commandes gardent leur place quel que soit leur état.
 - Un `git fetch` ou `git pull` lancé à la main pendant un fetch automatique peut répondre
   « cannot lock ref » : le relancer.
 
