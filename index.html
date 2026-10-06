@@ -2852,7 +2852,7 @@ async function openGitViewer(button, mr) {
       {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-MR-Dashboard": "1" },
-        body: JSON.stringify({ branch: mr.source_branch, target: mr.target_branch }),
+        body: JSON.stringify({ iid: mr.iid, branch: mr.source_branch, target: mr.target_branch }),
       }
     );
   } catch (error) {

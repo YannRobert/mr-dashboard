@@ -4,9 +4,10 @@ Tant que le fetch automatique est activé, il tourne aussi tout seul à interval
 distantes restent à jour même sans page ouverte, et le restent pendant une coupure de GitLab — on peut
 alors relire et committer sur origin/<branche>, puis pousser à son retour.
 
-Le fetch se fait dans le worktree principal, retrouvé depuis n'importe quel worktree du clone ; la
-visionneuse s'ouvre dans le worktree où la branche de la MR est extraite s'il y en a un, sinon dans le
-principal.
+Le fetch se fait dans le worktree principal, retrouvé depuis n'importe quel worktree du clone. La
+visionneuse s'ouvre dans le worktree où la branche de la MR est extraite s'il y en a un, sinon dans son
+worktree de revue, <clone>-MR<iid> à côté du principal, détaché sur origin/<branche> — jamais par un
+checkout dans le principal, qui porte le travail en cours.
 """
 import os
 import shlex
@@ -153,6 +154,7 @@ class GitActions:
 
     def view(
             self,
+            iid,
             branch,
             target
     ):
@@ -175,7 +177,10 @@ class GitActions:
                 raise GitError(f"aucune réponse de git fetch en {FETCH_TIMEOUT_S} s") from error
             if completed.returncode != 0:
                 raise GitError(last_line(completed.stderr) or "branche introuvable sur origin")
-        repo = self._worktree_of(branch)
+        repo = self._worktree_of(branch) or self._review_worktree(
+            iid,
+            branch
+        )
         values = {"branch": branch, "target": target, "repo": repo, "distro": os.environ.get("WSL_DISTRO_NAME", "")}
         command = [arg.format(**values) for arg in [*self._terminal, *self._viewer]]
         try:
@@ -198,7 +203,30 @@ class GitActions:
             fields = dict(line.split(" ", 1) for line in block.splitlines() if " " in line)
             if fields.get("branch") == f"refs/heads/{branch}":
                 return fields["worktree"]
-        return str(self._repo_root)
+        return None
+
+    def _review_worktree(
+            self,
+            iid,
+            branch
+    ):
+        """Worktree de revue de la MR, créé au besoin, et amené sur le dernier commit poussé tant qu'il
+        est détaché et sans modification : on n'y déplace ni une branche, ni un travail en cours."""
+        path = self._repo_root.parent / f"{self._repo_root.name}-MR{iid}"
+        remote = f"refs/remotes/origin/{branch}"
+        listing = self._git(["worktree", "list", "--porcelain"]).stdout
+        if f"worktree {path}\n" not in listing + "\n":
+            if path.exists():
+                raise GitError(f"{path} existe déjà sans être un worktree de ce dépôt")
+            completed = self._git(["worktree", "add", "--detach", str(path), remote], timeout=FETCH_TIMEOUT_S)
+            if completed.returncode != 0:
+                raise GitError(last_line(completed.stderr) or "création du worktree de revue impossible")
+            return str(path)
+        detached = self._git(["-C", str(path), "symbolic-ref", "--quiet", "HEAD"]).returncode != 0
+        clean = not self._git(["-C", str(path), "status", "--porcelain"]).stdout.strip()
+        if detached and clean:
+            self._git(["-C", str(path), "checkout", "--quiet", "--detach", remote])
+        return str(path)
 
     def _has_remote_branch(self, name):
         return self._git(["rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{name}"]).returncode == 0

@@ -99,19 +99,23 @@ Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut
   dernier fetch, ou son échec en rouge (le survol donne le message de git et l'heure du dernier fetch
   réussi). Les `origin/<branche>` restent ainsi à jour pendant une coupure
   de GitLab : on peut relire et committer, puis pousser à son retour.
-- **Visionneuse** : un bouton par MR ouverte lance `GIT_VIEWER` — par défaut `lazygit branch` —
-  dans le worktree où sa branche est extraite s'il y en a un (on peut y corriger et pousser), sinon
-  dans le worktree principal, sans rien y extraire. Une visionneuse qui s'utilise dans un terminal
-  s'ouvre par `GIT_TERMINAL` : par défaut un onglet Windows Terminal, où WSL la lance sans shell
+- **Visionneuse** : un bouton par MR ouverte lance `GIT_VIEWER` — par défaut `lazygit log`, sur les
+  commits de la MR — dans le worktree où sa branche est extraite s'il y en a un (on peut y corriger et
+  pousser), sinon dans son worktree de revue `<clone>-MR<iid>`, à côté du worktree principal, comme
+  pour une revue (cf. `GIT.md`) : créé au besoin, détaché sur `origin/<branche>`, et ramené sur le
+  dernier commit poussé à chaque ouverture tant qu'il est détaché et sans modification. Le worktree
+  principal n'est jamais touché, et aucun worktree n'est supprimé.
+- Une visionneuse qui s'utilise dans un terminal s'ouvre par `GIT_TERMINAL` : par défaut un onglet
+  Windows Terminal, où WSL la lance sans shell
   (`wt.exe -w 0 new-tab wsl.exe -d {distro} --cd {repo} --exec`) ; `GIT_TERMINAL=none` pour une
   visionneuse graphique comme `gitk --boundary origin/{target}..origin/{branch}`. `{branch}`,
   `{target}` et `{repo}` sont remplacés par les branches source et cible et le worktree. Une branche
   absente en local est d'abord fetchée. La visionneuse est cherchée dans le `PATH`, puis dans
   `~/go/bin` et `~/.local/bin` ; introuvable, ou terminal introuvable : pas de bouton.
-- **Relire une MR fichier par fichier dans lazygit** : panneau *Branches*, onglet *Remotes* (`]`),
-  `Entrée` sur `origin` ; sur la branche cible (`origin/develop`), `W` puis *Diff* la prend pour base ;
-  sur la branche de la MR, `Entrée` liste ses fichiers modifiés, à parcourir un par un, diff à droite.
-  `W` puis *Exit diff mode* pour en sortir.
+- **Relire une MR fichier par fichier dans lazygit** : panneau *Branches* (`3`), onglet *Remotes*
+  (`]`), `Entrée` sur `origin` ; sur la branche cible (`origin/develop`), `W` puis *Diff* la prend
+  pour base ; sur la branche de la MR, `Entrée` liste ses fichiers modifiés, à parcourir un par un,
+  diff à droite. `W` puis *Exit diff mode* pour en sortir.
 - Un `git fetch` ou `git pull` lancé à la main pendant un fetch automatique peut répondre
   « cannot lock ref » : le relancer.
 

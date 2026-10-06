@@ -56,8 +56,8 @@ from orca_launcher import OrcaError, OrcaLauncher
 DEFAULT_PORT = 8765
 DEFAULT_GIT_FETCH_INTERVAL_S = 300
 # Les commits de la MR, et le commit de la cible d'où elle part pour situer la divergence.
-# Ouvert sur le panneau des branches, d'où l'on compare la branche de la MR à sa cible.
-DEFAULT_GIT_VIEWER = "lazygit branch"
+# Ouvert sur les commits de la branche de la MR, extraite dans le worktree où il est lancé.
+DEFAULT_GIT_VIEWER = "lazygit log"
 # Onglet Windows Terminal, où WSL lance la visionneuse sans shell, dans le worktree de la branche.
 DEFAULT_GIT_TERMINAL = "wt.exe -w 0 new-tab wsl.exe -d {distro} --cd {repo} --exec"
 DEFAULT_SONAR_HOST = "https://sonarqube.example.com"
@@ -314,13 +314,15 @@ def make_handler(
 
         def git_view(self, payload):
             try:
+                iid = int(payload["iid"])
                 branch = str(payload["branch"])
                 target = str(payload["target"])
-            except (KeyError, TypeError):
+            except (ValueError, KeyError, TypeError):
                 self.send_json(400, {"message": "requête invalide"})
                 return
             try:
                 result = git.view(
+                    iid,
                     branch,
                     target
                 )
