@@ -236,7 +236,7 @@
     box-shadow: var(--shadow);
   }
   table.mrs th, table.mrs td {
-    padding: 0.6rem 0.5rem; border-bottom: 1px solid var(--border);
+    padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--border);
     text-align: center; vertical-align: middle;
   }
   /* Valeurs centrées comme leurs en-têtes, sauf le titre de la MR : un texte long se lit à gauche. */
@@ -329,7 +329,8 @@
   .ok.good { color: var(--green-fg); font-weight: 600; }
   .muted { color: var(--muted); }
   .late-orange { color: var(--orange-fg); font-weight: 600; }
-  .behind-unit { color: var(--muted); font-size: 0.75rem; }
+  /* Repère toujours affiché, pas un texte à lire : aussi petit que possible. */
+  .behind-unit { color: var(--muted); font-size: 0.55rem; line-height: 1.1; }
   .labels { display: flex; flex-wrap: wrap; gap: 4px; }
   .label {
     font-size: 0.8rem; font-weight: 500; border-radius: 999px; padding: 0.1em 0.65em;
@@ -337,9 +338,9 @@
   }
   .label:hover { filter: brightness(0.96); }
   .mr-cell .title .pill { font-size: 0.8rem; font-weight: 600; }
-  .actions-cell .actions { display: flex; flex-direction: column; align-items: stretch; gap: 0.3rem; }
+  .actions-cell .actions { display: flex; flex-direction: column; align-items: stretch; gap: 0.2rem; }
   /* Actions sur la MR (diff, correction) : boutons discrets, les signaux restent ce qui attire l'œil. */
-  .mr-action { flex: none; white-space: nowrap; font-size: 0.85rem; font-weight: 600; padding: 0.3em 0.7em; color: var(--muted); }
+  .mr-action { flex: none; white-space: nowrap; font-size: 0.85rem; font-weight: 600; padding: 0.15em 0.7em; color: var(--muted); }
   .mr-action:hover { color: var(--text); border-color: var(--faint); }
   /* Liseré rouge : sa seule présence signale une MR qui a quelque chose à corriger. */
   .mr-action.ai-fix { color: var(--text); border: 1px solid var(--red-fg); }
@@ -979,7 +980,7 @@ const I18N = {
     "conflicts.title": "La MR est en conflit avec sa branche cible",
     "diff.files": p => `${p.n} fichier${plural(p.n)}`,
     "diff.title": p => `${p.files} fichier${plural(p.files)} modifié${plural(p.files)}, ${p.additions} ligne${plural(p.additions)} ajoutée${plural(p.additions)}, ${p.deletions} supprimée${plural(p.deletions)}`,
-    "aiFix": "Correct with IA",
+    "aiFix": "AI fix",
     "aiFix.title": "Afficher un prompt Claude Code pour corriger cette MR",
     "gitFetch.title": "Lancer tout de suite un git fetch du dépôt local",
     "gitFetch.group": "Fetch du dépôt local",
@@ -1222,7 +1223,7 @@ const I18N = {
     "conflicts.title": "The MR conflicts with its target branch",
     "diff.files": p => `${p.n} file${pluralEn(p.n)}`,
     "diff.title": p => `${p.files} file${pluralEn(p.files)} changed, ${p.additions} line${pluralEn(p.additions)} added, ${p.deletions} deleted`,
-    "aiFix": "Fix with AI",
+    "aiFix": "AI fix",
     "aiFix.title": "Show a Claude Code prompt to fix this MR",
     "gitFetch.title": "Run a git fetch of the local repository now",
     "gitFetch.group": "Local repository fetch",
