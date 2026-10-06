@@ -87,8 +87,10 @@
   a:hover { text-decoration: underline; }
   :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
+  /* Deux lignes : identité et préférences d'affichage, puis commandes d'actualisation ; chacune revient à la
+     ligne pour son compte, sans mélanger les deux ensembles. */
   header {
-    display: flex; flex-wrap: wrap; align-items: center; gap: 0.8rem;
+    display: flex; flex-direction: column; gap: 0.7rem;
     padding: 1.1rem 1.5rem 0.9rem;
     background: var(--surface); border-bottom: 1px solid var(--border);
     position: relative;
@@ -102,17 +104,18 @@
     display: grid; place-items: center; font-weight: 800; font-size: 1.1rem;
     color: #fff; background: linear-gradient(135deg, var(--accent), var(--accent-2));
   }
-  header h1 { margin: 0; display: flex; align-items: center; gap: 0.6rem; font-size: 1.4rem; font-weight: 700; letter-spacing: -0.01em; }
-  /* « MisteR » au-dessus de « Dashboard », à hauteur de la pastille « MR » : le clin d'œil MR = MisteR se lit d'un coup. */
-  header h1 .name { display: flex; flex-direction: column; font-size: 1.15rem; line-height: 1.05; }
+  header .header-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.8rem; }
+  /* Le slogan sous le nom, à hauteur de la pastille « MR » : moins de place en largeur. */
+  header h1 { margin: 0; display: flex; flex-direction: column; font-size: 1.4rem; font-weight: 700; letter-spacing: -0.01em; }
+  header h1 .name { font-size: 1.15rem; line-height: 1.15; }
   /* Le M et le R de « MisteR » reprennent le dégradé des boutons principaux. */
   header h1 .initial {
     font-weight: inherit; color: var(--accent);
     background: linear-gradient(135deg, var(--accent), var(--accent-2));
     -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
   }
-  header h1 .tagline { font-size: 1rem; font-weight: 500; color: var(--muted); letter-spacing: 0; }
-  header .project {
+  header h1 .tagline { font-size: 0.85rem; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+  .summary-bar .project {
     font-size: 0.85rem; color: var(--muted); background: var(--surface-2);
     border: 1px solid var(--border); border-radius: 999px; padding: 0.15em 0.7em;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -123,7 +126,7 @@
   header .status { display: flex; align-items: center; gap: 0.8rem; }
   /* Hauteur réservée pour trois lignes (heure, date, progression ou échec) : sans elle, la ligne de
      progression apparue au rafraîchissement agrandissait l'en-tête et décalait toute la page. */
-  header .meta { color: var(--muted); font-size: 0.9rem; text-align: right; line-height: 1.35; min-height: calc(3 * 1.35em); }
+  header .meta { color: var(--muted); font-size: 0.9rem; text-align: left; line-height: 1.35; min-height: calc(3 * 1.35em); }
   header .meta > span { display: block; white-space: nowrap; }
   header .meta .progress { color: var(--accent); }
   header .meta .failed { color: var(--orange-fg); font-weight: 600; }
@@ -205,7 +208,8 @@
   .active-labels .label { cursor: pointer; }
   .active-labels .label::after { content: " ×"; }
 
-  .summary { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; padding: 0.9rem 1.5rem 0.6rem; }
+  .summary-bar { display: flex; flex-wrap: wrap; gap: 0.5rem 0.8rem; align-items: center; padding: 0.9rem 1.5rem 0.6rem; }
+  .summary { flex: 1; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
   .summary .gitlab-list { margin-left: auto; font-size: 0.9rem; }
   .stat {
     display: inline-flex; align-items: baseline; gap: 0.4em;
@@ -472,8 +476,7 @@
   @media (max-width: 720px) {
     header h1 .tagline { display: none; }
     header .divider { display: none; }
-    header .meta { text-align: left; }
-    header, .summary { padding-left: 16px; padding-right: 16px; }
+    header, .summary-bar { padding-left: 16px; padding-right: 16px; }
     .filters { margin-left: 16px; margin-right: 16px; }
     .table-wrap { padding: 0 16px 24px; }
     .branch-pipeline { padding: 0 16px 24px; }
@@ -482,51 +485,49 @@
 </head>
 <body>
 <header>
-  <span class="brand" aria-hidden="true" title="MisteR = MR">MR</span>
-  <h1><span class="name"><span><b class="initial">M</b>iste<b class="initial">R</b></span> <span>Dashboard</span></span> <span class="tagline" data-i18n="tagline">Le dashboard très rapide des Merge Requests</span></h1>
-  <span class="project" id="project"></span>
-  <div class="view-switch" role="group" aria-label="Vue" data-i18n-aria-label="view.group">
-    <button type="button" data-view="open" data-i18n="view.open">Ouvertes</button>
-    <button type="button" data-view="merged" data-i18n="view.merged">Mergées</button>
-  </div>
-  <span class="spacer"></span>
-  <div class="status" role="status" aria-live="polite">
-    <span class="meta" id="refreshed"></span>
-  </div>
-  <span class="divider" aria-hidden="true"></span>
-  <div class="refresh-controls" role="group" aria-label="Actualisation" data-i18n-aria-label="refresh.group">
-    <label class="auto" id="autoRefresh-control" data-i18n-title="autoRefresh.title"><input type="checkbox" id="autoRefresh" checked autocomplete="off"> <span data-i18n="autoRefresh">Actualisation auto</span></label>
-    <button id="refresh" type="button" class="primary" data-i18n="refresh">Rafraîchir</button>
-    <div class="freshness" id="freshness" hidden aria-hidden="true"></div>
-  </div>
-  <span class="divider" aria-hidden="true"></span>
-  <div class="git-fetch-control" id="git-fetch-control" hidden>
-    <span class="git-fetch-status" id="git-fetch-status" role="status" aria-live="polite"></span>
-    <div class="refresh-controls" role="group" aria-label="Fetch du dépôt local" data-i18n-aria-label="gitFetch.group">
-      <label class="auto" data-i18n-title="gitFetch.autoTitle"><input type="checkbox" id="git-fetch-auto" checked autocomplete="off"> <span data-i18n="gitFetch.auto">Fetch auto</span></label>
-      <button type="button" id="git-fetch" class="primary" data-i18n-title="gitFetch.title">git fetch</button>
-      <div class="freshness" id="git-fetch-freshness" hidden aria-hidden="true"></div>
+  <div class="header-row">
+    <span class="brand" aria-hidden="true" title="MisteR = MR">MR</span>
+    <h1><span class="name"><b class="initial">M</b>iste<b class="initial">R</b> Dashboard</span> <span class="tagline" data-i18n="tagline">Le dashboard très rapide des Merge Requests</span></h1>
+    <span class="spacer"></span>
+    <div class="lang-switch" role="group" aria-label="Langue" data-i18n-aria-label="lang.group">
+      <button type="button" data-lang="fr" lang="fr" title="Français">FR</button>
+      <button type="button" data-lang="en" lang="en" title="English">EN</button>
     </div>
+    <div class="lang-switch theme-switch" role="group" aria-label="Thème" data-i18n-aria-label="theme.group">
+      <button type="button" data-theme-choice="auto" data-i18n="theme.auto" data-i18n-title="theme.auto.title">Auto</button>
+      <button type="button" data-theme-choice="light" aria-label="Clair" data-i18n-aria-label="theme.light" data-i18n-title="theme.light"><span aria-hidden="true">☀</span></button>
+      <button type="button" data-theme-choice="dark" aria-label="Sombre" data-i18n-aria-label="theme.dark" data-i18n-title="theme.dark"><span aria-hidden="true">☾</span></button>
+    </div>
+    <div class="lang-switch text-size" role="group" aria-label="Taille du texte" data-i18n-aria-label="textSize.group" data-i18n-title="textSize.title">
+      <button type="button" data-text-step="-1" aria-label="Texte plus petit" data-i18n-aria-label="textSize.smaller">A−</button>
+      <output id="text-scale"></output>
+      <button type="button" data-text-step="1" aria-label="Texte plus grand" data-i18n-aria-label="textSize.larger">A+</button>
+    </div>
+    <span class="divider" aria-hidden="true"></span>
+    <button type="button" id="clear-storage" class="icon-button" aria-label="Effacer les données locales" data-i18n-aria-label="clearStorage" data-i18n-title="clearStorage.title"><span aria-hidden="true">🧹</span></button>
   </div>
-  <span class="divider" id="git-fetch-divider" aria-hidden="true" hidden></span>
-  <label class="auto" id="notify-control" data-i18n-title="notify.title"><input type="checkbox" id="notify" autocomplete="off"> <span data-i18n="notify">Notifications</span></label>
-  <span class="divider" aria-hidden="true"></span>
-  <div class="lang-switch" role="group" aria-label="Langue" data-i18n-aria-label="lang.group">
-    <button type="button" data-lang="fr" lang="fr" title="Français">FR</button>
-    <button type="button" data-lang="en" lang="en" title="English">EN</button>
+  <div class="header-row">
+    <div class="status" role="status" aria-live="polite">
+      <span class="meta" id="refreshed"></span>
+    </div>
+    <span class="divider" aria-hidden="true"></span>
+    <div class="refresh-controls" role="group" aria-label="Actualisation" data-i18n-aria-label="refresh.group">
+      <label class="auto" id="autoRefresh-control" data-i18n-title="autoRefresh.title"><input type="checkbox" id="autoRefresh" checked autocomplete="off"> <span data-i18n="autoRefresh">Actualisation auto</span></label>
+      <button id="refresh" type="button" class="primary" data-i18n="refresh">Rafraîchir</button>
+      <div class="freshness" id="freshness" hidden aria-hidden="true"></div>
+    </div>
+    <span class="divider" aria-hidden="true"></span>
+    <div class="git-fetch-control" id="git-fetch-control" hidden>
+      <span class="git-fetch-status" id="git-fetch-status" role="status" aria-live="polite"></span>
+      <div class="refresh-controls" role="group" aria-label="Fetch du dépôt local" data-i18n-aria-label="gitFetch.group">
+        <label class="auto" data-i18n-title="gitFetch.autoTitle"><input type="checkbox" id="git-fetch-auto" checked autocomplete="off"> <span data-i18n="gitFetch.auto">Fetch auto</span></label>
+        <button type="button" id="git-fetch" class="primary" data-i18n-title="gitFetch.title">git fetch</button>
+        <div class="freshness" id="git-fetch-freshness" hidden aria-hidden="true"></div>
+      </div>
+    </div>
+    <span class="divider" id="git-fetch-divider" aria-hidden="true" hidden></span>
+    <label class="auto" id="notify-control" data-i18n-title="notify.title"><input type="checkbox" id="notify" autocomplete="off"> <span data-i18n="notify">Notifications</span></label>
   </div>
-  <div class="lang-switch theme-switch" role="group" aria-label="Thème" data-i18n-aria-label="theme.group">
-    <button type="button" data-theme-choice="auto" data-i18n="theme.auto" data-i18n-title="theme.auto.title">Auto</button>
-    <button type="button" data-theme-choice="light" aria-label="Clair" data-i18n-aria-label="theme.light" data-i18n-title="theme.light"><span aria-hidden="true">☀</span></button>
-    <button type="button" data-theme-choice="dark" aria-label="Sombre" data-i18n-aria-label="theme.dark" data-i18n-title="theme.dark"><span aria-hidden="true">☾</span></button>
-  </div>
-  <div class="lang-switch text-size" role="group" aria-label="Taille du texte" data-i18n-aria-label="textSize.group" data-i18n-title="textSize.title">
-    <button type="button" data-text-step="-1" aria-label="Texte plus petit" data-i18n-aria-label="textSize.smaller">A−</button>
-    <output id="text-scale"></output>
-    <button type="button" data-text-step="1" aria-label="Texte plus grand" data-i18n-aria-label="textSize.larger">A+</button>
-  </div>
-  <span class="divider" aria-hidden="true"></span>
-  <button type="button" id="clear-storage" class="icon-button" aria-label="Effacer les données locales" data-i18n-aria-label="clearStorage" data-i18n-title="clearStorage.title"><span aria-hidden="true">🧹</span></button>
 </header>
 
 <div class="filters">
@@ -572,7 +573,14 @@
 </section>
 
 <div id="errors"></div>
-<div class="summary" id="summary"></div>
+<div class="summary-bar">
+  <div class="view-switch" role="group" aria-label="Vue" data-i18n-aria-label="view.group">
+    <button type="button" data-view="open" data-i18n="view.open">Ouvertes</button>
+    <button type="button" data-view="merged" data-i18n="view.merged">Mergées</button>
+  </div>
+  <div class="summary" id="summary"></div>
+  <span class="project" id="project"></span>
+</div>
 <div class="table-wrap">
   <table class="mrs">
     <thead id="headers"></thead>

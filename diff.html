@@ -62,10 +62,12 @@
   a { color: var(--link); }
   header {
     position: sticky; top: 0; z-index: 10;
-    display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem;
+    display: flex; flex-direction: column; gap: 0.45rem;
     padding: 0.75rem 1rem; background: var(--surface); border-bottom: 1px solid var(--border);
   }
-  header h1 { margin: 0; font-size: 1.05rem; flex: 1 1 20rem; min-width: 0; overflow-wrap: anywhere; }
+  /* Une ligne par ensemble — commandes, titre, branches — pour qu'ils ne se mélangent pas au gré des retours à la ligne. */
+  header .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; }
+  header h1 { margin: 0; font-size: 1.05rem; overflow-wrap: anywhere; }
   .branches { color: var(--muted); font-size: 0.9rem; overflow-wrap: anywhere; }
   .branches code { font-size: 0.85rem; }
   .format { display: flex; gap: 0; }
@@ -122,18 +124,20 @@
 </head>
 <body>
 <header>
+  <div class="controls">
+    <div class="format" role="group" id="format">
+      <button type="button" data-format="side-by-side" id="side-by-side"></button>
+      <button type="button" data-format="line-by-line" id="line-by-line"></button>
+    </div>
+    <div class="text-size" role="group" id="text-size">
+      <button type="button" data-text-step="-1">A−</button>
+      <output id="text-scale"></output>
+      <button type="button" data-text-step="1">A+</button>
+    </div>
+    <a id="gitlab" target="_blank" rel="noopener" hidden></a>
+  </div>
   <h1 id="title"></h1>
   <span class="branches" id="branches"></span>
-  <div class="format" role="group" id="format">
-    <button type="button" data-format="side-by-side" id="side-by-side"></button>
-    <button type="button" data-format="line-by-line" id="line-by-line"></button>
-  </div>
-  <div class="text-size" role="group" id="text-size">
-    <button type="button" data-text-step="-1">A−</button>
-    <output id="text-scale"></output>
-    <button type="button" data-text-step="1">A+</button>
-  </div>
-  <a id="gitlab" target="_blank" rel="noopener" hidden></a>
 </header>
 <main id="diff"><p class="message" id="loading"></p></main>
 <script src="vendor/diff2html/diff2html-ui-slim.min.js"></script>
