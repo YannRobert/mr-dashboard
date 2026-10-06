@@ -438,7 +438,11 @@
     font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
     color: var(--muted); border: 1px solid var(--border-strong); border-radius: 4px; padding: 1px 6px;
   }
-  .bp-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.8rem; }
+  .bp-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.8rem; cursor: pointer; }
+  .bp-head::-webkit-details-marker { display: none; }
+  .bp-head::before { content: "▸"; color: var(--muted); font-size: 1.2em; line-height: 1; transition: transform .15s ease; }
+  .bp-card[open] > .bp-head::before { transform: rotate(90deg); }
+  @media (prefers-reduced-motion: reduce) { .bp-head::before { transition: none; } }
   .bp-head .bp-commit { font-weight: 600; color: var(--text); }
   .bp-head .muted, .bp-head code { color: var(--muted); }
   .bp-history { display: inline-flex; align-items: stretch; gap: 0.35rem; position: relative; }
@@ -775,6 +779,8 @@ const state = {
   mrs: [],
   // undefined tant que rien n'est chargé, null si la branche n'a aucun pipeline.
   branchPipeline: undefined,
+  // Dépliage choisi à la main, par pipeline et par statut : un changement de statut rend la main au défaut.
+  branchPipelineOpen: new Map(),
   signals: new Map(),
   // Vue des MR mergées : chargée à la demande, jamais sauvegardée ni actualisée automatiquement.
   // seq écarte le résultat d'un chargement dépassé par un autre (période changée entre-temps).
@@ -3794,8 +3800,13 @@ function pipelineCard(
     const tooltip = escapeHtml(`${stage.name} : ${stage.detailedStatus.label}`);
     return `<li class="bp-stage"><div class="bp-stage-head" title="${tooltip}">${stageIcon(stage.detailedStatus.group)}${escapeHtml(stage.name)}</div><ul class="bp-jobs">${jobs}</ul></li>`;
   }).join("");
-  return `<div class="bp-card"><div class="bp-head">${head}</div><ol class="bp-stages">${stages}</ol></div>`;
+  const open = state.branchPipelineOpen.get(pipelineOpenKey(p)) ?? defaultPipelineOpen(p);
+  return `<details class="bp-card" data-pipeline-key="${escapeHtml(pipelineOpenKey(p))}"${open ? " open" : ""}><summary class="bp-head">${head}</summary><ol class="bp-stages">${stages}</ol></details>`;
 }
+
+// Réussi : replié, la ligne de tête suffit. Tout autre statut se déplie pour montrer où ça bloque.
+const defaultPipelineOpen = p => p.detailedStatus.group !== "success";
+const pipelineOpenKey = p => `${p.id}:${p.detailedStatus.group}`;
 
 function buildDurationsLine(durations) {
   if (!durations?.length) return "";
@@ -3896,6 +3907,14 @@ $("period").addEventListener("change", e => {
   loadMerged();
 });
 $("alerts").addEventListener("change", e => updateFilters({ alerts: e.target.checked }));
+// « toggle » ne remonte pas : écouté en capture. Revenir au défaut efface le choix manuel.
+$("branch-pipeline").addEventListener("toggle", e => {
+  const key = e.target.dataset?.pipelineKey;
+  if (!key) return;
+  const p = [state.branchPipeline, state.branchPipeline?.previous].find(c => c && pipelineOpenKey(c) === key);
+  if (!p || e.target.open === defaultPipelineOpen(p)) state.branchPipelineOpen.delete(key);
+  else state.branchPipelineOpen.set(key, e.target.open);
+}, true);
 $("label").addEventListener("change", e => {
   if (e.target.value) updateFilters({ labels: [...state.filters.labels, e.target.value] });
 });
