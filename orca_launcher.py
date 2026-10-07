@@ -1,4 +1,4 @@
-"""Ouvre dans Orca une session Claude Code chargée de corriger une MR.
+"""Ouvre dans Orca une session Claude Code chargée d'une action du bouton AI sur une MR.
 
 Orca tourne sous Windows, ce serveur dans WSL : on pilote Orca par sa CLI (orca.exe, joignable depuis
 WSL par l'interop Windows). Le terminal qu'Orca ouvre sur un worktree \\\\wsl.localhost\\… est un bash
@@ -95,6 +95,7 @@ class OrcaLauncher:
     def launch(
             self,
             iid,
+            title,
             prompt
     ):
         """Ouvre le terminal et renvoie {worktree, confirmed}."""
@@ -112,7 +113,7 @@ class OrcaLauncher:
             self._orca([
                 "terminal", "create",
                 "--worktree", "path:" + self._windows_path(self._repo_root),
-                "--title", f"Fix MR !{iid}",
+                "--title", title,
                 "--command", f"[ -f '{prompt_file}' ] && claude \"$(cat '{prompt_file}'; rm -f '{prompt_file}')\"",
                 "--focus",
                 "--json",
@@ -129,10 +130,10 @@ class OrcaLauncher:
             prompt
     ):
         PROMPT_DIR.mkdir(parents=True, exist_ok=True)
-        for stale in PROMPT_DIR.glob("fix-MR*.md"):
+        for stale in PROMPT_DIR.glob("*MR*.md"):
             if time.time() - stale.stat().st_mtime > PROMPT_MAX_AGE_S:
                 stale.unlink(missing_ok=True)
-        path = PROMPT_DIR / f"fix-MR{iid}-{secrets.token_hex(4)}.md"
+        path = PROMPT_DIR / f"MR{iid}-{secrets.token_hex(4)}.md"
         path.write_text(prompt, encoding="utf-8")
         path.chmod(0o600)
         return path

@@ -330,12 +330,12 @@
   .label:hover { filter: brightness(0.96); }
   .mr-cell .title .pill { font-size: 0.8rem; font-weight: 600; }
   .actions-cell .actions { display: flex; flex-direction: column; align-items: stretch; gap: 0.2rem; }
-  /* Actions sur la MR (diff, correction) : boutons discrets, les signaux restent ce qui attire l'œil. */
+  /* Actions sur la MR (diff, commentaires, AI) : boutons discrets, les signaux restent ce qui attire l'œil. */
   .mr-action { flex: none; white-space: nowrap; font-size: 0.85rem; font-weight: 600; padding: 0.15em 0.7em; color: var(--muted); }
   .mr-action:hover { color: var(--text); border-color: var(--faint); }
   /* Liseré rouge : sa seule présence signale une MR qui a quelque chose à corriger. */
-  .mr-action.ai-fix { color: var(--text); border: 1px solid var(--red-fg); }
-  .mr-action.ai-fix:hover { border-color: var(--red-fg); background: var(--red-bg); }
+  .mr-action.ai.to-fix { color: var(--text); border: 1px solid var(--red-fg); }
+  .mr-action.ai.to-fix:hover { border-color: var(--red-fg); background: var(--red-bg); }
   .mr-action.placeholder { visibility: hidden; }
   .actions-row { display: flex; gap: 0.2rem; }
   /* Diff et commentaires : deux cases de même taille, pictogramme centré. */
@@ -348,6 +348,10 @@
   dialog.ai-prompt::backdrop { background: rgba(16, 24, 40, .45); }
   dialog.ai-prompt h2 { margin: 0 0 0.3rem; font-size: 1.1rem; }
   dialog.ai-prompt p { margin: 0 0 0.8rem; color: var(--muted); font-size: 0.9rem; }
+  dialog.ai-prompt p.ai-error { color: var(--red-fg); }
+  dialog.ai-prompt .ai-actions { margin: 0.3rem 0 0.7rem; }
+  dialog.ai-prompt .ai-actions[hidden] { display: none; }
+  dialog.ai-prompt .ai-actions button { font-size: 0.9rem; padding: 0.3em 0.9em; }
   dialog.ai-prompt textarea {
     width: 100%; box-sizing: border-box; height: min(60vh, 34rem); min-height: 16rem; resize: vertical; padding: 0.7rem;
     font: 0.9rem/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -559,6 +563,8 @@
 
 <dialog class="ai-prompt" id="ai-dialog" aria-labelledby="ai-title">
   <h2 id="ai-title"></h2>
+  <div class="view-switch ai-actions" id="ai-actions" role="group" aria-label="Action" data-i18n-aria-label="dialog.actions"></div>
+  <p class="ai-error" id="ai-error" hidden></p>
   <p data-i18n="dialog.hint">Prompt à coller dans Claude Code, lancé à la racine du dépôt.</p>
   <textarea id="ai-text" readonly aria-label="Prompt pour Claude Code" data-i18n-aria-label="dialog.aria"></textarea>
   <div class="actions">
@@ -685,7 +691,7 @@ const COLUMNS = [
   { key: "title", firstDir: "asc", cellClass: "mr-cell", value: mr => mr.title.replace(/^Draft:\s*/i, ""), render: mrCell },
   { key: "author", firstDir: "asc", cellClass: "nowrap", value: mr => mr.author?.name ?? null, render: authorCell },
   // Actions dans leur colonne, empilées : sous le titre, elles ajoutaient une troisième ligne à chaque MR.
-  { key: "actions", sortable: false, cellClass: "actions-cell", render: mr => `<div class="actions"><div class="actions-row">${gitDiffButton(mr)}${commentsLink(mr)}</div>${mr.state === "merged" ? "" : aiFixButton(mr) || aiFixPlaceholder()}</div>` },
+  { key: "actions", sortable: false, cellClass: "actions-cell", render: mr => `<div class="actions"><div class="actions-row">${gitDiffButton(mr)}${commentsLink(mr)}</div>${mr.state === "merged" ? "" : aiButton(mr) || aiPlaceholder()}</div>` },
   { key: "commits", firstDir: "desc", num: true, cellClass: "num", value: commitsCount, render: commitsCell },
   { key: "comments", firstDir: "desc", num: true, cellClass: "num", value: mr => mr.user_notes_count, render: mr => String(mr.user_notes_count) },
   { key: "threads", firstDir: "desc", num: true, cellClass: "num",
@@ -873,7 +879,9 @@ const I18N = {
     "filter.addLabel": "Label : ajouter…",
     "label.add": "Filtrer sur ce label",
     "label.remove": "Retirer ce label du filtre",
-    "dialog.title": p => `Corriger la MR !${p.iid} avec Claude Code`,
+    "dialog.title": p => `Claude Code sur la MR !${p.iid}`,
+    "dialog.actions": "Action",
+    "dialog.catalogError": p => `Catalogue des actions AI illisible : ${p.message}`,
     "dialog.hint": "Prompt à coller dans Claude Code, lancé à la racine du dépôt — ou à lancer directement dans Orca.",
     "dialog.aria": "Prompt pour Claude Code",
     "dialog.close": "Fermer",
@@ -983,8 +991,10 @@ const I18N = {
     "conflicts.title": "La MR est en conflit avec sa branche cible",
     "diff.files": p => `${p.n} fichier${plural(p.n)}`,
     "diff.title": p => `${p.files} fichier${plural(p.files)} modifié${plural(p.files)}, ${p.additions} ligne${plural(p.additions)} ajoutée${plural(p.additions)}, ${p.deletions} supprimée${plural(p.deletions)}`,
-    "aiFix": "AI fix",
-    "aiFix.title": "Afficher un prompt Claude Code pour corriger cette MR",
+    "ai": "AI",
+    "ai.title": "Afficher un prompt Claude Code pour cette MR",
+    "ai.title.toFix": "Afficher un prompt Claude Code pour cette MR, qui a quelque chose à corriger",
+    "ai.fix": "Corriger",
     "gitFetch.title": "Lancer tout de suite un git fetch du dépôt local",
     "gitFetch.group": "Fetch du dépôt local",
     "gitFetch.auto": "Fetch auto",
@@ -1117,7 +1127,9 @@ const I18N = {
     "filter.addLabel": "Label: add…",
     "label.add": "Filter on this label",
     "label.remove": "Remove this label from the filter",
-    "dialog.title": p => `Fix MR !${p.iid} with Claude Code`,
+    "dialog.title": p => `Claude Code on MR !${p.iid}`,
+    "dialog.actions": "Action",
+    "dialog.catalogError": p => `Unreadable AI actions catalogue: ${p.message}`,
     "dialog.hint": "Prompt to paste into Claude Code, started at the repository root — or to start directly in Orca.",
     "dialog.aria": "Prompt for Claude Code",
     "dialog.close": "Close",
@@ -1227,8 +1239,10 @@ const I18N = {
     "conflicts.title": "The MR conflicts with its target branch",
     "diff.files": p => `${p.n} file${pluralEn(p.n)}`,
     "diff.title": p => `${p.files} file${pluralEn(p.files)} changed, ${p.additions} line${pluralEn(p.additions)} added, ${p.deletions} deleted`,
-    "aiFix": "AI fix",
-    "aiFix.title": "Show a Claude Code prompt to fix this MR",
+    "ai": "AI",
+    "ai.title": "Show a Claude Code prompt for this MR",
+    "ai.title.toFix": "Show a Claude Code prompt for this MR, which has something to fix",
+    "ai.fix": "Fix",
     "gitFetch.title": "Run a git fetch of the local repository now",
     "gitFetch.group": "Local repository fetch",
     "gitFetch.auto": "Auto-fetch",
@@ -1574,6 +1588,7 @@ async function ensureConfig() {
     state.configLoaded = true;
     renderGitFetch();
     loadGitFetchStatus();
+    loadAiActions().then(render);
   }
   applyDefaultTarget();
   $("project").textContent = state.config.gitlabProject;
@@ -3022,20 +3037,56 @@ function renderGitFetchFreshness() {
   );
 }
 
-// ---------- Prompt de correction ----------
+// ---------- Actions AI ----------
 
-// Le bouton n'apparaît que s'il y a quelque chose à corriger : une branche en retard ou en conflit, un
-// indicateur qualité imparfait ou un thread non résolu. Le prompt ne cite que ce qui l'est, avec les
-// valeurs affichées dans le tableau.
-// Place du bouton gardée quand il n'y a rien à corriger : « diff » reste au même endroit d'une ligne à l'autre.
-const aiFixPlaceholder = () => `<button type="button" class="mr-action ai-fix placeholder" tabindex="-1" aria-hidden="true">${escapeHtml(t("aiFix"))}</button>`;
+// Catalogue des actions du projet suivi (cf. ai_actions.py) : chacune un prompt dont la page remplace
+// les variables. Relu à chaque ouverture du dialogue, pour essayer un prompt sans recharger la page.
+async function loadAiActions() {
+  try {
+    state.aiActions = (await api("/ai/actions")).body;
+  } catch (error) {
+    state.aiActions = { actions: [], error: error.message };
+  }
+}
 
-function aiFixButton(mr) {
+// Une branche en retard ou en conflit, un indicateur qualité imparfait ou un thread non résolu : seules
+// les actions « to-fix » l'exigent, et le liseré rouge du bouton le signale.
+function hasSomethingToFix(mr) {
   const s = signalsOf(mr);
-  if (s.loading || mr.state === "merged") return "";
-  const outdated = mr.has_conflicts || s.behind?.count > 0;
-  if (!outdated && !qualityDefects(s).length && !(s.threads?.unresolved > 0)) return "";
-  return `<button type="button" class="mr-action ai-fix" data-ai-fix="${mr.iid}" title="${escapeHtml(t("aiFix.title"))}">${escapeHtml(t("aiFix"))}</button>`;
+  return mr.has_conflicts || s.behind?.count > 0 || qualityDefects(s).length > 0 || s.threads?.unresolved > 0;
+}
+
+function aiActionsFor(mr) {
+  const toFix = hasSomethingToFix(mr);
+  return (state.aiActions?.actions ?? []).filter(action => action.when !== "to-fix" || toFix);
+}
+
+// Place du bouton gardée quand aucune action n'est proposée : « diff » reste au même endroit d'une ligne à l'autre.
+const aiPlaceholder = () => `<button type="button" class="mr-action ai placeholder" tabindex="-1" aria-hidden="true">${escapeHtml(t("ai"))}</button>`;
+
+// Un catalogue illisible laisse le bouton partout : le dialogue dit pourquoi aucune action n'est proposée.
+function aiButton(mr) {
+  if (signalsOf(mr).loading || mr.state === "merged" || !state.aiActions) return "";
+  if (!state.aiActions.error && !aiActionsFor(mr).length) return "";
+  const toFix = hasSomethingToFix(mr);
+  return `<button type="button" class="mr-action ai${toFix ? " to-fix" : ""}" data-ai="${mr.iid}" ` +
+    `title="${escapeHtml(t(toFix ? "ai.title.toFix" : "ai.title"))}">${escapeHtml(t("ai"))}</button>`;
+}
+
+// Variables inconnues laissées telles quelles : le prompt affiché montre la faute de frappe.
+function aiPrompt(
+  action,
+  mr
+) {
+  const values = {
+    iid: () => mr.iid,
+    title: () => mr.title,
+    source_branch: () => mr.source_branch,
+    target_branch: () => mr.target_branch,
+    web_url: () => mr.web_url,
+    fix_context: () => aiFixPrompt(mr),
+  };
+  return action.prompt.replace(/\{(\w+)\}/g, (variable, name) => Object.hasOwn(values, name) ? String(values[name]()) : variable);
 }
 
 // Alimente le prompt seul : en français quelle que soit la langue de l'interface, comme aiFixPrompt.
@@ -3105,14 +3156,39 @@ function aiFixPrompt(mr) {
   return parts.join("\n\n");
 }
 
-function openAiFix(mr) {
-  $("ai-dialog").dataset.iid = mr.iid;
+async function openAi(mr) {
+  await loadAiActions();
+  render();
+  const actions = aiActionsFor(mr);
+  const dialog = $("ai-dialog");
+  dialog.dataset.iid = mr.iid;
   $("ai-title").textContent = t("dialog.title", { iid: mr.iid });
-  $("ai-text").value = aiFixPrompt(mr);
-  $("ai-copied").textContent = "";
+  $("ai-error").hidden = !state.aiActions.error;
+  $("ai-error").textContent = state.aiActions.error ? t("dialog.catalogError", { message: state.aiActions.error }) : "";
+  $("ai-actions").innerHTML = actions.map(action =>
+    `<button type="button" data-ai-action="${escapeHtml(action.id)}">${escapeHtml(action.label ?? t("ai.fix"))}</button>`
+  ).join("");
+  $("ai-actions").hidden = !actions.length;
   $("ai-orca").hidden = !state.config?.orcaEnabled;
-  $("ai-orca").disabled = false;
-  $("ai-dialog").showModal();
+  if (!dialog.open) dialog.showModal();
+  selectAiAction(
+    mr,
+    actions[0]
+  );
+}
+
+function selectAiAction(
+  mr,
+  action
+) {
+  const dialog = $("ai-dialog");
+  dialog.dataset.action = action?.id ?? "";
+  for (const button of $("ai-actions").querySelectorAll("[data-ai-action]")) {
+    button.setAttribute("aria-pressed", String(button.dataset.aiAction === action?.id));
+  }
+  $("ai-text").value = action ? aiPrompt(action, mr) : "";
+  $("ai-copied").textContent = "";
+  for (const id of ["ai-orca", "ai-copy"]) $(id).disabled = !action;
   $("ai-text").select();
 }
 
@@ -3134,11 +3210,15 @@ async function openInOrca() {
   status.textContent = t("dialog.orca.opening");
   try {
     const { body } = await api(
-      "/orca/fix",
+      "/orca/launch",
       {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-MR-Dashboard": "1" },
-        body: JSON.stringify({ iid: Number($("ai-dialog").dataset.iid), prompt: $("ai-text").value }),
+        body: JSON.stringify({
+          iid: Number($("ai-dialog").dataset.iid),
+          action: $("ai-dialog").dataset.action,
+          prompt: $("ai-text").value,
+        }),
       }
     );
     status.textContent = t(body.confirmed ? "dialog.orca.opened" : "dialog.orca.unconfirmed", body);
@@ -3933,9 +4013,9 @@ document.addEventListener("click", e => {
     openGitDiff(mrs.find(mr => String(mr.iid) === gitDiff.dataset.gitDiff));
     return;
   }
-  const aiFix = e.target.closest("[data-ai-fix]");
-  if (aiFix) {
-    openAiFix(state.mrs.find(mr => String(mr.iid) === aiFix.dataset.aiFix));
+  const ai = e.target.closest("[data-ai]");
+  if (ai) {
+    openAi(state.mrs.find(mr => String(mr.iid) === ai.dataset.ai));
     return;
   }
   const add = e.target.closest("[data-add-label]");
@@ -4020,6 +4100,15 @@ setInterval(loadGitFetchStatus, 30 * 1000);
 $("git-fetch").addEventListener("click", () => gitFetch());
 $("git-fetch-auto").addEventListener("change", e => setGitFetchAuto(e.target.checked));
 $("ai-copy").addEventListener("click", copyAiPrompt);
+$("ai-actions").addEventListener("click", e => {
+  const button = e.target.closest("[data-ai-action]");
+  if (!button) return;
+  const mr = state.mrs.find(m => String(m.iid) === $("ai-dialog").dataset.iid);
+  selectAiAction(
+    mr,
+    aiActionsFor(mr).find(action => action.id === button.dataset.aiAction)
+  );
+});
 $("ai-orca").addEventListener("click", openInOrca);
 $("ai-close").addEventListener("click", () => $("ai-dialog").close());
 

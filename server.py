@@ -14,8 +14,9 @@ relayé, et le serveur n'écoute que sur 127.0.0.1 : les seules écritures dans 
 /gitlab/… ci-dessous, qui valident leur requête avant de la transmettre.
 
 Actions locales, en POST :
-    /orca/fix   ouvre dans Orca une session Claude Code avec le prompt de correction d'une MR
-                (cf. orca_launcher.py), quand le serveur tourne dans WSL et qu'Orca est installé
+    /orca/launch  ouvre dans Orca une session Claude Code avec le prompt d'une action du bouton AI
+                d'une MR : {"iid", "action", "prompt"} (cf. orca_launcher.py), quand le serveur tourne
+                dans WSL et qu'Orca est installé ; GET /ai/actions en donne le catalogue (cf. ai_actions.py)
     /git/fetch  git fetch du clone local, qui tourne aussi tout seul toutes les --git-fetch-interval
                 secondes ; GET /git/status en donne le dernier résultat (cf. git_actions.py)
     /git/auto   active ou suspend le fetch automatique : {"enabled": true|false}
@@ -58,6 +59,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlsplit
 
+from ai_actions import AiActions, AiActionsError
 from git_actions import GitActions, GitError
 from orca_launcher import OrcaError, OrcaLauncher
 
@@ -253,7 +255,8 @@ class UpstreamPool:
 def make_handler(
         settings,
         orca,
-        git
+        git,
+        ai_actions
 ):
     upstream = UpstreamPool()
 
@@ -275,6 +278,11 @@ def make_handler(
                 self.send_file(STATIC_DIR / "comments.html", "text/html; charset=utf-8")
             elif self.path in STATIC_FILES:
                 self.send_file(STATIC_DIR / self.path.lstrip("/"), STATIC_FILES[self.path])
+            elif self.path == "/ai/actions":
+                try:
+                    self.send_json(200, ai_actions.catalog())
+                except AiActionsError as error:
+                    self.send_json(500, {"message": str(error)})
             elif self.path == "/git/status":
                 self.send_json(200, git.status())
             elif self.path.startswith("/git/diff?"):
@@ -306,7 +314,7 @@ def make_handler(
             if not self.host_allowed():
                 return
             actions = {
-                "/orca/fix": self.orca_fix,
+                "/orca/launch": self.orca_launch,
                 "/git/fetch": self.git_fetch,
                 "/git/auto": self.git_auto,
                 "/gitlab/discussion": self.gitlab_discussion,
@@ -335,9 +343,10 @@ def make_handler(
                 return
             action(payload)
 
-        def orca_fix(self, payload):
+        def orca_launch(self, payload):
             try:
                 iid = int(payload["iid"])
+                action = str(payload["action"])
                 prompt = str(payload["prompt"])
             except (ValueError, KeyError, TypeError):
                 self.send_json(400, {"message": "requête invalide"})
@@ -346,8 +355,17 @@ def make_handler(
                 self.send_json(503, {"message": "Orca introuvable, ou serveur lancé hors WSL"})
                 return
             try:
+                title = ai_actions.tab_title(
+                    action,
+                    iid
+                )
+            except AiActionsError as error:
+                self.send_json(400, {"message": str(error)})
+                return
+            try:
                 result = orca.launch(
                     iid,
+                    title,
                     prompt
                 )
             except OrcaError as error:
@@ -773,7 +791,8 @@ def main():
         make_handler(
             settings,
             orca,
-            git
+            git,
+            AiActions.detect(args.repo_dir)
         )
     )
     git.start_periodic_fetch()

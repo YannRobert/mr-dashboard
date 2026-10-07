@@ -91,6 +91,37 @@ c'est le navigateur ou Windows qui bloque, pas le dashboard :
    *Ne pas déranger* (ou l'*Assistant de concentration*) désactivé ;
 3. décocher puis recocher la case pour renvoyer la notification de test.
 
+## Actions AI
+
+Le bouton **AI** d'une MR ouverte propose les actions du catalogue du projet suivi : le dialogue
+affiche le prompt de l'action choisie, à copier dans Claude Code ou à lancer dans un onglet Orca (quand
+le serveur tourne dans WSL et qu'Orca est installé). Le bouton porte un liseré rouge quand la MR a
+quelque chose à corriger : branche en retard ou en conflit, indicateur qualité imparfait, thread non
+résolu.
+
+Le catalogue est le fichier `.mr-dashboard/ai-actions.toml`, commité à la racine du projet suivi et lu
+dans son worktree principal. Il est relu à chaque ouverture du dialogue : un prompt modifié s'essaie
+sans redémarrer ni commiter. Une action par bloc `[[action]]`, dans l'ordre du dialogue :
+
+```toml
+[[action]]
+id = "…"           # unique dans le fichier
+label = "…"        # libellé du choix dans le dialogue
+tab = "… !{iid}"   # titre de l'onglet Orca (défaut : label)
+when = "to-fix"    # facultatif : seulement quand la MR a quelque chose à corriger
+prompt = """
+…
+"""
+```
+
+Variables du prompt : `{iid}`, `{title}`, `{source_branch}`, `{target_branch}`, `{web_url}`, et
+`{fix_context}`, le prompt de correction calculé par le dashboard (mise à jour de la branche,
+indicateurs imparfaits, threads, boucle de vérification jusqu'à des indicateurs parfaits). Une
+variable inconnue reste telle quelle dans le prompt affiché.
+
+Sans catalogue, seule la correction est proposée, avec `{fix_context}` pour prompt. Un catalogue
+invalide n'en propose aucune : le dialogue dit pourquoi.
+
 ## Dépôt local : fetch et diff
 
 Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut), toujours dans son
@@ -162,6 +193,6 @@ Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut
 ## Après une modification
 
 - `index.html` et `diff.html` sont relus à chaque requête : recharger la page suffit.
-- `server.py`, `orca_launcher.py` ou `git_actions.py` : `stop.sh` puis `start.sh`.
+- `server.py`, `orca_launcher.py`, `ai_actions.py` ou `git_actions.py` : `stop.sh` puis `start.sh`.
 - Le serveur sert l'`index.html` du dépôt (ou du worktree) d'où il a été lancé : pour tester la
   version d'un worktree, relancer le serveur depuis ce worktree.
