@@ -252,7 +252,7 @@
   /* Infobulle des commits et des fichiers : celle du navigateur, minuscule et coupée en lignes étroites, se lit mal. Ici à la taille
      du texte de la page, chaque ligne d'un tenant tant que l'écran est assez large. */
   .tip {
-    position: fixed; z-index: 30; pointer-events: none; box-sizing: border-box;
+    position: fixed; z-index: 30; box-sizing: border-box; user-select: text; cursor: text;
     width: max-content; max-width: calc(100vw - 1rem); padding: 0.4rem 0.65rem;
     font-size: 1rem; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere;
     color: var(--text); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 0.45rem;
@@ -1488,13 +1488,21 @@
     markSeen();
   }
 
-  // Infobulle des éléments [data-tip], après le même court délai que celle du navigateur ; tout défilement,
-  // clic ou sortie de l'élément la ferme.
+  // Infobulle des éléments [data-tip], après le même court délai que celle du navigateur. Collée à l'élément, elle
+  // reste ouverte quand la souris passe dessus, le temps d'en sélectionner le texte pour le copier ; une sélection
+  // en cours la garde ouverte. Un clic ailleurs, un défilement ou Échap la ferment.
   const tip = Object.assign(document.createElement("div"), { className: "tip", hidden: true });
   tip.setAttribute("role", "tooltip");
   document.body.append(tip);
   let tipOwner = null;
   let tipTimer = 0;
+  // Délai de grâce entre la sortie de l'élément et l'arrivée sur l'infobulle.
+  const TIP_LEAVE_MS = 300;
+
+  const tipSelected = () => {
+    const selection = getSelection();
+    return !tip.hidden && !selection.isCollapsed && tip.contains(selection.anchorNode);
+  };
 
   function hideTip() {
     clearTimeout(tipTimer);
@@ -1502,26 +1510,45 @@
     tip.hidden = true;
   }
 
+  function leaveTip() {
+    clearTimeout(tipTimer);
+    tipTimer = setTimeout(() => {
+      if (!tipSelected()) hideTip();
+    }, TIP_LEAVE_MS);
+  }
+
   function showTip(owner) {
     tip.textContent = owner.dataset.tip;
     tip.hidden = false;
     const box = owner.getBoundingClientRect();
-    const below = box.bottom + 4;
-    tip.style.top = `${below + tip.offsetHeight > innerHeight ? box.top - tip.offsetHeight - 4 : below}px`;
+    tip.style.top = `${box.bottom + tip.offsetHeight > innerHeight ? box.top - tip.offsetHeight + 1 : box.bottom - 1}px`;
     tip.style.left = `${Math.max(4, Math.min(box.left, innerWidth - tip.offsetWidth - 4))}px`;
   }
 
   document.addEventListener("mouseover", e => {
     const owner = e.target.closest("[data-tip]");
-    if (owner === tipOwner) return;
+    if (tip.contains(e.target) || (owner && owner === tipOwner)) {
+      if (!tip.hidden) clearTimeout(tipTimer);
+      return;
+    }
+    if (tipSelected()) return;
+    if (!owner) {
+      if (tip.hidden) hideTip();
+      else leaveTip();
+      return;
+    }
     hideTip();
-    if (!owner) return;
     tipOwner = owner;
     tipTimer = setTimeout(() => showTip(owner), 500);
   });
-  document.addEventListener("mousedown", hideTip);
+  document.addEventListener("mousedown", e => {
+    if (!tip.contains(e.target)) hideTip();
+  });
   document.addEventListener("scroll", hideTip, true);
-  document.documentElement.addEventListener("mouseleave", hideTip);
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && !tip.hidden) hideTip();
+  });
+  document.documentElement.addEventListener("mouseleave", leaveTip);
 
   document.getElementById("diff").addEventListener("click", e => {
     const lineNumber = e.target.closest("#diff-files td.d2h-code-side-linenumber, #diff-files td.d2h-code-linenumber");
