@@ -34,6 +34,12 @@
   background: var(--surface); border: 1px solid var(--border-strong); border-radius: 0.5rem;
 }
 .thread-actions button:hover { border-color: var(--accent); }
+/* Chaque action sa teinte, mêlée au fond de la page pour valoir en thème clair comme sombre : Répondre en
+   couleur d'accent, Résoudre en vert, Rouvrir en orange. */
+.thread-actions button:not([type="submit"]) { --tint: var(--accent); font-weight: 600; background: color-mix(in srgb, var(--tint) 16%, var(--surface)); border-color: color-mix(in srgb, var(--tint) 55%, var(--surface)); }
+.thread-actions button:not([type="submit"]):hover { background: color-mix(in srgb, var(--tint) 28%, var(--surface)); border-color: var(--tint); }
+.thread-actions button[data-thread-resolve="true"] { --tint: #16a34a; }
+.thread-actions button[data-thread-resolve="false"] { --tint: #ea8a0c; }
 .thread-actions button[type="submit"] { color: var(--accent-fg); background: var(--accent); border-color: var(--accent); }
 .thread-actions button:disabled { opacity: 0.5; cursor: default; }
 .thread-error { margin-right: auto; font-size: 0.8rem; color: var(--red-fg); overflow-wrap: anywhere; }
