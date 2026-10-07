@@ -535,6 +535,7 @@
     </div>
     <span class="divider" id="git-fetch-divider" aria-hidden="true" hidden></span>
     <label class="auto" id="notify-control" data-i18n-title="notify.title"><input type="checkbox" id="notify" autocomplete="off"> <span data-i18n="notify">Notifications</span></label>
+    <label class="auto" id="sound-control" data-i18n-title="sound.title"><input type="checkbox" id="sound" autocomplete="off"> <span data-i18n="sound">Sons</span></label>
   </div>
 </header>
 
@@ -658,6 +659,10 @@ const REFRESH_LOCK = "mr-dashboard.refresh";
 // n'est pas traité. Un seul onglet notifie : celui qui détient NOTIFIER_LOCK.
 const NOTIFY_KEY = "mr-dashboard.notify";
 const NOTIFIED_KEY = "mr-dashboard.notified";
+// Sons, indépendants des notifications : joués par le même onglet, d'après la même détection.
+const SOUND_KEY = "mr-dashboard.sound";
+// Approbateurs déjà vus, par MR : un nom qui s'y ajoute est une approbation à annoncer.
+const APPROVALS_SEEN_KEY = "mr-dashboard.approvalsSeen";
 const THEME_KEY = "mr-dashboard.theme";
 const TEXT_SCALE_KEY = "mr-dashboard.textScale";
 const TEXT_SCALES = [0.7, 0.8, 0.9, 1, 1.1, 1.25, 1.5];
@@ -801,6 +806,7 @@ const state = {
   autoRefreshTimer: null,
   cycleStart: null,
   notify: false,
+  sound: false,
   notifier: false,
   me: null,
   notifications: new Map(),
@@ -841,6 +847,10 @@ const I18N = {
     "autoRefresh": "Actualisation auto",
     "autoRefresh.title": () => `Recharge les données toutes les ${AUTO_REFRESH_MS / 60000} minutes`,
     "notify": "Notifications",
+    "sound": "Sons",
+    "sound.title": "Joue un son : cloche de bar quand ta MR est approuvée, un tintement pour celle d'un autre, alerte grave sur un nouveau problème bloquant de ta MR. Cocher la case fait entendre la cloche.",
+    "approved.own": p => `✅ Ta MR !${p.iid} est approuvée par ${p.names}`,
+    "approved.other": p => `✅ MR !${p.iid} de ${p.author} approuvée par ${p.names}`,
     "notify.title": () => `Notifie les problèmes des MR ; sur tes MR, la notification reste affichée et revient toutes les ${OWN_REMINDER_MS / 60000} minutes tant que le problème n'est pas traité`,
     "notify.denied": "Notifications refusées par le navigateur : autorise-les pour ce site puis recoche la case.",
     "notify.enabled": "🔔 Notifications MisteR Dashboard activées",
@@ -1089,6 +1099,10 @@ const I18N = {
     "autoRefresh": "Auto-refresh",
     "autoRefresh.title": () => `Reloads the data every ${AUTO_REFRESH_MS / 60000} minutes`,
     "notify": "Notifications",
+    "sound": "Sounds",
+    "sound.title": "Plays a sound: a bar bell when your MR is approved, a chime for someone else's, a low alert on a new blocking problem of your MR. Ticking the box rings the bell.",
+    "approved.own": p => `✅ Your MR !${p.iid} is approved by ${p.names}`,
+    "approved.other": p => `✅ MR !${p.iid} by ${p.author} approved by ${p.names}`,
     "notify.title": () => `Notifies MR problems; on your own MRs, the notification stays on screen and comes back every ${OWN_REMINDER_MS / 60000} minutes until the problem is dealt with`,
     "notify.denied": "Notifications blocked by the browser: allow them for this site, then tick the box again.",
     "notify.enabled": "🔔 MisteR Dashboard notifications enabled",
@@ -1919,7 +1933,7 @@ const GRAPHQL_MR_FIELDS = `
   commitCount
   commits(first: 1) { nodes { committedDate } }
   mergeRequestDiffs(first: 1) { nodes { createdAt } }
-  approvedBy { nodes { name } }
+  approvedBy { nodes { name username } }
   reviewers { nodes { name mergeRequestInteraction { reviewState } } }
   resolvableDiscussionsCount
   resolvedDiscussionsCount`;
@@ -2119,6 +2133,7 @@ async function loadApprovals(mr) {
     ]);
     return {
       names: approvals.body.approved_by.map(a => a.user.name),
+      usernames: approvals.body.approved_by.map(a => a.user.username),
       changesRequested: reviewers.body.filter(r => r.state === "requested_changes").map(r => r.user.name),
     };
   } catch (error) {
@@ -2142,6 +2157,7 @@ function graphqlCommits(node) {
 function graphqlApprovals(node) {
   return {
     names: node.approvedBy.nodes.map(a => a.name),
+    usernames: node.approvedBy.nodes.map(a => a.username),
     changesRequested: node.reviewers.nodes
       .filter(r => r.mergeRequestInteraction?.reviewState === "REQUESTED_CHANGES")
       .map(r => r.name),
@@ -2535,9 +2551,11 @@ function problemsOf(mr) {
 
 // Appelée à chaque nouvelles données et toutes les REMINDER_CHECK_MS, pour les rappels sur ses propres MR.
 // Le premier passage (rien de notifié jusque-là) notifie ses propres MR une par une et résume celles des
-// autres en une seule notification, plutôt qu'une rafale.
+// autres en une seule notification, plutôt qu'une rafale. Les sons suivent la même détection, notifications
+// cochées ou non, et un seul par passage : le plus important.
 function notifyProblems() {
-  if (!state.notify || !state.notifier || !state.me || Notification.permission !== "granted") return;
+  const notifying = state.notify && "Notification" in window && Notification.permission === "granted";
+  if (!(notifying || state.sound) || !state.notifier || !state.me) return;
   // Pas de données complètes encore : l'état notifié serait réécrit à vide, et tout renotifié ensuite.
   if (!state.refreshedAt) return;
   const notified = readNotified();
@@ -2545,6 +2563,7 @@ function notifyProblems() {
   const next = {};
   const now = Date.now();
   let othersWithProblems = 0;
+  let ownFreshBlocking = false;
   for (const mr of state.mrs) {
     const before = notified?.[mr.iid];
     if (signalsOf(mr).loading) {
@@ -2561,12 +2580,14 @@ function notifyProblems() {
       continue;
     }
     const own = mr.author?.username === state.me;
-    const fresh = problems.some(p => !(p.severity <= (before?.problems?.[p.key] ?? 0)));
+    const isFresh = p => !(p.severity <= (before?.problems?.[p.key] ?? 0));
+    const fresh = problems.some(isFresh);
+    if (own && !first && problems.some(p => p.blocking && isFresh(p))) ownFreshBlocking = true;
     const reminderDue = own && problems.length > 0 && (!before || now - before.at >= OWN_REMINDER_MS);
     const show = own ? fresh || reminderDue : fresh && !first;
     if (!own && fresh && first) othersWithProblems++;
     next[mr.iid] = { problems: severities, at: show ? now : before?.at ?? now };
-    if (show) showNotification(
+    if (show && notifying) showNotification(
       mr,
       problems,
       own
@@ -2576,9 +2597,206 @@ function notifyProblems() {
     if (!(iid in next)) closeNotification(iid);
   }
   saveNotified(next);
-  if (othersWithProblems) {
+  if (othersWithProblems && notifying) {
     new Notification(t("notify.others", { n: othersWithProblems }), { body: t("notify.othersBody"), tag: "mr-others" });
   }
+  const approvalSound = notifyApprovals(notifying);
+  const sound = approvalSound === "bell" ? "bell" : ownFreshBlocking ? "alert" : approvalSound;
+  if (sound && state.sound) playSound(sound);
+}
+
+// Approbateurs apparus depuis le passage précédent, hors soi-même : notification de succès, et le son à
+// jouer (cloche sur ses propres MR, un tintement sur celles des autres). Le premier passage ne fait que
+// relever les approbations en place. Une MR dont les approbations sont en cours de chargement ou en
+// erreur garde ce qui en était vu.
+function notifyApprovals(notifying) {
+  const seen = readApprovalsSeen();
+  const next = {};
+  let sound = null;
+  for (const mr of state.mrs) {
+    const { loading, approvals } = signalsOf(mr);
+    const before = seen?.[mr.iid];
+    if (loading || !approvals?.usernames) {
+      if (before) next[mr.iid] = before;
+      continue;
+    }
+    next[mr.iid] = approvals.usernames;
+    if (!seen) continue;
+    const newcomers = approvals.names.filter((name, i) => {
+      const username = approvals.usernames[i];
+      return username !== state.me && !(before ?? []).includes(username);
+    });
+    if (!newcomers.length) continue;
+    const own = mr.author?.username === state.me;
+    sound = own ? "bell" : sound ?? "ding";
+    if (notifying) showApproval(
+      mr,
+      newcomers,
+      own
+    );
+  }
+  saveApprovalsSeen(next);
+  return sound;
+}
+
+function showApproval(
+  mr,
+  names,
+  own
+) {
+  const title = own
+    ? t("approved.own", { iid: mr.iid, names: names.join(", ") })
+    : t("approved.other", { iid: mr.iid, author: mr.author?.name ?? "?", names: names.join(", ") });
+  const notification = new Notification(title, {
+    body: mr.title,
+    tag: `mr-approved-${mr.iid}`,
+    renotify: true,
+    requireInteraction: own,
+  });
+  notification.onclick = () => {
+    window.open(mr.web_url, "_blank", "noopener");
+    notification.close();
+  };
+}
+
+function readApprovalsSeen() {
+  try {
+    return JSON.parse(localStorage.getItem(APPROVALS_SEEN_KEY));
+  } catch (ignored) {
+    return null;
+  }
+}
+
+function saveApprovalsSeen(seen) {
+  try {
+    localStorage.setItem(APPROVALS_SEEN_KEY, JSON.stringify(seen));
+  } catch (ignored) { /* stockage indisponible : les approbations seront relevées au prochain chargement */ }
+}
+
+function forgetApprovalsSeen() {
+  try {
+    localStorage.removeItem(APPROVALS_SEEN_KEY);
+  } catch (ignored) { /* stockage indisponible : rien à oublier */ }
+}
+
+// Sons synthétisés par Web Audio, sans fichier : un seul contexte, créé au premier son. Le navigateur ne
+// le laisse jouer qu'après un geste dans la page (clic, touche) : unlockAudio le reprend au premier.
+let audio = null;
+
+function audioContext() {
+  audio ??= new AudioContext();
+  return audio;
+}
+
+function unlockAudio() {
+  if (state.sound && audioContext().state === "suspended") audio.resume();
+}
+
+// Note amortie : attaque brève puis décroissance exponentielle, à partir de at secondes.
+function tone(
+  ctx,
+  output,
+  { frequency, at, duration, gain, type = "sine" }
+) {
+  const oscillator = ctx.createOscillator();
+  const envelope = ctx.createGain();
+  const start = ctx.currentTime + at;
+  oscillator.type = type;
+  oscillator.frequency.value = frequency;
+  envelope.gain.setValueAtTime(0.0001, start);
+  envelope.gain.exponentialRampToValueAtTime(gain, start + 0.005);
+  envelope.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+  oscillator.connect(envelope).connect(output);
+  oscillator.start(start);
+  oscillator.stop(start + duration + 0.05);
+}
+
+// Partiels inharmoniques d'une cloche : la fondamentale résonne, les aigus s'éteignent vite.
+const BELL_PARTIALS = [[1, 0.5, 1.6], [2.76, 0.25, 0.9], [5.4, 0.12, 0.5], [8.93, 0.06, 0.3]];
+
+function strike(
+  ctx,
+  output,
+  frequency,
+  at
+) {
+  BELL_PARTIALS.forEach(([ratio, gain, duration]) => tone(
+    ctx,
+    output,
+    { frequency: frequency * ratio, at, duration, gain }
+  ));
+}
+
+const SOUNDS = {
+  // Cloche de bar, plusieurs coups : sa MR est approuvée.
+  bell: (ctx, output) => [0, 0.28, 0.56, 0.84].forEach(at => strike(
+    ctx,
+    output,
+    1046,
+    at
+  )),
+  // Un seul coup clair et bref : la MR d'un autre est approuvée.
+  ding: (ctx, output) => tone(
+    ctx,
+    output,
+    { frequency: 1318, at: 0, duration: 0.6, gain: 0.2 }
+  ),
+  // Deux notes graves descendantes : nouveau problème bloquant sur sa MR.
+  alert: (ctx, output) => {
+    tone(
+      ctx,
+      output,
+      { frequency: 392, at: 0, duration: 0.3, gain: 0.35, type: "triangle" }
+    );
+    tone(
+      ctx,
+      output,
+      { frequency: 294, at: 0.25, duration: 0.45, gain: 0.35, type: "triangle" }
+    );
+  },
+};
+
+function playSound(name) {
+  try {
+    const ctx = audioContext();
+    if (ctx.state === "suspended") ctx.resume();
+    const output = ctx.createGain();
+    output.gain.value = 0.6;
+    output.connect(ctx.destination);
+    SOUNDS[name](ctx, output);
+  } catch (ignored) { /* Web Audio indisponible : pas de son */ }
+}
+
+function readSound() {
+  try {
+    return localStorage.getItem(SOUND_KEY) === "true";
+  } catch (ignored) {
+    return false;
+  }
+}
+
+function saveSound(enabled) {
+  try {
+    localStorage.setItem(SOUND_KEY, String(enabled));
+  } catch (ignored) { /* stockage indisponible : la préférence vaut pour la session */ }
+}
+
+// announce : la case vient d'être cochée. La cloche fait vérifier tout de suite que le son passe, et les
+// approbations en place sont relevées sans être annoncées.
+async function setSound(
+  enabled,
+  announce = false
+) {
+  state.sound = enabled;
+  $("sound").checked = enabled;
+  if (enabled && announce) {
+    forgetApprovalsSeen();
+    playSound("bell");
+  }
+  saveSound(enabled);
+  if (!enabled) return;
+  await loadMe();
+  notifyProblems();
 }
 
 // Même tag par MR : une nouvelle notification remplace la précédente au lieu de s'empiler, et renotify la
@@ -2669,7 +2887,10 @@ async function setNotify(
   }
   state.notify = enabled;
   $("notify").checked = enabled;
-  if (enabled && announce) forgetNotified();
+  if (enabled && announce) {
+    forgetNotified();
+    forgetApprovalsSeen();
+  }
   saveNotify(enabled);
   if (!enabled) {
     [...state.notifications.keys()].forEach(closeNotification);
@@ -4090,6 +4311,11 @@ window.addEventListener("storage", e => {
     if (state.notify) loadMe().then(notifyProblems);
     else [...state.notifications.keys()].forEach(closeNotification);
   }
+  if (e.key === SOUND_KEY) {
+    state.sound = e.newValue === "true";
+    $("sound").checked = state.sound;
+    if (state.sound) loadMe().then(notifyProblems);
+  }
   if (e.key === THEME_KEY) {
     state.theme = readTheme();
     applyTheme();
@@ -4129,12 +4355,21 @@ if ("Notification" in window) {
   ));
   if (readNotify() && Notification.permission === "granted") setNotify(true);
   else if (readNotify()) showError(t("notify.denied"));
-  electNotifier();
-  setInterval(notifyProblems, REMINDER_CHECK_MS);
 } else {
-  $("notify-control").previousElementSibling.remove();
   $("notify-control").remove();
 }
+if (window.AudioContext) {
+  $("sound").addEventListener("change", e => setSound(
+    e.target.checked,
+    true
+  ));
+  ["pointerdown", "keydown"].forEach(type => window.addEventListener(type, unlockAudio, true));
+  if (readSound()) setSound(true);
+} else {
+  $("sound-control").remove();
+}
+electNotifier();
+setInterval(notifyProblems, REMINDER_CHECK_MS);
 // Données sauvegardées : affichées tout de suite avec leur âge, et GitLab n'est interrogé que si
 // l'actualisation est due, cycle compté depuis la sauvegarde : recharger la page ne le sollicite pas.
 // Sans elles, premier chargement au fil de l'eau.
