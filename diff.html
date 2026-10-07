@@ -249,7 +249,7 @@
   .text-size button { border-radius: 0.5rem; padding: 0.3em 0.6em; }
   .text-size button:disabled { opacity: 0.4; cursor: default; }
   .text-size output { min-width: 3.2em; text-align: center; font-size: 0.85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
-  /* Infobulle des commits : celle du navigateur, minuscule et coupée en lignes étroites, se lit mal. Ici à la taille
+  /* Infobulle des commits et des fichiers : celle du navigateur, minuscule et coupée en lignes étroites, se lit mal. Ici à la taille
      du texte de la page, chaque ligne d'un tenant tant que l'écran est assez large. */
   .tip {
     position: fixed; z-index: 30; pointer-events: none; box-sizing: border-box;
@@ -600,7 +600,7 @@
     for (const link of list.querySelectorAll("a.d2h-file-name")) {
       const path = link.textContent.trim();
       const cut = path.lastIndexOf("/") + 1;
-      link.title = path;
+      link.dataset.tip = path;
       link.innerHTML = `<span class="file-base">${escapeHtml(path.slice(cut))}</span>`
         + (cut ? `<span class="file-dir">${escapeHtml(path.slice(0, cut))}</span>` : "");
       lines.set(link.getAttribute("href").slice(1), link.closest(".d2h-file-list-line"));
@@ -735,7 +735,7 @@
     const matchers = fileMatchers(fileFilter.text);
     let shown = 0;
     for (const [id, line] of lines) {
-      const path = line.querySelector("a.d2h-file-name").title;
+      const path = line.querySelector("a.d2h-file-name").dataset.tip;
       const visible = !matchers.length || matchers.some(m => m.test(path)) !== fileFilter.exclude;
       line.hidden = !visible;
       const wrapper = document.getElementById(id);
