@@ -278,6 +278,7 @@
   const TEXT_SCALE_KEY = "mr-dashboard.diffTextRatio";
   const COMMITS_SHARE_KEY = "mr-dashboard.diffCommitsShare";
   const NOTES_KEY = "mr-dashboard.diffNotes";
+  const FILE_FILTERS_KEY = "mr-dashboard.diffFileFilters";
   const TEXT_SCALES = [0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3];
   const DEFAULT_TEXT_SCALE = 1.25;
   const TEXTS = {
@@ -341,10 +342,12 @@
       previousNote: "Diff note précédente",
       filterPlaceholder: "Filtrer : user, src/main/java, *Test.java",
       filterTitle: "Garde les fichiers dont le chemin contient le filtre. * : n'importe quels caractères ; "
-        + "plusieurs filtres séparés par des espaces : l'un ou l'autre. Une majuscule rend le filtre sensible à la casse. Échap : vider",
+        + "plusieurs filtres séparés par des espaces ou des virgules : l'un ou l'autre (Test.java, IT.java). "
+        + "Une majuscule rend le filtre sensible à la casse. Flèche bas : filtres déjà utilisés · Échap : vider",
       filterInclude: "Inclure",
       filterExclude: "Exclure",
       filterModeTitle: "Inclure : ne montrer que les fichiers qui correspondent · Exclure : les cacher",
+      filterExcluded: "exclure",
       nextNote: "Diff note suivante",
     },
     en: {
@@ -407,10 +410,12 @@
       previousNote: "Previous diff note",
       filterPlaceholder: "Filter: user, src/main/java, *Test.java",
       filterTitle: "Keeps the files whose path contains the filter. *: any characters; "
-        + "several filters separated by spaces: either one. An uppercase letter makes the filter case-sensitive. Esc: clear",
+        + "several filters separated by spaces or commas: either one (Test.java, IT.java). "
+        + "An uppercase letter makes the filter case-sensitive. Down arrow: filters used before · Esc: clear",
       filterInclude: "Include",
       filterExclude: "Exclude",
       filterModeTitle: "Include: show only the matching files · Exclude: hide them",
+      filterExcluded: "exclude",
       nextNote: "Next diff note",
     },
   };
@@ -574,10 +579,21 @@
     if (!title) return;
     const box = document.createElement("span");
     box.className = "file-filter";
-    box.innerHTML = `<input type="search" spellcheck="false" placeholder="${escapeHtml(texts.filterPlaceholder)}" title="${escapeHtml(texts.filterTitle)}">`
-      + `<button type="button" title="${escapeHtml(texts.filterModeTitle)}"></button>`;
+    box.innerHTML = `<input type="search" spellcheck="false" list="file-filters" placeholder="${escapeHtml(texts.filterPlaceholder)}" title="${escapeHtml(texts.filterTitle)}">`
+      + `<datalist id="file-filters"></datalist><button type="button" title="${escapeHtml(texts.filterModeTitle)}"></button>`;
     title.after(box);
     const input = box.querySelector("input");
+    const suggestions = box.querySelector("datalist");
+    const suggest = () => {
+      suggestions.innerHTML = rememberedFilters().map(f => `<option value="${escapeHtml(f.text)}"`
+        + `${f.exclude ? ` label="${escapeHtml(texts.filterExcluded)}"` : ""}></option>`).join("");
+    };
+    // Un filtre compte comme utilisé une fois validé (Entrée, sortie du champ, choix d'une suggestion),
+    // pas à chaque frappe : « Tes » en route vers « Test.java » ne doit pas être retenu.
+    const remember = () => {
+      rememberFilter(fileFilter);
+      suggest();
+    };
     const mode = box.querySelector("button");
     const apply = () => {
       mode.textContent = fileFilter.exclude ? texts.filterExclude : texts.filterInclude;
@@ -591,10 +607,16 @@
       renderNotesNav();
     };
     input.value = fileFilter.text;
-    input.addEventListener("input", () => {
+    input.addEventListener("input", event => {
       fileFilter.text = input.value;
+      // Suggestion choisie dans la liste : elle revient avec son mode.
+      const picked = !(event instanceof InputEvent) || event.inputType === "insertReplacementText";
+      const known = picked && rememberedFilters().find(f => f.text === input.value);
+      if (known) fileFilter.exclude = known.exclude;
       change();
+      if (known) remember();
     });
+    input.addEventListener("change", remember);
     input.addEventListener("keydown", event => {
       if (event.key !== "Escape" || !input.value) return;
       event.stopPropagation();
@@ -604,14 +626,67 @@
     mode.addEventListener("click", () => {
       fileFilter.exclude = !fileFilter.exclude;
       change();
+      remember();
     });
+    suggest();
     apply();
   }
 
-  // Un filtre par mot ; * vaut n'importe quels caractères, ailleurs dans le chemin. Sensible à la casse dès
+  // Filtres déjà utilisés, du plus au moins susceptible de resservir : chaque usage compte, les récents
+  // davantage. Un filtre d'un seul usage reste proposé le jour même puis disparaît ; un filtre fréquent
+  // survit à quelques jours sans usage. Le même principe que la barre d'adresse des navigateurs.
+  const FILTER_SUGGESTIONS = 8;
+  const FILTERS_KEPT = 30;
+  const HOUR_MS = 3600000;
+
+  function filterScore(entry, now) {
+    const age = now - entry.last;
+    const recency = age < HOUR_MS ? 4 : age < 24 * HOUR_MS ? 2 : age < 7 * 24 * HOUR_MS ? 0.5 : 0.25;
+    return entry.count * recency;
+  }
+
+  function readFilterHistory() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(FILE_FILTERS_KEY));
+      return Array.isArray(saved) ? saved.filter(e => typeof e?.text === "string" && Number.isFinite(e.count) && Number.isFinite(e.last)) : [];
+    } catch (ignored) {
+      return [];
+    }
+  }
+
+  function rememberedFilters() {
+    const now = Date.now();
+    return readFilterHistory()
+      .map(entry => ({ ...entry, score: filterScore(entry, now) }))
+      .filter(entry => entry.score >= 1)
+      .sort((a, b) => b.score - a.score || b.last - a.last)
+      .slice(0, FILTER_SUGGESTIONS);
+  }
+
+  function rememberFilter({ text, exclude }) {
+    const value = text.trim();
+    if (!fileMatchers(value).length) return;
+    const now = Date.now();
+    const history = readFilterHistory();
+    const entry = history.find(e => e.text === value && !!e.exclude === exclude);
+    // Rechoisir le filtre déjà affiché, ou sortir du champ sans l'avoir changé, n'en fait pas un usage de plus.
+    if (entry && now - entry.last < 60000) return;
+    if (entry) {
+      entry.count++;
+      entry.last = now;
+    } else {
+      history.push({ text: value, exclude, count: 1, last: now });
+    }
+    const kept = history.sort((a, b) => filterScore(b, now) - filterScore(a, now)).slice(0, FILTERS_KEPT);
+    try {
+      localStorage.setItem(FILE_FILTERS_KEY, JSON.stringify(kept));
+    } catch (ignored) { /* stockage indisponible : le filtre n'est pas retenu */ }
+  }
+
+  // Un filtre par mot, séparés par des espaces ou des virgules ; * vaut n'importe quels caractères, ailleurs dans le chemin. Sensible à la casse dès
   // qu'il contient une majuscule : « Test » écarte le répertoire test/, « user » trouve UserService.
   function fileMatchers(text) {
-    return text.trim().split(/\s+/).filter(Boolean).map(term => new RegExp(
+    return text.trim().split(/[\s,]+/).filter(Boolean).map(term => new RegExp(
       term.split("*").map(part => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*"),
       /\p{Lu}/u.test(term) ? "u" : "iu"
     ));
