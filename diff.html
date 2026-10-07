@@ -249,6 +249,16 @@
   .text-size button { border-radius: 0.5rem; padding: 0.3em 0.6em; }
   .text-size button:disabled { opacity: 0.4; cursor: default; }
   .text-size output { min-width: 3.2em; text-align: center; font-size: 0.85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  /* Infobulle des commits : celle du navigateur, minuscule et coupée en lignes étroites, se lit mal. Ici à la taille
+     du texte de la page, chaque ligne d'un tenant tant que l'écran est assez large. */
+  .tip {
+    position: fixed; z-index: 30; pointer-events: none; box-sizing: border-box;
+    width: max-content; max-width: calc(100vw - 1rem); padding: 0.4rem 0.65rem;
+    font-size: 1rem; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere;
+    color: var(--text); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 0.45rem;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
+  }
+  .tip[hidden] { display: none; }
   /* En-tête de fichier collé sous celui de la page, que le sien (stickyFileHeaders) passerait dessous. */
   .d2h-file-header { position: sticky; top: var(--header-height, 0); z-index: 2; }
 </style>
@@ -785,12 +795,12 @@
       const tooltip = `${c.sha.slice(0, 8)} · ${author} · ${formatDateTime(c.date)}\n${c.title}${c.merge ? `\n${texts.mergeCommit}` : ""}`;
       const push = pushes[pushStarts.get(i)];
       const separator = push
-        ? `<li class="push" data-push="${pushStarts.get(i)}" title="${escapeHtml(texts.pushTitle)}">${escapeHtml(texts.push({
+        ? `<li class="push" data-push="${pushStarts.get(i)}" data-tip="${escapeHtml(texts.pushTitle)}">${escapeHtml(texts.push({
           date: formatDateTime(push.date),
           count: push.last - push.first + 1,
         }))}</li>`
         : "";
-      return `${separator}<li data-index="${i}"${classes ? ` class="${classes}"` : ""} title="${escapeHtml(tooltip)}">`
+      return `${separator}<li data-index="${i}"${classes ? ` class="${classes}"` : ""} data-tip="${escapeHtml(tooltip)}">`
         + `<span class="n">${i + 1}</span>`
         + `<span class="avatar" style="--avatar-color:${Avatars.color(author)}" aria-hidden="true">${escapeHtml(Avatars.initials(author))}</span>`
         + `<span class="t">${c.merge ? "⑂ " : ""}${escapeHtml(c.title)}</span>`
@@ -1477,6 +1487,41 @@
     render();
     markSeen();
   }
+
+  // Infobulle des éléments [data-tip], après le même court délai que celle du navigateur ; tout défilement,
+  // clic ou sortie de l'élément la ferme.
+  const tip = Object.assign(document.createElement("div"), { className: "tip", hidden: true });
+  tip.setAttribute("role", "tooltip");
+  document.body.append(tip);
+  let tipOwner = null;
+  let tipTimer = 0;
+
+  function hideTip() {
+    clearTimeout(tipTimer);
+    tipOwner = null;
+    tip.hidden = true;
+  }
+
+  function showTip(owner) {
+    tip.textContent = owner.dataset.tip;
+    tip.hidden = false;
+    const box = owner.getBoundingClientRect();
+    const below = box.bottom + 4;
+    tip.style.top = `${below + tip.offsetHeight > innerHeight ? box.top - tip.offsetHeight - 4 : below}px`;
+    tip.style.left = `${Math.max(4, Math.min(box.left, innerWidth - tip.offsetWidth - 4))}px`;
+  }
+
+  document.addEventListener("mouseover", e => {
+    const owner = e.target.closest("[data-tip]");
+    if (owner === tipOwner) return;
+    hideTip();
+    if (!owner) return;
+    tipOwner = owner;
+    tipTimer = setTimeout(() => showTip(owner), 500);
+  });
+  document.addEventListener("mousedown", hideTip);
+  document.addEventListener("scroll", hideTip, true);
+  document.documentElement.addEventListener("mouseleave", hideTip);
 
   document.getElementById("diff").addEventListener("click", e => {
     const lineNumber = e.target.closest("#diff-files td.d2h-code-side-linenumber, #diff-files td.d2h-code-linenumber");
