@@ -35,6 +35,7 @@
     --accent-2: #7c3aed;
     --accent-fg: #ffffff;
     --red-bg: #fdecec; --red-fg: #b42318; --red-line: #d92d20;
+    --orange-bg: #fff4e0; --orange-fg: #93510a; --orange-line: #f79009;
     color-scheme: light;
   }
   :root[data-theme="dark"] {
@@ -50,6 +51,7 @@
     --accent-2: #a78bfa;
     --accent-fg: #0f1020;
     --red-bg: #3d1a1a; --red-fg: #ffb4ab; --red-line: #f97066;
+    --orange-bg: #3d2a10; --orange-fg: #ffc77a; --orange-line: #fdb022;
   }
   /* Taille du texte : celle du dashboard (même base, même réglage A− / A+), multipliée par celle de la page, réglée
      par ses propres A− / A+ — 125 % par défaut, le code se lisant de plus près qu'un tableau. Sans le zoom du
@@ -162,6 +164,15 @@
     color: var(--text); background: var(--bg); border: 1px solid var(--border-strong); border-radius: 0.35rem;
   }
   #files .d2h-file-list-line[hidden], .d2h-file-wrapper[hidden] { display: none; }
+  .file-filter input.active { border: 2px solid var(--orange-line); background: var(--orange-bg); }
+  /* Filtre actif : rappelé dans l'en-tête collé, visible où qu'on soit dans le diff, pour ne pas croire avoir tout relu. */
+  .partial-diff {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem 0.8rem; padding: 0.35rem 0.75rem;
+    font-size: 0.85rem; font-weight: 600; color: var(--orange-fg); background: var(--orange-bg);
+    border: 1px solid var(--orange-line); border-left-width: 4px; border-radius: 0.5rem;
+  }
+  .partial-diff[hidden] { display: none; }
+  .partial-diff button { font-size: 0.8rem; border-radius: 0.4rem; padding: 0.15em 0.6em; }
   .file-filter button { font-size: 0.72rem; padding: 0.1em 0.5em; border-radius: 0.4rem; white-space: nowrap; }
   .file-filter button[aria-pressed="true"] { color: var(--red-fg); background: var(--red-bg); }
   #files .d2h-file-list-line { padding: 0.25rem 0.75rem; border-bottom: 1px solid var(--border); }
@@ -266,6 +277,10 @@
     <a id="gitlab" target="_blank" rel="noopener" hidden></a>
     <button type="button" class="toggle" id="close-tab" data-close-tab></button>
   </div>
+  <div class="partial-diff" id="partial-diff" role="status" hidden>
+    <span id="partial-diff-text"></span>
+    <button type="button" id="partial-diff-clear"></button>
+  </div>
 </header>
 <main id="diff"><p class="message" id="loading"></p></main>
 <script src="vendor/diff2html/diff2html-ui-slim.min.js"></script>
@@ -348,6 +363,9 @@
       filterExclude: "Exclure",
       filterModeTitle: "Inclure : ne montrer que les fichiers qui correspondent · Exclure : les cacher",
       filterExcluded: "exclure",
+      partialDiff: p => `⚠ Diff partiel : ${p.shown} fichier${p.shown > 1 ? "s" : ""} sur ${p.total} affiché${p.shown > 1 ? "s" : ""}, `
+        + `filtre « ${p.filter} »${p.exclude ? " en exclusion" : ""}. Les autres fichiers de la MR sont masqués.`,
+      showAllFiles: "Retirer le filtre, voir tous les fichiers",
       nextNote: "Diff note suivante",
     },
     en: {
@@ -416,6 +434,9 @@
       filterExclude: "Exclude",
       filterModeTitle: "Include: show only the matching files · Exclude: hide them",
       filterExcluded: "exclude",
+      partialDiff: p => `⚠ Partial diff: showing ${p.shown} of ${p.total} file${p.total > 1 ? "s" : ""}, `
+        + `filter "${p.filter}"${p.exclude ? " (excluding)" : ""}. The MR's other files are hidden.`,
+      showAllFiles: "Clear the filter, show all files",
       nextNote: "Next diff note",
     },
   };
@@ -463,6 +484,8 @@
   let currentNote = -1;
   // Filtre des fichiers, gardé d'un rendu du diff à l'autre (format, plage de commits, notes).
   const fileFilter = { text: "", exclude: false };
+  // Vide le filtre du diff affiché ; null tant qu'aucune liste de fichiers n'est dessinée.
+  let clearFileFilter = null;
   // Hauteur des fils placés dans le diff : la ligne vide d'en face la suit (fil replié, réponse ouverte…).
   let notesObserver = null;
 
@@ -527,6 +550,8 @@
     const listScroll = document.getElementById("commit-list")?.scrollTop ?? null;
     main.innerHTML = `<aside id="side"><section id="commits" hidden></section><div id="split" role="separator" aria-orientation="horizontal" title="${escapeHtml(texts.splitTitle)}"></div><div id="files"></div></aside><div id="diff-files"></div>`;
     main.classList.add("with-files");
+    clearFileFilter = null;
+    showPartialDiff(null);
     renderCommits(listScroll);
     const container = document.getElementById("diff-files");
     if (!diffText.trim()) {
@@ -606,6 +631,10 @@
       apply();
       renderNotesNav();
     };
+    clearFileFilter = () => {
+      input.value = fileFilter.text = "";
+      change();
+    };
     input.value = fileFilter.text;
     input.addEventListener("input", event => {
       fileFilter.text = input.value;
@@ -620,8 +649,7 @@
     input.addEventListener("keydown", event => {
       if (event.key !== "Escape" || !input.value) return;
       event.stopPropagation();
-      input.value = fileFilter.text = "";
-      change();
+      clearFileFilter();
     });
     mode.addEventListener("click", () => {
       fileFilter.exclude = !fileFilter.exclude;
@@ -704,6 +732,18 @@
       if (visible) shown++;
     }
     title.textContent = title.textContent.replace(/\(.*\)/, `(${matchers.length ? `${shown}/` : ""}${lines.size})`);
+    title.parentElement.querySelector(".file-filter input")?.classList.toggle("active", !!matchers.length);
+    showPartialDiff(matchers.length && shown < lines.size ? { shown, total: lines.size, filter: fileFilter.text.trim(), exclude: fileFilter.exclude } : null);
+  }
+
+  // Bandeau de l'en-tête : le diff affiché n'est pas toute la MR. L'en-tête change de hauteur, que suivent
+  // les en-têtes de fichier collés dessous.
+  function showPartialDiff(partial) {
+    const banner = document.getElementById("partial-diff");
+    if (banner.hidden === !partial && !partial) return;
+    banner.hidden = !partial;
+    if (partial) document.getElementById("partial-diff-text").textContent = texts.partialDiff(partial);
+    document.documentElement.style.setProperty("--header-height", `${document.querySelector("header").offsetHeight}px`);
   }
 
   // Le fichier en haut de l'écran est surligné dans la liste, que le panneau garde en vue.
@@ -1363,6 +1403,9 @@
     close.textContent = texts.close;
     close.title = texts.closeTitle;
     close.dataset.closeRefused = texts.closeRefused;
+    const showAll = document.getElementById("partial-diff-clear");
+    showAll.textContent = texts.showAllFiles;
+    showAll.addEventListener("click", () => clearFileFilter?.());
     const gitlab = document.getElementById("gitlab");
     if (/^https:\/\//.test(mr.url)) {
       gitlab.href = `${mr.url}/diffs`;
