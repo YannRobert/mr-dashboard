@@ -340,9 +340,9 @@
       replies: n => `${n} réponse${n > 1 ? "s" : ""}`,
       openInGitlab: "GitLab",
       previousNote: "Diff note précédente",
-      filterPlaceholder: "Filtrer : user, src/main/java, *Test.java",
+      filterPlaceholder: "Filtrer",
       filterTitle: "Garde les fichiers dont le chemin contient le filtre. * : n'importe quels caractères ; "
-        + "plusieurs filtres séparés par des espaces ou des virgules : l'un ou l'autre (Test.java, IT.java). "
+        + "plusieurs filtres séparés par des espaces ou des virgules : l'un ou l'autre. "
         + "Une majuscule rend le filtre sensible à la casse. Flèche bas : filtres déjà utilisés · Échap : vider",
       filterInclude: "Inclure",
       filterExclude: "Exclure",
@@ -408,9 +408,9 @@
       replies: n => `${n} repl${n > 1 ? "ies" : "y"}`,
       openInGitlab: "GitLab",
       previousNote: "Previous diff note",
-      filterPlaceholder: "Filter: user, src/main/java, *Test.java",
+      filterPlaceholder: "Filter",
       filterTitle: "Keeps the files whose path contains the filter. *: any characters; "
-        + "several filters separated by spaces or commas: either one (Test.java, IT.java). "
+        + "several filters separated by spaces or commas: either one. "
         + "An uppercase letter makes the filter case-sensitive. Down arrow: filters used before · Esc: clear",
       filterInclude: "Include",
       filterExclude: "Exclude",
@@ -589,7 +589,7 @@
         + `${f.exclude ? ` label="${escapeHtml(texts.filterExcluded)}"` : ""}></option>`).join("");
     };
     // Un filtre compte comme utilisé une fois validé (Entrée, sortie du champ, choix d'une suggestion),
-    // pas à chaque frappe : « Tes » en route vers « Test.java » ne doit pas être retenu.
+    // pas à chaque frappe : un début de saisie ne doit pas être retenu.
     const remember = () => {
       rememberFilter(fileFilter);
       suggest();
@@ -683,8 +683,8 @@
     } catch (ignored) { /* stockage indisponible : le filtre n'est pas retenu */ }
   }
 
-  // Un filtre par mot, séparés par des espaces ou des virgules ; * vaut n'importe quels caractères, ailleurs dans le chemin. Sensible à la casse dès
-  // qu'il contient une majuscule : « Test » écarte le répertoire test/, « user » trouve UserService.
+  // Un filtre par mot, séparés par des espaces ou des virgules ; * vaut n'importe quels caractères, ailleurs
+  // dans le chemin. Sensible à la casse dès qu'il contient une majuscule, insensible sinon.
   function fileMatchers(text) {
     return text.trim().split(/[\s,]+/).filter(Boolean).map(term => new RegExp(
       term.split("*").map(part => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*"),
