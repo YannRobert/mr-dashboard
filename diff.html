@@ -244,6 +244,11 @@
   .d2h-file-name-wrapper { font-size: 0.95rem; }
   .d2h-file-stats { font-size: 0.875rem; }
   .d2h-file-collapse { font-size: 0.8rem; }
+  /* Retour à la ligne, fichier par fichier : un long paragraphe se lit sans ascenseur, le code garde ses lignes. */
+  .d2h-file-collapse.wrap-toggle { display: flex; flex: none; margin-right: 0.4rem; white-space: nowrap; }
+  .d2h-file-wrapper.wrap-lines .d2h-code-line, .d2h-file-wrapper.wrap-lines .d2h-code-side-line { white-space: normal; }
+  .d2h-file-wrapper.wrap-lines .d2h-code-line-ctn { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .d2h-file-wrapper.wrap-lines .d2h-file-side-diff { overflow-x: hidden; }
   .d2h-tag { font-size: 0.65rem; }
   .text-size { display: flex; align-items: center; gap: 0.25rem; }
   .text-size button { border-radius: 0.5rem; padding: 0.3em 0.6em; }
@@ -377,6 +382,8 @@
       partialDiff: p => `⚠ Diff partiel : ${p.shown} fichier${p.shown > 1 ? "s" : ""} sur ${p.total} affiché${p.shown > 1 ? "s" : ""}, `
         + `filtre « ${p.filter} »${p.exclude ? " en exclusion" : ""}. Les autres fichiers de la MR sont masqués.`,
       showAllFiles: "Retirer le filtre, voir tous les fichiers",
+      wrapLines: "Retour à la ligne",
+      wrapLinesTitle: "Replie les lignes trop longues de ce fichier au lieu de les faire défiler",
       nextNote: "Diff note suivante",
     },
     en: {
@@ -448,6 +455,8 @@
       partialDiff: p => `⚠ Partial diff: showing ${p.shown} of ${p.total} file${p.total > 1 ? "s" : ""}, `
         + `filter "${p.filter}"${p.exclude ? " (excluding)" : ""}. The MR's other files are hidden.`,
       showAllFiles: "Clear the filter, show all files",
+      wrapLines: "Wrap lines",
+      wrapLinesTitle: "Wrap this file's long lines instead of scrolling them",
       nextNote: "Next diff note",
     },
   };
@@ -497,6 +506,8 @@
   const fileFilter = { text: "", exclude: false };
   // Vide le filtre du diff affiché ; null tant qu'aucune liste de fichiers n'est dessinée.
   let clearFileFilter = null;
+  // Fichiers affichés avec retour à la ligne, par chemin : le choix survit aux rendus du diff.
+  const wrappedFiles = new Set();
   // Hauteur des fils placés dans le diff : la ligne vide d'en face la suit (fil replié, réponse ouverte…).
   let notesObserver = null;
 
@@ -586,9 +597,62 @@
     );
     ui.draw();
     ui.highlightCode();
+    addWrapToggles(container);
     showFileList(container);
     if (readNotesEnabled()) placeNotes(container);
     container.classList.toggle("can-comment", canComment());
+  }
+
+  // Case « retour à la ligne » devant « Viewed », de même apparence, dans l'en-tête de chaque fichier.
+  function addWrapToggles(container) {
+    for (const wrapper of container.querySelectorAll(".d2h-file-wrapper")) {
+      const viewed = wrapper.querySelector(".d2h-file-header .d2h-file-collapse");
+      if (!viewed) continue;
+      const path = wrapperPaths(wrapper).join(" → ");
+      const label = document.createElement("label");
+      label.className = "d2h-file-collapse wrap-toggle";
+      label.title = texts.wrapLinesTitle;
+      label.innerHTML = `<input class="d2h-file-collapse-input" type="checkbox"> ${escapeHtml(texts.wrapLines)}`;
+      viewed.before(label);
+      const input = label.querySelector("input");
+      const observer = new ResizeObserver(() => alignWrappedRows(wrapper));
+      const apply = () => {
+        wrapper.classList.toggle("wrap-lines", input.checked);
+        label.classList.toggle("d2h-selected", input.checked);
+        if (input.checked) {
+          for (const table of wrapper.querySelectorAll(".d2h-diff-table")) observer.observe(table);
+        } else {
+          observer.disconnect();
+        }
+        alignWrappedRows(wrapper);
+      };
+      input.checked = wrappedFiles.has(path);
+      input.addEventListener("change", () => {
+        if (input.checked) wrappedFiles.add(path);
+        else wrappedFiles.delete(path);
+        apply();
+      });
+      apply();
+    }
+  }
+
+  // En côte à côte, chaque colonne est un tableau à part : une ligne repliée d'un côté décalerait tout
+  // ce qui la suit de l'autre. Chaque paire de lignes prend la hauteur de la plus haute ; les fils de
+  // commentaires ont leur propre alignement.
+  function alignWrappedRows(wrapper) {
+    const sides = [...wrapper.querySelectorAll(".d2h-file-side-diff tbody")];
+    if (sides.length !== 2) return;
+    const [left, right] = sides.map(tbody => [...tbody.children].filter(row => !row.classList.contains("note-row")));
+    const rows = [...left, ...right];
+    for (const row of rows) row.style.height = "";
+    if (!wrapper.classList.contains("wrap-lines") || left.length !== right.length) return;
+    const heights = left.map((row, i) => Math.max(row.offsetHeight, right[i].offsetHeight));
+    left.forEach((row, i) => {
+      if (row.offsetHeight !== right[i].offsetHeight) {
+        row.style.height = `${heights[i]}px`;
+        right[i].style.height = `${heights[i]}px`;
+      }
+    });
   }
 
   // La liste dessinée par diff2html passe dans le panneau ; chaque fichier y montre son nom, puis son répertoire.
