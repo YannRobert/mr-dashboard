@@ -1,14 +1,17 @@
 // Un onglet par page et par MR : le diff de !226, ses commentaires. Un lien vers une page déjà ouverte
-// y ramène, sans la recharger ni en ouvrir une autre. Partagé par index.html, diff.html et comments.html.
+// y ramène et la recharge, pour ne jamais montrer une version périmée de la MR. Partagé par index.html,
+// diff.html and comments.html.
 window.MrTabs = (() => {
   const name = (page, iid) => `mr-dashboard-${page}-${iid}`;
 
-  // Onglet nommé : le navigateur rend celui qui porte déjà ce nom, ou en ouvre un vide à remplir.
+  // Onglet nommé : le navigateur rend celui qui porte déjà ce nom, ou en ouvre un vide à remplir. Un onglet
+  // déjà ouvert est rechargé sans ajouter d'entrée à son historique.
   function open(url, page, iid) {
     const tab = window.open("", name(page, iid));
     if (!tab) return;
     try {
       if (tab.location.href === "about:blank") tab.location.href = url;
+      else tab.location.replace(url);
     } catch (ignored) {
       tab.location.href = url;
     }

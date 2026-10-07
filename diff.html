@@ -75,6 +75,9 @@
   header h1 { margin: 0; font-size: 1.05rem; overflow-wrap: anywhere; }
   .branches { color: var(--muted); font-size: 0.9rem; overflow-wrap: anywhere; }
   .branches code { font-size: 0.85rem; }
+  .subtitle { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.3rem 1.4rem; }
+  .loaded-at { color: var(--muted); font-size: 0.8rem; white-space: nowrap; }
+  .loaded-at.stale { color: #ea8a0c; font-weight: 600; }
   .format { display: flex; gap: 0; }
   button {
     font: inherit; font-size: 0.9rem; color: var(--text); background: var(--surface);
@@ -274,7 +277,10 @@
 <body>
 <header>
   <h1 id="title"></h1>
-  <span class="branches" id="branches"></span>
+  <div class="subtitle">
+    <span class="branches" id="branches"></span>
+    <span class="loaded-at" id="loaded-at"></span>
+  </div>
   <div class="controls">
     <div class="format" role="group" id="format">
       <button type="button" data-format="side-by-side" id="side-by-side"></button>
@@ -480,6 +486,7 @@
     merge: params.get("merge") ?? "",
   };
   MrTabs.claim("diff", mr.iid);
+  showLoadedAt(document.getElementById("loaded-at"), lang);
   let diffText = null;
   // Commits de la MR, du plus ancien au plus récent ; plage affichée en indices, null pour tout le diff.
   let commits = null;
