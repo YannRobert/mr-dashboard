@@ -848,7 +848,7 @@ const I18N = {
     "autoRefresh.title": () => `Recharge les données toutes les ${AUTO_REFRESH_MS / 60000} minutes`,
     "notify": "Notifications",
     "sound": "Sons",
-    "sound.title": "Joue un son : cloche de bar quand ta MR est approuvée, un tintement pour celle d'un autre, alerte grave sur un nouveau problème bloquant de ta MR. Cocher la case fait entendre la cloche.",
+    "sound.title": "Joue un son : cloche de bar quand ta MR est approuvée ou que tu approuves celle d'un autre, un tintement quand un autre l'approuve, alerte grave sur un nouveau problème bloquant de ta MR. Cocher la case fait entendre la cloche.",
     "approved.own": p => `✅ Ta MR !${p.iid} est approuvée par ${p.names}`,
     "approved.other": p => `✅ MR !${p.iid} de ${p.author} approuvée par ${p.names}`,
     "notify.title": () => `Notifie les problèmes des MR ; sur tes MR, la notification reste affichée et revient toutes les ${OWN_REMINDER_MS / 60000} minutes tant que le problème n'est pas traité`,
@@ -1100,7 +1100,7 @@ const I18N = {
     "autoRefresh.title": () => `Reloads the data every ${AUTO_REFRESH_MS / 60000} minutes`,
     "notify": "Notifications",
     "sound": "Sounds",
-    "sound.title": "Plays a sound: a bar bell when your MR is approved, a chime for someone else's, a low alert on a new blocking problem of your MR. Ticking the box rings the bell.",
+    "sound.title": "Plays a sound: a bar bell when your MR is approved or you approve someone else's, a chime when someone else approves it, a low alert on a new blocking problem of your MR. Ticking the box rings the bell.",
     "approved.own": p => `✅ Your MR !${p.iid} is approved by ${p.names}`,
     "approved.other": p => `✅ MR !${p.iid} by ${p.author} approved by ${p.names}`,
     "notify.title": () => `Notifies MR problems; on your own MRs, the notification stays on screen and comes back every ${OWN_REMINDER_MS / 60000} minutes until the problem is dealt with`,
@@ -2605,8 +2605,8 @@ function notifyProblems() {
   if (sound && state.sound) playSound(sound);
 }
 
-// Approbateurs apparus depuis le passage précédent, hors soi-même : notification de succès, et le son à
-// jouer (cloche sur ses propres MR, un tintement sur celles des autres). Le premier passage ne fait que
+// Approbateurs apparus depuis le passage précédent : notification de succès, hors soi-même, et le son à
+// jouer (cloche sur ses propres MR et quand on approuve celle d'un autre, un tintement sinon). Le premier passage ne fait que
 // relever les approbations en place. Une MR dont les approbations sont en cours de chargement ou en
 // erreur garde ce qui en était vu.
 function notifyApprovals(notifying) {
@@ -2622,12 +2622,12 @@ function notifyApprovals(notifying) {
     }
     next[mr.iid] = approvals.usernames;
     if (!seen) continue;
-    const newcomers = approvals.names.filter((name, i) => {
-      const username = approvals.usernames[i];
-      return username !== state.me && !(before ?? []).includes(username);
-    });
-    if (!newcomers.length) continue;
+    const added = approvals.usernames.flatMap((username, i) => ((before ?? []).includes(username) ? [] : [{ username, name: approvals.names[i] }]));
     const own = mr.author?.username === state.me;
+    // Approuver la MR d'un autre, c'est payer la tournée : la cloche, sans notification.
+    if (!own && added.some(a => a.username === state.me)) sound = "bell";
+    const newcomers = added.filter(a => a.username !== state.me).map(a => a.name);
+    if (!newcomers.length) continue;
     sound = own ? "bell" : sound ?? "ding";
     if (notifying) showApproval(
       mr,

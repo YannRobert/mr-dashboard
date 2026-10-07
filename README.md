@@ -66,8 +66,8 @@ ensemble — puis `start.sh <nom>`.
   navigateur. Sur ses propres MR, la notification reste affichée et revient toutes les 15 minutes tant
   qu'un problème reste ouvert.
 - Une nouvelle approbation d'une MR est notifiée aussi, sauf celle qu'on a donnée soi-même. **Sons**, à côté,
-  indépendant des notifications : cloche de bar quand sa MR est approuvée, un tintement pour celle d'un
-  autre, deux notes graves sur un nouveau problème bloquant de sa MR ; cocher la case fait entendre la
+  indépendant des notifications : cloche de bar quand sa MR est approuvée ou qu'on approuve celle
+  d'un autre (à la mise à jour suivante), un tintement quand un autre l'approuve, deux notes graves sur un nouveau problème bloquant de sa MR ; cocher la case fait entendre la
   cloche. Après un rechargement, le navigateur ne laisse jouer un son qu'après un clic ou une touche dans
   la page.
 - `?lang=en` pour forcer l'anglais.
