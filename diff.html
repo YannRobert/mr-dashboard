@@ -151,6 +151,15 @@
   #commit-list .a { color: var(--muted); font-size: 0.7rem; white-space: nowrap; }
   #files .d2h-file-list-wrapper { margin: 0; border: none; }
   #files .d2h-file-list-header { padding: 0.4rem 0.75rem; font-size: 0.85rem; border-bottom: 1px solid var(--border); }
+  #files .d2h-file-list-header { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+  .file-filter { display: flex; align-items: center; gap: 0.3rem; flex: 1 1 10rem; min-width: 0; }
+  .file-filter input {
+    flex: 1 1 auto; min-width: 0; padding: 0.15em 0.45em; font: 0.78rem Menlo, Consolas, monospace;
+    color: var(--text); background: var(--bg); border: 1px solid var(--border-strong); border-radius: 0.35rem;
+  }
+  #files .d2h-file-list-line[hidden], .d2h-file-wrapper[hidden] { display: none; }
+  .file-filter button { font-size: 0.72rem; padding: 0.1em 0.5em; border-radius: 0.4rem; white-space: nowrap; }
+  .file-filter button[aria-pressed="true"] { color: var(--red-fg); background: var(--red-bg); }
   #files .d2h-file-list-line { padding: 0.25rem 0.75rem; border-bottom: 1px solid var(--border); }
   #files .d2h-file-list-line.current { background: color-mix(in srgb, var(--accent) 14%, transparent); }
   #files .d2h-file-name-wrapper { font-size: 0.78rem; min-width: 0; }
@@ -325,6 +334,12 @@
       replies: n => `${n} réponse${n > 1 ? "s" : ""}`,
       openInGitlab: "GitLab",
       previousNote: "Diff note précédente",
+      filterPlaceholder: "Filtrer : user, src/main/java, *Test.java",
+      filterTitle: "Garde les fichiers dont le chemin contient le filtre. * : n'importe quels caractères ; "
+        + "plusieurs filtres séparés par des espaces : l'un ou l'autre. Une majuscule rend le filtre sensible à la casse. Échap : vider",
+      filterInclude: "Inclure",
+      filterExclude: "Exclure",
+      filterModeTitle: "Inclure : ne montrer que les fichiers qui correspondent · Exclure : les cacher",
       nextNote: "Diff note suivante",
     },
     en: {
@@ -385,6 +400,12 @@
       replies: n => `${n} repl${n > 1 ? "ies" : "y"}`,
       openInGitlab: "GitLab",
       previousNote: "Previous diff note",
+      filterPlaceholder: "Filter: user, src/main/java, *Test.java",
+      filterTitle: "Keeps the files whose path contains the filter. *: any characters; "
+        + "several filters separated by spaces: either one. An uppercase letter makes the filter case-sensitive. Esc: clear",
+      filterInclude: "Include",
+      filterExclude: "Exclude",
+      filterModeTitle: "Include: show only the matching files · Exclude: hide them",
       nextNote: "Next diff note",
     },
   };
@@ -430,6 +451,8 @@
   let selection = null;
   // Fil de commentaire courant de la navigation ‹ ›, en indice dans l'ordre du diff ; -1 : aucun encore.
   let currentNote = -1;
+  // Filtre des fichiers, gardé d'un rendu du diff à l'autre (format, plage de commits, notes).
+  const fileFilter = { text: "", exclude: false };
   // Hauteur des fils placés dans le diff : la ligne vide d'en face la suit (fil replié, réponse ouverte…).
   let notesObserver = null;
 
@@ -536,7 +559,71 @@
         + (cut ? `<span class="file-dir">${escapeHtml(path.slice(0, cut))}</span>` : "");
       lines.set(link.getAttribute("href").slice(1), link.closest(".d2h-file-list-line"));
     }
+    addFileFilter(list, lines);
     followCurrentFile(container, lines);
+  }
+
+  // Champ de filtre à côté du titre de la liste : n'affiche, ou cache, que les fichiers dont le chemin correspond.
+  function addFileFilter(list, lines) {
+    const title = list.querySelector(".d2h-file-list-title");
+    if (!title) return;
+    const box = document.createElement("span");
+    box.className = "file-filter";
+    box.innerHTML = `<input type="search" spellcheck="false" placeholder="${escapeHtml(texts.filterPlaceholder)}" title="${escapeHtml(texts.filterTitle)}">`
+      + `<button type="button" title="${escapeHtml(texts.filterModeTitle)}"></button>`;
+    title.after(box);
+    const input = box.querySelector("input");
+    const mode = box.querySelector("button");
+    const apply = () => {
+      mode.textContent = fileFilter.exclude ? texts.filterExclude : texts.filterInclude;
+      mode.setAttribute("aria-pressed", String(fileFilter.exclude));
+      applyFileFilter(title, lines);
+    };
+    // Les fils navigables changent avec le filtre : la navigation ‹ › repart du premier.
+    const change = () => {
+      currentNote = -1;
+      apply();
+      renderNotesNav();
+    };
+    input.value = fileFilter.text;
+    input.addEventListener("input", () => {
+      fileFilter.text = input.value;
+      change();
+    });
+    input.addEventListener("keydown", event => {
+      if (event.key !== "Escape" || !input.value) return;
+      event.stopPropagation();
+      input.value = fileFilter.text = "";
+      change();
+    });
+    mode.addEventListener("click", () => {
+      fileFilter.exclude = !fileFilter.exclude;
+      change();
+    });
+    apply();
+  }
+
+  // Un filtre par mot ; * vaut n'importe quels caractères, ailleurs dans le chemin. Sensible à la casse dès
+  // qu'il contient une majuscule : « Test » écarte le répertoire test/, « user » trouve UserService.
+  function fileMatchers(text) {
+    return text.trim().split(/\s+/).filter(Boolean).map(term => new RegExp(
+      term.split("*").map(part => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*"),
+      /\p{Lu}/u.test(term) ? "u" : "iu"
+    ));
+  }
+
+  function applyFileFilter(title, lines) {
+    const matchers = fileMatchers(fileFilter.text);
+    let shown = 0;
+    for (const [id, line] of lines) {
+      const path = line.querySelector("a.d2h-file-name").title;
+      const visible = !matchers.length || matchers.some(m => m.test(path)) !== fileFilter.exclude;
+      line.hidden = !visible;
+      const wrapper = document.getElementById(id);
+      if (wrapper) wrapper.hidden = !visible;
+      if (visible) shown++;
+    }
+    title.textContent = title.textContent.replace(/\(.*\)/, `(${matchers.length ? `${shown}/` : ""}${lines.size})`);
   }
 
   // Le fichier en haut de l'écran est surligné dans la liste, que le panneau garde en vue.
@@ -732,7 +819,9 @@
   }
 
   // Fils placés dans le diff, dans l'ordre de lecture ; ceux de l'encart « hors du diff » n'en sont pas.
-  const placedNotes = () => [...document.querySelectorAll("#diff-files tr.note-row .note-thread")];
+  // Ceux d'un fichier caché par le filtre n'en sont pas non plus.
+  const placedNotes = () => [...document.querySelectorAll("#diff-files tr.note-row .note-thread")]
+    .filter(note => !note.closest(".d2h-file-wrapper")?.hidden);
 
   function renderNotesNav() {
     const nav = document.getElementById("notes-nav");
