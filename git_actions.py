@@ -201,7 +201,7 @@ class GitActions:
         base, head = revisions
         completed = self._git(
             [
-                "log", "--first-parent", "--reverse", "--format=%H%x1f%P%x1f%an%x1f%aI%x1f%s",
+                "log", "--first-parent", "--reverse", "--format=%H%x1f%P%x1f%an%x1f%ae%x1f%aI%x1f%s",
                 f"{base}..{head}",
             ],
             timeout=DIFF_TIMEOUT_S
@@ -210,11 +210,12 @@ class GitActions:
             raise GitError(last_line(completed.stderr) or "git log en échec")
         commits = []
         for line in completed.stdout.splitlines():
-            sha, parents, author, date, title = line.split("\x1f", 4)
+            sha, parents, author, email, date, title = line.split("\x1f", 5)
             commits.append({
                 "sha": sha,
                 "merge": len(parents.split()) > 1,
                 "author": author,
+                "email": email,
                 "date": date,
                 "title": title,
             })

@@ -17,6 +17,7 @@
       : matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   } catch (ignored) { /* stockage indisponible : le script principal applique le thème du système */ }
 </script>
+<link rel="stylesheet" href="avatars.css">
 <style>
   :root {
     --bg: #f3f4f7;
@@ -37,10 +38,6 @@
     --grey-bg: #eef0f4; --grey-fg: #555b69; --grey-dot: #98a2b3;
     --blue-bg: #e9f0fd; --blue-fg: #1e4ea8;
     --quality-bg: #f6f5ff;
-    /* Avatars d'auteur : ni rouge, ni orange, ni vert, qui se confondraient avec les indicateurs de qualité, ni violet,
-       qui se confondrait avec la couleur du dashboard. Même luminosité perçue (OKLCH) pour qu'aucun ne domine. */
-    --avatar-0: #2a61b1; --avatar-1: #a12d79; --avatar-2: #774c33; --avatar-3: #212730; --avatar-4: #00768f;
-    --avatar-fg: #ffffff;
     --shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 6px 24px -8px rgba(16, 24, 40, .12);
     --focus: #4f46e5;
     color-scheme: light;
@@ -66,9 +63,6 @@
     --grey-bg: #282b35; --grey-fg: #b4b9c6; --grey-dot: #6f7584;
     --blue-bg: #1b2b4a; --blue-fg: #a9c6f5;
     --quality-bg: #1e1d2c;
-    /* Teintes claires sous initiales sombres : une couleur foncée se fondrait dans le fond. */
-    --avatar-0: #8bb9fd; --avatar-1: #f1a1ce; --avatar-2: #c5a38d; --avatar-3: #ebeff5; --avatar-4: #70d5ed;
-    --avatar-fg: #111217;
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 28px -10px rgba(0, 0, 0, .6);
   }
   * { box-sizing: border-box; }
@@ -321,11 +315,6 @@
   .author .author-name { display: flex; flex-direction: column; font-size: 0.85rem; line-height: 1.2; }
   /* Nom en plus petit : le prénom suffit à reconnaître, le nom complet reste lisible sur une capture. */
   .author .author-name > span + span { font-size: 0.75em; }
-  .avatar {
-    width: 1.8em; height: 1.8em; border-radius: 50%; flex: none;
-    display: grid; place-items: center; font-size: 0.78rem; font-weight: 700; color: var(--avatar-fg);
-    background: var(--avatar-color);
-  }
 
   .ok { color: var(--muted); }
   .ok.good { color: var(--green-fg); font-weight: 600; }
@@ -606,6 +595,7 @@
 <section class="branch-pipeline" id="branch-pipeline" hidden aria-labelledby="branch-pipeline-title"></section>
 
 <script src="tabs.js"></script>
+<script src="avatars.js"></script>
 <script>
 "use strict";
 
@@ -661,7 +651,6 @@ const REFRESH_LOCK = "mr-dashboard.refresh";
 // n'est pas traité. Un seul onglet notifie : celui qui détient NOTIFIER_LOCK.
 const NOTIFY_KEY = "mr-dashboard.notify";
 const NOTIFIED_KEY = "mr-dashboard.notified";
-const AVATAR_COLORS_KEY = "mr-dashboard.avatar-colors";
 const THEME_KEY = "mr-dashboard.theme";
 const TEXT_SCALE_KEY = "mr-dashboard.textScale";
 const TEXT_SCALES = [0.7, 0.8, 0.9, 1, 1.1, 1.25, 1.5];
@@ -2860,45 +2849,11 @@ function renderRow(mr) {
   return `<tr${isStalled(mr) ? ' class="stalled"' : ""}>${shownColumns().map(c => `<td class="${c.cellClass ?? ""} ${groupClass(c.key)}">${c.render(mr)}</td>`).join("")}</tr>`;
 }
 
-// Nombre de couleurs d'avatar --avatar-<n> définies pour chaque thème, rangées des plus éloignées aux plus proches.
-const AVATAR_COLOR_COUNT = 5;
-
-// Une couleur dérivée du nom pourrait donner la même, ou une voisine, à deux auteurs. Chaque nouvel auteur prend
-// la couleur la moins utilisée et la garde : retenue d'un chargement à l'autre, elle ne change pas non plus quand
-// la vue des MR mergées fait apparaître d'autres auteurs.
-let avatarSlots = null;
-function avatarColor(name) {
-  avatarSlots ??= readAvatarSlots();
-  if (!Object.hasOwn(avatarSlots, name)) {
-    const uses = Array(AVATAR_COLOR_COUNT).fill(0);
-    Object.values(avatarSlots).forEach(slot => uses[slot]++);
-    avatarSlots[name] = uses.indexOf(Math.min(...uses));
-    saveAvatarSlots();
-  }
-  return `var(--avatar-${avatarSlots[name]})`;
-}
-
-function readAvatarSlots() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(AVATAR_COLORS_KEY)) ?? {};
-    return Object.fromEntries(Object.entries(saved).filter(([, slot]) => Number.isInteger(slot) && slot >= 0 && slot < AVATAR_COLOR_COUNT));
-  } catch (ignored) {
-    return {};
-  }
-}
-
-function saveAvatarSlots() {
-  try {
-    localStorage.setItem(AVATAR_COLORS_KEY, JSON.stringify(avatarSlots));
-  } catch (ignored) { /* stockage indisponible : les couleurs seront réattribuées au prochain chargement */ }
-}
-
 function authorCell(mr) {
   const name = mr.author?.name ?? "?";
-  const initials = name.split(/\s+/).map(part => part[0] ?? "").join("").slice(0, 2).toUpperCase();
   const [first, ...rest] = name.trim().split(/\s+/);
   const lines = [first, rest.join(" ")].filter(Boolean).map(line => `<span>${escapeHtml(line)}</span>`).join("");
-  return `<span class="author"><span class="avatar" style="--avatar-color:${avatarColor(name)}" aria-hidden="true">${escapeHtml(initials)}</span><span class="author-name">${lines}</span></span>`;
+  return `<span class="author"><span class="avatar" style="--avatar-color:${Avatars.color(name)}" aria-hidden="true">${escapeHtml(Avatars.initials(name))}</span><span class="author-name">${lines}</span></span>`;
 }
 
 function mrCell(mr) {

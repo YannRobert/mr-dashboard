@@ -1,0 +1,17 @@
+/* Pastilles d'auteur, partagées par index.html et diff.html : un auteur garde sa couleur d'une page à l'autre. */
+:root {
+  /* Ni rouge, ni orange, ni vert, qui se confondraient avec les indicateurs de qualité, ni violet,
+     qui se confondrait avec la couleur du dashboard. Même luminosité perçue (OKLCH) pour qu'aucun ne domine. */
+  --avatar-0: #2a61b1; --avatar-1: #a12d79; --avatar-2: #774c33; --avatar-3: #212730; --avatar-4: #00768f;
+  --avatar-fg: #ffffff;
+}
+:root[data-theme="dark"] {
+  /* Teintes claires sous initiales sombres : une couleur foncée se fondrait dans le fond. */
+  --avatar-0: #8bb9fd; --avatar-1: #f1a1ce; --avatar-2: #c5a38d; --avatar-3: #ebeff5; --avatar-4: #70d5ed;
+  --avatar-fg: #111217;
+}
+.avatar {
+  width: 1.8em; height: 1.8em; border-radius: 50%; flex: none;
+  display: grid; place-items: center; font-size: 0.78rem; font-weight: 700; color: var(--avatar-fg);
+  background: var(--avatar-color);
+}

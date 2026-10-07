@@ -21,6 +21,7 @@
 </script>
 <link rel="stylesheet" href="vendor/diff2html/diff2html.min.css">
 <link rel="stylesheet" href="notes.css">
+<link rel="stylesheet" href="avatars.css">
 <style>
   :root {
     --bg: #f3f4f7;
@@ -132,7 +133,7 @@
   .commits-warning { padding: 0.3rem 0.6rem; font-size: 0.75rem; color: var(--red-fg); background: var(--red-bg); }
   #commit-list { list-style: none; margin: 0; padding: 0; overflow: auto; min-height: 0; }
   #commit-list li {
-    display: grid; grid-template-columns: 2.2em minmax(0, 1fr) auto; gap: 0 0.4rem; align-items: baseline;
+    display: grid; grid-template-columns: 2.2em auto minmax(0, 1fr) auto; gap: 0 0.4rem; align-items: baseline;
     padding: 0.2rem 0.6rem; font-size: 0.78rem; cursor: pointer; user-select: none;
     border-left: 3px solid transparent;
   }
@@ -149,6 +150,9 @@
   #commit-list .n { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
   #commit-list .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #commit-list .a { color: var(--muted); font-size: 0.7rem; white-space: nowrap; }
+  /* Pastille à peine plus haute que le texte, alignée en colonne : la couleur suffit à distinguer les auteurs. */
+  #commit-list .avatar { align-self: center; font-size: 0.5rem; width: 1.9em; height: 1.9em; }
+  #commit-list li.merge .avatar { opacity: 0.6; }
   #files .d2h-file-list-wrapper { margin: 0; border: none; }
   #files .d2h-file-list-header { padding: 0.4rem 0.75rem; font-size: 0.85rem; border-bottom: 1px solid var(--border); }
   #files .d2h-file-list-header { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
@@ -267,6 +271,7 @@
 <script src="vendor/diff2html/diff2html-ui-slim.min.js"></script>
 <script src="notes.js"></script>
 <script src="tabs.js"></script>
+<script src="avatars.js"></script>
 <script>
   const FORMAT_KEY = "mr-dashboard.diffFormat";
   const DASHBOARD_TEXT_SCALE_KEY = "mr-dashboard.textScale";
@@ -660,7 +665,8 @@
     const items = commits.map((c, i) => {
       const classes = [selected(i) ? "selected" : "", c.merge ? "merge" : "", seenAtOpen >= 0 && i > seenAtOpen ? "new" : ""]
         .filter(Boolean).join(" ");
-      const tooltip = `${c.sha.slice(0, 8)} · ${c.author} · ${new Date(c.date).toLocaleString(lang)}\n${c.title}${c.merge ? `\n${texts.mergeCommit}` : ""}`;
+      const author = Avatars.gitlabName(c.author, c.email ?? "");
+      const tooltip = `${c.sha.slice(0, 8)} · ${author} · ${new Date(c.date).toLocaleString(lang)}\n${c.title}${c.merge ? `\n${texts.mergeCommit}` : ""}`;
       const push = pushes[pushStarts.get(i)];
       const separator = push
         ? `<li class="push" data-push="${pushStarts.get(i)}" title="${escapeHtml(texts.pushTitle)}">${escapeHtml(texts.push({
@@ -669,8 +675,10 @@
         }))}</li>`
         : "";
       return `${separator}<li data-index="${i}"${classes ? ` class="${classes}"` : ""} title="${escapeHtml(tooltip)}">`
-        + `<span class="n">${i + 1}</span><span class="t">${c.merge ? "⑂ " : ""}${escapeHtml(c.title)}</span>`
-        + `<span class="a">${escapeHtml(initials(c.author))} · ${escapeHtml(age(c.date))}</span></li>`;
+        + `<span class="n">${i + 1}</span>`
+        + `<span class="avatar" style="--avatar-color:${Avatars.color(author)}" aria-hidden="true">${escapeHtml(Avatars.initials(author))}</span>`
+        + `<span class="t">${c.merge ? "⑂ " : ""}${escapeHtml(c.title)}</span>`
+        + `<span class="a">${escapeHtml(age(c.date))}</span></li>`;
     }).join("");
     const warning = range && commits.slice(range[0], range[1] + 1).some(c => c.merge)
       ? `<div class="commits-warning">${escapeHtml(texts.mergeWarning)}</div>` : "";
@@ -1221,8 +1229,6 @@
       pushes = [];
     }
   }
-
-  const initials = name => name.split(/\s+/).filter(Boolean).map(part => part[0].toUpperCase()).join("").slice(0, 3);
 
   // « 3 h », « 2 j » : de quoi situer un commit dans la vie de la MR.
   function age(iso) {
