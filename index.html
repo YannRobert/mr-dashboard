@@ -3265,10 +3265,14 @@ function aiFixPrompt(mr) {
       (running ? "\n(un pipeline est en cours : n'attends pas sa fin, vérifie seulement dans le code qu'un point n'est pas déjà corrigé sur la branche)" : "")
     );
   }
+  // Le compte seul ne dit pas quoi faire : le prompt dit où lire les threads et qu'ils demandent des
+  // corrections de la MR elle-même.
   if (unresolved > 0) {
     parts.push(
-      `La MR a ${unresolved} thread${plural(unresolved)} non résolu${plural(unresolved)} : traite chacun des points ` +
-      "dans la mesure du possible et du raisonnable."
+      `La MR a ${unresolved} thread${plural(unresolved)} non résolu${plural(unresolved)} (commentaires de revue et diff notes) : ` +
+      `lis-les (\`glab api projects/:id/merge_requests/${mr.iid}/discussions\`, threads \`resolvable\` non \`resolved\`) ` +
+      "et corrige le code de la MR selon chacun, dans la mesure du possible et du raisonnable. Réponds ensuite dans " +
+      "chaque thread : ce qui a été corrigé et comment, ou pourquoi le point n'est pas retenu ; résous ceux que tu as corrigés."
     );
   }
   if (behind > 0 || mr.has_conflicts) {
