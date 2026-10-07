@@ -84,6 +84,7 @@ STATIC_FILES = {
     "/notes.css": "text/css; charset=utf-8",
     "/tabs.js": "text/javascript; charset=utf-8",
     "/avatars.js": "text/javascript; charset=utf-8",
+    "/dates.js": "text/javascript; charset=utf-8",
     "/avatars.css": "text/css; charset=utf-8",
 }
 SIGNALS_SCRIPT = STATIC_DIR.parent / "mr-ci-signals.py"

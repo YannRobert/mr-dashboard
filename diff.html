@@ -287,6 +287,7 @@
 <script src="notes.js"></script>
 <script src="tabs.js"></script>
 <script src="avatars.js"></script>
+<script src="dates.js"></script>
 <script>
   const FORMAT_KEY = "mr-dashboard.diffFormat";
   const DASHBOARD_TEXT_SCALE_KEY = "mr-dashboard.textScale";
@@ -781,11 +782,11 @@
       const classes = [selected(i) ? "selected" : "", c.merge ? "merge" : "", seenAtOpen >= 0 && i > seenAtOpen ? "new" : ""]
         .filter(Boolean).join(" ");
       const author = Avatars.gitlabName(c.author, c.email ?? "");
-      const tooltip = `${c.sha.slice(0, 8)} · ${author} · ${new Date(c.date).toLocaleString(lang)}\n${c.title}${c.merge ? `\n${texts.mergeCommit}` : ""}`;
+      const tooltip = `${c.sha.slice(0, 8)} · ${author} · ${formatDateTime(c.date)}\n${c.title}${c.merge ? `\n${texts.mergeCommit}` : ""}`;
       const push = pushes[pushStarts.get(i)];
       const separator = push
         ? `<li class="push" data-push="${pushStarts.get(i)}" title="${escapeHtml(texts.pushTitle)}">${escapeHtml(texts.push({
-          date: new Date(push.date).toLocaleString(lang, { dateStyle: "short", timeStyle: "short" }),
+          date: formatDateTime(push.date),
           count: push.last - push.first + 1,
         }))}</li>`
         : "";
@@ -996,7 +997,7 @@
     const link = /^https:\/\//.test(mr.url)
       ? `<a href="${escapeHtml(`${mr.url}#note_${first.id}`)}" target="_blank" rel="noopener">${escapeHtml(texts.openInGitlab)}</a>` : "";
     const note = n => `<div class="note"><div class="note-meta"><strong>${escapeHtml(n.author?.name ?? "?")}</strong> · `
-      + `<span title="${escapeHtml(new Date(n.created_at).toLocaleString(lang))}">${escapeHtml(age(n.created_at))}</span></div>`
+      + `<span title="${escapeHtml(formatDateTime(n.created_at))}">${escapeHtml(age(n.created_at))}</span></div>`
       + (notesHtml.has(n.id)
         ? `<div class="gl-body">${GitlabNotes.render(notesHtml.get(n.id), gitlabWeb)}</div></div>`
         : `<div class="note-body">${markdown(n.body)}</div></div>`);

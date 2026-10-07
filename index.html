@@ -596,6 +596,7 @@
 
 <script src="tabs.js"></script>
 <script src="avatars.js"></script>
+<script src="dates.js"></script>
 <script>
 "use strict";
 
@@ -3837,7 +3838,7 @@ function compactDuration(ms) {
   return `${Math.floor(hours / 24)} ${t("unit.day")}${rest ? ` ${rest}h` : ""}`;
 }
 
-const formatDate = iso => new Date(iso).toLocaleString(locale(), { dateStyle: "short", timeStyle: "short" });
+const formatDate = formatDateTime;
 const formatPercent = value => (value / 100).toLocaleString(locale(), { style: "percent", maximumFractionDigits: 1 });
 // Formes françaises fixes, pour le prompt et les traductions françaises.
 const formatPercentFr = value => value.toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " %";

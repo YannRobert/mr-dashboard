@@ -108,6 +108,7 @@
 <main id="comments"><p class="message" id="loading"></p></main>
 <script src="notes.js"></script>
 <script src="tabs.js"></script>
+<script src="dates.js"></script>
 <script>
   const TEXTS = {
     fr: {
@@ -208,7 +209,7 @@
     const notes = discussion.notes.nodes.filter(n => !n.system);
     const [first, ...replies] = notes;
     const resolved = discussion.resolvable && discussion.resolved;
-    const when = n => `<span title="${escapeHtml(new Date(n.createdAt).toLocaleString(lang))}">${escapeHtml(age(n.createdAt))}</span>`;
+    const when = n => `<span title="${escapeHtml(formatDateTime(n.createdAt))}">${escapeHtml(age(n.createdAt))}</span>`;
     // Auteur et date du premier commentaire dans l'en-tête du fil ; chaque réponse porte les siens.
     const note = (n, i) => `<div class="note">`
       + (i ? `<div class="note-meta"><strong>${escapeHtml(n.author?.name ?? "?")}</strong> · ${when(n)}</div>` : "")
@@ -218,7 +219,7 @@
     const id = GitlabNotes.discussionId(discussion.id);
     return `<details class="thread${state}" data-discussion="${escapeHtml(id)}"${resolved ? "" : " open"}>`
       + `<summary><strong>${escapeHtml(first.author?.name ?? "?")}</strong>`
-      + `<span>${escapeHtml(new Date(first.createdAt).toLocaleString(lang, { dateStyle: "short", timeStyle: "short" }))} · ${when(first)}</span>`
+      + `<span>${escapeHtml(formatDateTime(first.createdAt))} · ${when(first)}</span>`
       + badge + (replies.length ? `<span>${escapeHtml(texts.replies(replies.length))}</span>` : "")
       + `<a href="${escapeHtml(first.url)}" target="_blank" rel="noopener">${escapeHtml(texts.openNote)}</a></summary>`
       + notes.map(note).join("") + GitlabNotes.threadActionsHtml(discussion, lang) + `</details>`;
