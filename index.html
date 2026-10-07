@@ -3092,21 +3092,24 @@ function aiPrompt(
 // Alimente le prompt seul : en français quelle que soit la langue de l'interface, comme aiFixPrompt.
 function qualityDefects(s) {
   const defects = [];
-  if (s.pipeline?.status === "failed") defects.push(`le pipeline #${s.pipeline.id} est en échec`);
+  if (s.pipeline?.status === "failed") defects.push(`le pipeline #${s.pipeline.id} est en échec${linkFr(s.pipeline.web_url)}`);
   if (sonarUsable(s.sonar)) {
     const sonar = s.sonar;
-    if (sonar.issues > 0) defects.push(`${sonar.issues} issue${plural(sonar.issues)} Sonar ouverte${plural(sonar.issues)}`);
+    if (sonar.issues > 0) defects.push(`${sonar.issues} issue${plural(sonar.issues)} Sonar ouverte${plural(sonar.issues)}${linkFr(sonar.links?.issues)}`);
     if (sonar.gate && sonar.gate !== "OK") defects.push(`Quality Gate Sonar ${sonar.gate}`);
-    if (sonar.coverage != null && sonar.coverage < 100) defects.push(`couverture du nouveau code à ${formatPercentFr(sonar.coverage)} (objectif 100 %)`);
+    if (sonar.coverage != null && sonar.coverage < 100) defects.push(`couverture du nouveau code à ${formatPercentFr(sonar.coverage)}, objectif 100 %${linkFr(sonar.links?.coverage)}`);
   }
   const pit = s.pit;
   if (pit?.state === "ok") {
-    if (pit.survived > 0) defects.push(`${pit.survived} mutant${plural(pit.survived)} PIT survivant${plural(pit.survived)}`);
-    if (pit.noCoverage > 0) defects.push(`${pit.noCoverage} mutant${plural(pit.noCoverage)} PIT non couvert${plural(pit.noCoverage)}`);
-    if (pit.errors > 0) defects.push(`${pit.errors} mutant${plural(pit.errors)} PIT en erreur`);
+    if (pit.survived > 0) defects.push(`${pit.survived} mutant${plural(pit.survived)} PIT survivant${plural(pit.survived)}${linkFr(pit.link)}`);
+    if (pit.noCoverage > 0) defects.push(`${pit.noCoverage} mutant${plural(pit.noCoverage)} PIT non couvert${plural(pit.noCoverage)}${linkFr(pit.link)}`);
+    if (pit.errors > 0) defects.push(`${pit.errors} mutant${plural(pit.errors)} PIT en erreur${linkFr(pit.link)}`);
   }
   return defects;
 }
+
+// Lien vers le détail d'un indicateur : le correcteur y va droit, au lieu de le rechercher.
+const linkFr = url => url ? ` : ${url}` : "";
 
 // Seuls les indicateurs que le projet suivi produit : exiger un mutant de moins d'un projet sans PIT
 // lancerait le correcteur sur un objectif impossible.
@@ -3125,19 +3128,14 @@ function aiFixPrompt(mr) {
   const running = s.sonar?.refreshing || s.pit?.refreshing || PENDING_JOB_STATUSES.has(s.pipeline?.status);
   const behind = s.behind?.count ?? 0;
   const parts = [`Sur la MR !${mr.iid} (\`${mr.source_branch}\` → \`${mr.target_branch}\`) :`];
-  // La mise à jour passe avant tout le reste : les corrections se font sur la base à jour, et les
-  // indicateurs ne sont fiables qu'une fois la cible intégrée.
-  if (behind > 0 || mr.has_conflicts) {
-    const late = behind > 0 ? ` (${behind} commit${plural(behind)} de retard)` : "";
-    parts.push(
-      `${defects.length || unresolved > 0 ? "Avant toute chose, mets" : "Mets"} à jour la branche de la MR en y mergeant \`origin/${mr.target_branch}\`${late}` +
-      (mr.has_conflicts ? ", et résous les conflits que GitLab signale avec la cible." : ".")
-    );
-  }
+  // Corrections d'abord, sur les valeurs du dernier pipeline terminé : mettre la branche à jour ne
+  // corrige aucun indicateur, et attendre le pipeline qui suit la mise à jour retarderait d'autant les
+  // corrections. Le tout part ensuite en un seul push, donc un seul pipeline.
   if (defects.length) {
     parts.push(
-      "Corrige les indicateurs qualité actuellement imparfaits :\n" + defects.map(d => `- ${d}`).join("\n") +
-      (running ? "\n(valeurs du dernier pipeline terminé : un pipeline est en cours, commence par vérifier leur état)" : "")
+      "Corrige les indicateurs qualité imparfaits relevés par le dernier pipeline terminé, sans attendre de nouveau pipeline :\n" +
+      defects.map(d => `- ${d}`).join("\n") +
+      (running ? "\n(un pipeline est en cours : n'attends pas sa fin, vérifie seulement dans le code qu'un point n'est pas déjà corrigé sur la branche)" : "")
     );
   }
   if (unresolved > 0) {
@@ -3146,12 +3144,19 @@ function aiFixPrompt(mr) {
       "dans la mesure du possible et du raisonnable."
     );
   }
+  if (behind > 0 || mr.has_conflicts) {
+    const late = behind > 0 ? ` (${behind} commit${plural(behind)} de retard)` : "";
+    parts.push(
+      `${defects.length || unresolved > 0 ? "Ensuite, mets" : "Mets"} à jour la branche de la MR en y mergeant \`origin/${mr.target_branch}\`${late}` +
+      (mr.has_conflicts ? ", et résous les conflits que GitLab signale avec la cible." : ".")
+    );
+  }
   // Toute modification de la MR — mise à jour, correction, réponse à un thread — relance la CI et peut
   // dégrader un indicateur jusque-là parfait : la boucle de vérification vaut donc dans tous les cas.
   parts.push(
-    "Une fois les modifications effectuées et poussées sur la branche de la MR, attends la fin du pipeline puis vérifie " +
+    "Pousse le tout en une fois sur la branche de la MR, puis attends la fin du pipeline et vérifie " +
     `l'état des indicateurs avec \`${state.config.signalsCommand} ${mr.iid}\`. Tant que les indicateurs ne sont pas ` +
-    `parfaits (${perfectIndicators().join(", ")}), effectue les corrections nécessaires."`
+    `parfaits (${perfectIndicators().join(", ")}), effectue les corrections nécessaires.`
   );
   return parts.join("\n\n");
 }
