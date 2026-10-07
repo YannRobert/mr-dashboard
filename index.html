@@ -18,6 +18,7 @@
   } catch (ignored) { /* stockage indisponible : le script principal applique le thème du système */ }
 </script>
 <link rel="stylesheet" href="avatars.css">
+<link rel="stylesheet" href="ai.css">
 <style>
   :root {
     --bg: #f3f4f7;
@@ -341,29 +342,7 @@
   /* Diff et commentaires : deux cases de même taille, pictogramme centré. */
   .actions-row > .mr-action { flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center; min-height: 1.7em; padding: 0; }
   a.mr-action { text-decoration: none; border: 1px solid var(--border-strong); border-radius: 0.5rem; background: var(--surface); text-align: center; }
-  dialog.ai-prompt {
-    width: min(1200px, calc(100vw - 32px)); padding: 1.2rem; border: 1px solid var(--border);
-    border-radius: 0.8rem; background: var(--surface); color: var(--text); box-shadow: var(--shadow);
-  }
-  dialog.ai-prompt::backdrop { background: rgba(16, 24, 40, .45); }
-  dialog.ai-prompt h2 { margin: 0 0 0.3rem; font-size: 1.1rem; }
-  dialog.ai-prompt p { margin: 0 0 0.8rem; color: var(--muted); font-size: 0.9rem; }
-  dialog.ai-prompt p.ai-error { color: var(--red-fg); }
-  dialog.ai-prompt .ai-actions { margin: 0.3rem 0 0.7rem; }
-  dialog.ai-prompt .ai-actions[hidden] { display: none; }
-  dialog.ai-prompt .ai-actions button { font-size: 0.9rem; padding: 0.3em 0.9em; }
-  dialog.ai-prompt textarea {
-    width: 100%; box-sizing: border-box; height: min(60vh, 34rem); min-height: 16rem; resize: vertical; padding: 0.7rem;
-    font: 0.9rem/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 0.5rem;
-  }
-  dialog.ai-prompt .actions button[hidden] { display: none; }
-  /* Fermer à gauche, à l'écart des actions sur le prompt, regroupées à droite. */
-  dialog.ai-prompt .actions .dismiss { margin-right: auto; }
   button.icon-button { padding-inline: 0.55em; line-height: 1; }
-  button.with-icon { display: inline-flex; align-items: center; gap: 0.45em; }
-  button.with-icon .orca-logo { height: 0.95em; width: auto; flex: none; }
-  dialog.ai-prompt .actions { display: flex; justify-content: flex-end; align-items: center; gap: 0.6rem; margin-top: 0.8rem; }
   /* Activité des commits, au survol du nombre de commits : courbe cumulée et commentaires. Volet ancré
      dans le coin bas droit de la fenêtre, pour ne jamais recouvrir la ligne de la MR survolée. */
   .commit-activity {
@@ -562,22 +541,6 @@
   <div class="active-labels" id="activeLabels"></div>
 </div>
 
-<dialog class="ai-prompt" id="ai-dialog" aria-labelledby="ai-title">
-  <h2 id="ai-title"></h2>
-  <div class="view-switch ai-actions" id="ai-actions" role="group" aria-label="Action" data-i18n-aria-label="dialog.actions"></div>
-  <p class="ai-error" id="ai-error" hidden></p>
-  <p data-i18n="dialog.hint">Prompt à coller dans Claude Code, lancé à la racine du dépôt.</p>
-  <textarea id="ai-text" readonly aria-label="Prompt pour Claude Code" data-i18n-aria-label="dialog.aria"></textarea>
-  <div class="actions">
-    <button type="button" id="ai-close" class="dismiss" data-i18n="dialog.close">Fermer</button>
-    <span class="muted" id="ai-copied" aria-live="polite"></span>
-    <button type="button" id="ai-orca" class="with-icon" hidden data-i18n-title="dialog.orca.title">
-      <svg class="orca-logo" viewBox="6.67 70.67 318.6 202.67" aria-hidden="true"><path fill="currentColor" d="m 177.81311,248.33334 c 23.82304,-41.29793 40.54045,-66.84626 49.51207,-75.66667 6.81685,-6.70196 10.07373,-8.7374 20.07265,-12.54475 34.57822,-13.16655 61.04674,-26.78733 72.37222,-37.24295 9.62924,-8.88966 9.34286,-9.01142 -23.43671,-9.964 -35.71756,-1.03796 -43.72989,0.42119 -62.17546,11.323 -16.72118,9.88265 -34.20103,30.11225 -42.74704,49.47157 -2.57353,5.82985 -14.81294,44.3056 -27.96399,87.90747 -2.86036,9.48343 -3.02466,11.71633 -0.86213,11.71633 0.44382,0 7.29659,-11.25 15.22839,-25 z m -65.14644,-8.32267 C 120,239.3326 130.5,237.50979 136,235.95998 c 5.5,-1.5498 12.25,-3.13783 15,-3.52895 2.75,-0.39111 5,-0.95485 5,-1.25275 0,-0.29789 2.15135,-7.58487 4.78078,-16.19328 8.49209,-27.80201 12.21334,-40.41629 21.13747,-71.65166 4.81891,-16.86667 11.23502,-39.185 14.25802,-49.596301 5.12803,-17.66103 5.74763,-23.07037 2.64253,-23.07037 -1.84887,0 -4.07048,6.908293 -16.72243,52.000001 -21.78975,77.65896 -20.80806,74.74393 -26.84794,79.72251 -7.5925,6.25838 -25.03916,14.82524 -36.10856,17.73044 -17.0947,4.48656 -33.410599,3.86724 -53.116765,-2.01622 -18.569242,-5.54403 -23.142662,-5.80284 -33.639754,-1.9037 -5.875424,2.18242 -9.864152,5.04363 -16.716684,11.99127 -4.95,5.0187 -9.0000001,10.02884 -9.0000001,11.13364 0,1.75174 5.9276921,2.00299 46.3333351,1.96383 25.483334,-0.0247 52.333338,-0.59969 59.666668,-1.27777 z M 252.69513,104.63708 c 12.18267,-3.48651 15.77304,-7.895503 9.63821,-11.835773 -10.19296,-6.546726 -36.19849,-1.77301 -41.19436,7.561863 -1.2556,2.3461 -0.98698,3.2037 1.68353,5.375 2.69471,2.19098 4.59991,2.47691 12.53928,1.88189 5.14899,-0.3859 12.94899,-1.72824 17.33334,-2.98298 z"/></svg>
-      <span data-i18n="dialog.orca">Ouvrir dans Orca</span>
-    </button>
-    <button type="button" id="ai-copy" class="primary" data-i18n="dialog.copy">Copier</button>
-  </div>
-</dialog>
 
 <section class="commit-activity" id="commit-activity" aria-labelledby="ca-title" hidden>
   <div class="ca-body" id="ca-body"></div>
@@ -602,6 +565,7 @@
 <section class="branch-pipeline" id="branch-pipeline" hidden aria-labelledby="branch-pipeline-title"></section>
 
 <script src="tabs.js"></script>
+<script src="ai.js"></script>
 <script src="avatars.js"></script>
 <script src="dates.js"></script>
 <script>
@@ -889,20 +853,6 @@ const I18N = {
     "filter.addLabel": "Label : ajouter…",
     "label.add": "Filtrer sur ce label",
     "label.remove": "Retirer ce label du filtre",
-    "dialog.title": p => `Claude Code sur la MR !${p.iid}`,
-    "dialog.actions": "Action",
-    "dialog.catalogError": p => `Catalogue des actions AI illisible : ${p.message}`,
-    "dialog.hint": "Prompt à coller dans Claude Code, lancé à la racine du dépôt — ou à lancer directement dans Orca.",
-    "dialog.aria": "Prompt pour Claude Code",
-    "dialog.close": "Fermer",
-    "dialog.copy": "Copier",
-    "dialog.copied": "Copié",
-    "dialog.orca": "Ouvrir dans Orca",
-    "dialog.orca.title": "Lance Claude Code avec ce prompt dans un nouvel onglet Orca, sur le worktree principal",
-    "dialog.orca.opening": "Ouverture dans Orca…",
-    "dialog.orca.opened": "Session lancée dans Orca",
-    "dialog.orca.unconfirmed": "Orca n'a pas confirmé à temps : bascule sur Orca, l'onglet s'y ouvre dès que sa fenêtre est au premier plan",
-    "dialog.orca.failed": p => `Échec : ${p.message}`,
     "error.load": p => `Chargement des MR impossible : ${p.message}`,
     "error.sonar": p => `Sonar injoignable : ${p.message}`,
     "error.graphql": p => `Taille, commits, approbations et threads des MR indisponibles (GraphQL) : ${p.message}`,
@@ -1001,10 +951,6 @@ const I18N = {
     "conflicts.title": "La MR est en conflit avec sa branche cible",
     "diff.files": p => `${p.n} fichier${plural(p.n)}`,
     "diff.title": p => `${p.files} fichier${plural(p.files)} modifié${plural(p.files)}, ${p.additions} ligne${plural(p.additions)} ajoutée${plural(p.additions)}, ${p.deletions} supprimée${plural(p.deletions)}`,
-    "ai": "AI",
-    "ai.title": "Afficher un prompt Claude Code pour cette MR",
-    "ai.title.toFix": "Afficher un prompt Claude Code pour cette MR, qui a quelque chose à corriger",
-    "ai.fix": "Corriger",
     "gitFetch.title": "Lancer tout de suite un git fetch du dépôt local",
     "gitFetch.group": "Fetch du dépôt local",
     "gitFetch.auto": "Fetch auto",
@@ -1141,20 +1087,6 @@ const I18N = {
     "filter.addLabel": "Label: add…",
     "label.add": "Filter on this label",
     "label.remove": "Remove this label from the filter",
-    "dialog.title": p => `Claude Code on MR !${p.iid}`,
-    "dialog.actions": "Action",
-    "dialog.catalogError": p => `Unreadable AI actions catalogue: ${p.message}`,
-    "dialog.hint": "Prompt to paste into Claude Code, started at the repository root — or to start directly in Orca.",
-    "dialog.aria": "Prompt for Claude Code",
-    "dialog.close": "Close",
-    "dialog.copy": "Copy",
-    "dialog.copied": "Copied",
-    "dialog.orca": "Open in Orca",
-    "dialog.orca.title": "Start Claude Code with this prompt in a new Orca tab, on the main worktree",
-    "dialog.orca.opening": "Opening in Orca…",
-    "dialog.orca.opened": "Session started in Orca",
-    "dialog.orca.unconfirmed": "Orca did not confirm in time: switch to Orca, the tab opens as soon as its window is in front",
-    "dialog.orca.failed": p => `Failed: ${p.message}`,
     "error.load": p => `Could not load the MRs: ${p.message}`,
     "error.sonar": p => `Sonar unreachable: ${p.message}`,
     "error.graphql": p => `MR sizes, commits, approvals and threads unavailable (GraphQL): ${p.message}`,
@@ -1253,10 +1185,6 @@ const I18N = {
     "conflicts.title": "The MR conflicts with its target branch",
     "diff.files": p => `${p.n} file${pluralEn(p.n)}`,
     "diff.title": p => `${p.files} file${pluralEn(p.files)} changed, ${p.additions} line${pluralEn(p.additions)} added, ${p.deletions} deleted`,
-    "ai": "AI",
-    "ai.title": "Show a Claude Code prompt for this MR",
-    "ai.title.toFix": "Show a Claude Code prompt for this MR, which has something to fix",
-    "ai.fix": "Fix",
     "gitFetch.title": "Run a git fetch of the local repository now",
     "gitFetch.group": "Local repository fetch",
     "gitFetch.auto": "Auto-fetch",
@@ -1386,6 +1314,7 @@ function renderStatus() {
 function setLang(lang) {
   if (lang === state.lang) return;
   state.lang = lang;
+  MrAi.setLang(lang);
   writeFiltersToUrl();
   applyStaticTexts();
   renderStatus();
@@ -1602,7 +1531,7 @@ async function ensureConfig() {
     state.configLoaded = true;
     renderGitFetch();
     loadGitFetchStatus();
-    loadAiActions().then(render);
+    MrAi.loadCatalog().then(render);
   }
   applyDefaultTarget();
   $("project").textContent = state.config.gitlabProject;
@@ -1745,6 +1674,7 @@ function applySnapshot(snapshot) {
   render();
   renderStatus();
   notifyProblems();
+  saveAiFixContexts();
   scheduleBranchPipelinePoll();
   fetchIfRepoChanged();
 }
@@ -3260,16 +3190,6 @@ function renderGitFetchFreshness() {
 
 // ---------- Actions AI ----------
 
-// Catalogue des actions du projet suivi (cf. ai_actions.py) : chacune un prompt dont la page remplace
-// les variables. Relu à chaque ouverture du dialogue, pour essayer un prompt sans recharger la page.
-async function loadAiActions() {
-  try {
-    state.aiActions = (await api("/ai/actions")).body;
-  } catch (error) {
-    state.aiActions = { actions: [], error: error.message };
-  }
-}
-
 // Une branche en retard ou en conflit, un indicateur qualité imparfait ou un thread non résolu : seules
 // les actions « to-fix » l'exigent, et le liseré rouge du bouton le signale.
 function hasSomethingToFix(mr) {
@@ -3277,37 +3197,23 @@ function hasSomethingToFix(mr) {
   return mr.has_conflicts || s.behind?.count > 0 || qualityDefects(s).length > 0 || s.threads?.unresolved > 0;
 }
 
-function aiActionsFor(mr) {
-  const toFix = hasSomethingToFix(mr);
-  return (state.aiActions?.actions ?? []).filter(action => action.when !== "to-fix" || toFix);
-}
-
 // Place du bouton gardée quand aucune action n'est proposée : « diff » reste au même endroit d'une ligne à l'autre.
-const aiPlaceholder = () => `<button type="button" class="mr-action ai placeholder" tabindex="-1" aria-hidden="true">${escapeHtml(t("ai"))}</button>`;
+const aiPlaceholder = () => `<button type="button" class="mr-action ai placeholder" tabindex="-1" aria-hidden="true">${escapeHtml(MrAi.t("ai"))}</button>`;
 
-// Un catalogue illisible laisse le bouton partout : le dialogue dit pourquoi aucune action n'est proposée.
 function aiButton(mr) {
-  if (signalsOf(mr).loading || mr.state === "merged" || !state.aiActions) return "";
-  if (!state.aiActions.error && !aiActionsFor(mr).length) return "";
+  if (signalsOf(mr).loading || mr.state === "merged") return "";
   const toFix = hasSomethingToFix(mr);
+  if (!MrAi.offered(toFix)) return "";
   return `<button type="button" class="mr-action ai${toFix ? " to-fix" : ""}" data-ai="${mr.iid}" ` +
-    `title="${escapeHtml(t(toFix ? "ai.title.toFix" : "ai.title"))}">${escapeHtml(t("ai"))}</button>`;
+    `title="${escapeHtml(MrAi.buttonTitle(toFix))}">${escapeHtml(MrAi.t("ai"))}</button>`;
 }
 
-// Variables inconnues laissées telles quelles : le prompt affiché montre la faute de frappe.
-function aiPrompt(
-  action,
-  mr
-) {
-  const values = {
-    iid: () => mr.iid,
-    title: () => mr.title,
-    source_branch: () => mr.source_branch,
-    target_branch: () => mr.target_branch,
-    web_url: () => mr.web_url,
-    fix_context: () => aiFixPrompt(mr),
-  };
-  return action.prompt.replace(/\{(\w+)\}/g, (variable, name) => Object.hasOwn(values, name) ? String(values[name]()) : variable);
+// Ce que les actions AI d'une MR demandent : si elle a quelque chose à corriger, et quoi.
+const aiFixContext = mr => ({ toFix: hasSomethingToFix(mr), fixContext: aiFixPrompt(mr) });
+
+// Le diff, qui ne charge ni indicateurs CI ni threads, propose ainsi la correction comme ici.
+function saveAiFixContexts() {
+  MrAi.saveFixContexts(Object.fromEntries(state.mrs.filter(mr => !signalsOf(mr).loading).map(mr => [mr.iid, aiFixContext(mr)])));
 }
 
 // Alimente le prompt seul : en français quelle que soit la langue de l'interface, comme aiFixPrompt.
@@ -3382,77 +3288,15 @@ function aiFixPrompt(mr) {
   return parts.join("\n\n");
 }
 
+// Catalogue relu à l'ouverture : le bouton de la ligne suit aussitôt un catalogue modifié.
 async function openAi(mr) {
-  await loadAiActions();
-  render();
-  const actions = aiActionsFor(mr);
-  const dialog = $("ai-dialog");
-  dialog.dataset.iid = mr.iid;
-  $("ai-title").textContent = t("dialog.title", { iid: mr.iid });
-  $("ai-error").hidden = !state.aiActions.error;
-  $("ai-error").textContent = state.aiActions.error ? t("dialog.catalogError", { message: state.aiActions.error }) : "";
-  $("ai-actions").innerHTML = actions.map(action =>
-    `<button type="button" data-ai-action="${escapeHtml(action.id)}">${escapeHtml(action.label ?? t("ai.fix"))}</button>`
-  ).join("");
-  $("ai-actions").hidden = !actions.length;
-  $("ai-orca").hidden = !state.config?.orcaEnabled;
-  if (!dialog.open) dialog.showModal();
-  selectAiAction(
+  await MrAi.open(
     mr,
-    actions[0]
+    () => {
+      render();
+      return aiFixContext(mr);
+    }
   );
-}
-
-function selectAiAction(
-  mr,
-  action
-) {
-  const dialog = $("ai-dialog");
-  dialog.dataset.action = action?.id ?? "";
-  for (const button of $("ai-actions").querySelectorAll("[data-ai-action]")) {
-    button.setAttribute("aria-pressed", String(button.dataset.aiAction === action?.id));
-  }
-  $("ai-text").value = action ? aiPrompt(action, mr) : "";
-  $("ai-copied").textContent = "";
-  for (const id of ["ai-orca", "ai-copy"]) $(id).disabled = !action;
-  $("ai-text").select();
-}
-
-async function copyAiPrompt() {
-  const text = $("ai-text").value;
-  try {
-    await navigator.clipboard.writeText(text);
-  } catch (ignored) {
-    $("ai-text").select();
-    document.execCommand("copy");
-  }
-  $("ai-copied").textContent = t("dialog.copied");
-}
-
-// Le serveur ouvre un onglet Orca sur le worktree principal, qui lance Claude Code avec le prompt affiché.
-async function openInOrca() {
-  const status = $("ai-copied");
-  $("ai-orca").disabled = true;
-  status.textContent = t("dialog.orca.opening");
-  try {
-    const { body } = await api(
-      "/orca/launch",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-MR-Dashboard": "1" },
-        body: JSON.stringify({
-          iid: Number($("ai-dialog").dataset.iid),
-          action: $("ai-dialog").dataset.action,
-          prompt: $("ai-text").value,
-        }),
-      }
-    );
-    status.textContent = t(body.confirmed ? "dialog.orca.opened" : "dialog.orca.unconfirmed", body);
-  } catch (error) {
-    status.textContent = t("dialog.orca.failed", { message: error.message });
-  } finally {
-    $("ai-orca").disabled = false;
-  }
 }
 
 function threadsCell(mr) {
@@ -4330,19 +4174,8 @@ setInterval(renderStatus, 30 * 1000);
 setInterval(loadGitFetchStatus, 30 * 1000);
 $("git-fetch").addEventListener("click", () => gitFetch());
 $("git-fetch-auto").addEventListener("change", e => setGitFetchAuto(e.target.checked));
-$("ai-copy").addEventListener("click", copyAiPrompt);
-$("ai-actions").addEventListener("click", e => {
-  const button = e.target.closest("[data-ai-action]");
-  if (!button) return;
-  const mr = state.mrs.find(m => String(m.iid) === $("ai-dialog").dataset.iid);
-  selectAiAction(
-    mr,
-    aiActionsFor(mr).find(action => action.id === button.dataset.aiAction)
-  );
-});
-$("ai-orca").addEventListener("click", openInOrca);
-$("ai-close").addEventListener("click", () => $("ai-dialog").close());
 
+MrAi.init({ lang: state.lang, orcaEnabled: () => !!state.config?.orcaEnabled });
 applyStaticTexts();
 applyTheme();
 applyTextScale();

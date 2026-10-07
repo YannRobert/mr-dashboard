@@ -1,0 +1,39 @@
+/* Dialogue du bouton AI (ai.js), partagé par index.html et diff.html : autonome, sur les couleurs de la page. */
+dialog.ai-prompt {
+  width: min(1200px, calc(100vw - 32px)); padding: 1.2rem; border: 1px solid var(--border);
+  border-radius: 0.8rem; background: var(--surface); color: var(--text); box-shadow: var(--shadow, 0 12px 32px rgba(16, 24, 40, .25));
+}
+dialog.ai-prompt::backdrop { background: rgba(16, 24, 40, .45); }
+dialog.ai-prompt h2 { margin: 0 0 0.3rem; font-size: 1.1rem; }
+dialog.ai-prompt p { margin: 0 0 0.8rem; color: var(--muted); font-size: 0.9rem; }
+dialog.ai-prompt p.ai-error { color: var(--red-fg); }
+dialog.ai-prompt p[hidden] { display: none; }
+dialog.ai-prompt button {
+  font: inherit; font-size: 0.9rem; color: var(--text); background: var(--surface);
+  border: 1px solid var(--border-strong); border-radius: 0.5rem; padding: 0.3em 0.9em; cursor: pointer;
+}
+dialog.ai-prompt button:disabled { opacity: 0.5; cursor: default; }
+dialog.ai-prompt button.primary {
+  color: var(--accent-fg); border-color: transparent; font-weight: 600;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+}
+dialog.ai-prompt button.primary:hover { filter: brightness(1.07); }
+/* Choix de l'action : boutons accolés, celui retenu en couleur. */
+dialog.ai-prompt .ai-actions {
+  display: inline-flex; margin: 0.3rem 0 0.7rem; border: 1px solid var(--border-strong); border-radius: 0.5rem; overflow: hidden;
+}
+dialog.ai-prompt .ai-actions[hidden] { display: none; }
+dialog.ai-prompt .ai-actions button { border: 0; border-radius: 0; font-weight: 600; color: var(--muted); }
+dialog.ai-prompt .ai-actions button[aria-pressed="true"] { color: var(--accent-fg); background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
+dialog.ai-prompt textarea {
+  width: 100%; box-sizing: border-box; height: min(60vh, 34rem); min-height: 16rem; resize: vertical; padding: 0.7rem;
+  font: 0.9rem/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--text); background: var(--surface-2, var(--bg)); border: 1px solid var(--border); border-radius: 0.5rem;
+}
+dialog.ai-prompt .actions { display: flex; justify-content: flex-end; align-items: center; gap: 0.6rem; margin-top: 0.8rem; }
+dialog.ai-prompt .actions button[hidden] { display: none; }
+/* Fermer à gauche, à l'écart des actions sur le prompt, regroupées à droite. */
+dialog.ai-prompt .actions .dismiss { margin-right: auto; }
+dialog.ai-prompt .muted { color: var(--muted); }
+dialog.ai-prompt button.with-icon { display: inline-flex; align-items: center; gap: 0.45em; }
+dialog.ai-prompt button.with-icon .orca-logo { height: 0.95em; width: auto; flex: none; }

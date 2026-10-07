@@ -104,6 +104,11 @@ le serveur tourne dans WSL et qu'Orca est installé). Le bouton porte un liseré
 quelque chose à corriger : branche en retard ou en conflit, indicateur qualité imparfait, thread non
 résolu.
 
+Le même bouton figure en haut du diff d'une MR ouverte, avec les mêmes actions : de quoi demander une
+explication en lisant le diff, puis poser ses questions dans la session ouverte. La correction n'y est
+proposée que si un onglet du dashboard a mis ses données à jour dans la demi-heure : seul le dashboard
+charge les indicateurs CI et les threads dont son prompt est fait.
+
 Le catalogue est le fichier `.mr-dashboard/ai-actions.toml`, commité à la racine du projet suivi et lu
 dans son worktree principal. Il est relu à chaque ouverture du dialogue : un prompt modifié s'essaie
 sans redémarrer ni commiter. Une action par bloc `[[action]]`, dans l'ordre du dialogue :
@@ -197,7 +202,8 @@ Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut
 
 ## Après une modification
 
-- `index.html` et `diff.html` sont relus à chaque requête : recharger la page suffit.
+- `index.html`, `diff.html` et les fichiers qu'ils chargent (`ai.js`, `notes.js`…) sont relus à chaque
+  requête : recharger la page suffit. Un nouveau fichier s'ajoute à `STATIC_FILES` de `server.py`.
 - `server.py`, `orca_launcher.py`, `ai_actions.py` ou `git_actions.py` : `stop.sh` puis `start.sh`.
 - Le serveur sert l'`index.html` du dépôt (ou du worktree) d'où il a été lancé : pour tester la
   version d'un worktree, relancer le serveur depuis ce worktree.

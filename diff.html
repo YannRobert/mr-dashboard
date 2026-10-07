@@ -22,6 +22,7 @@
 <link rel="stylesheet" href="vendor/diff2html/diff2html.min.css">
 <link rel="stylesheet" href="notes.css">
 <link rel="stylesheet" href="avatars.css">
+<link rel="stylesheet" href="ai.css">
 <style>
   :root {
     --bg: #f3f4f7;
@@ -82,6 +83,8 @@
   .format button:first-child { border-radius: 0.5rem 0 0 0.5rem; }
   .format button:last-child { border-radius: 0 0.5rem 0.5rem 0; border-left: none; }
   .toggle { border-radius: 0.5rem; }
+  /* Bouton AI d'une MR qui a quelque chose à corriger : liseré rouge, comme dans le dashboard. */
+  .toggle.ai.to-fix { border-color: var(--red-line); }
   a.toggle {
     display: inline-block; font-size: 0.9rem; color: var(--text); background: var(--surface); text-decoration: none;
     border: 1px solid var(--border-strong); padding: 0.3em 0.8em;
@@ -288,6 +291,7 @@
       <output id="note-position"></output>
       <button type="button" data-note-step="1">›</button>
     </div>
+    <button type="button" class="toggle ai" id="ai-button" hidden></button>
     <a class="toggle" id="comments-link" target="_blank" data-tab="comments"></a>
     <a id="gitlab" target="_blank" rel="noopener" hidden></a>
     <button type="button" class="toggle" id="close-tab" data-close-tab></button>
@@ -301,6 +305,7 @@
 <script src="vendor/diff2html/diff2html-ui-slim.min.js"></script>
 <script src="notes.js"></script>
 <script src="tabs.js"></script>
+<script src="ai.js"></script>
 <script src="avatars.js"></script>
 <script src="dates.js"></script>
 <script>
@@ -1491,6 +1496,35 @@
     applyTextScale(readTextScale());
   }
 
+  // Bouton AI : les actions du catalogue, comme dans le dashboard ; la correction, seulement d'après le
+  // prompt que le dashboard calcule et enregistre (cf. MrAi.readFixContext). Pas sur une MR mergée.
+  function initAi() {
+    if (mr.merge || !mr.iid) return;
+    let orcaEnabled = false;
+    config().then(c => { orcaEnabled = !!c.orcaEnabled; }).catch(() => { /* sans config, pas d'Orca */ });
+    MrAi.init({ lang, orcaEnabled: () => orcaEnabled });
+    const aiMr = { iid: mr.iid, title: mr.title, source_branch: mr.branch, target_branch: mr.target, web_url: mr.url };
+    const button = document.getElementById("ai-button");
+    button.textContent = MrAi.t("ai");
+    const render = () => {
+      const { toFix } = MrAi.readFixContext(mr.iid);
+      button.hidden = !MrAi.offered(toFix);
+      button.classList.toggle("to-fix", toFix);
+      button.title = MrAi.buttonTitle(toFix);
+    };
+    button.addEventListener("click", () => MrAi.open(
+      aiMr,
+      () => {
+        render();
+        return MrAi.readFixContext(mr.iid);
+      }
+    ));
+    window.addEventListener("storage", event => {
+      if (event.key === MrAi.FIX_CONTEXTS_KEY) render();
+    });
+    MrAi.loadCatalog().then(render);
+  }
+
   function mrQuery() {
     return new URLSearchParams(mr.merge
       ? { iid: mr.iid, head: mr.head, merge: mr.merge, target: mr.target }
@@ -1700,6 +1734,7 @@
   });
   renderHeader();
   renderNotesToggle();
+  initAi();
   load();
 </script>
 </body>
