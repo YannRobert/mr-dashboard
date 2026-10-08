@@ -920,7 +920,7 @@ const I18N = {
     "problem.pitErrors": p => `${p.n} mutant${plural(p.n)} PIT en erreur`,
     "problem.threads": p => `${p.n} thread${plural(p.n)} non résolu${plural(p.n)}`,
     "problem.behind": p => `${p.n} commit${plural(p.n)} de retard sur ${p.target} depuis ${p.duration}`,
-    "search.placeholder": "Rechercher : titre, !iid, branche, ticket…",
+    "search.placeholder": "Rechercher : titre, !iid, branche, ticket… (virgule = ou)",
     "search.aria": "Recherche",
     "filter.target": "Branche cible",
     "filter.author": "Auteur",
@@ -1184,7 +1184,7 @@ const I18N = {
     "problem.pitErrors": p => `${p.n} PIT mutant${pluralEn(p.n)} in error`,
     "problem.threads": p => `${p.n} unresolved thread${pluralEn(p.n)}`,
     "problem.behind": p => `${p.n} commit${pluralEn(p.n)} behind ${p.target} for ${p.duration}`,
-    "search.placeholder": "Search: title, !iid, branch, ticket…",
+    "search.placeholder": "Search: title, !iid, branch, ticket… (comma = or)",
     "search.aria": "Search",
     "filter.target": "Target branch",
     "filter.author": "Author",
@@ -3310,11 +3310,18 @@ function matches(mr) {
   if (!merged && f.draft === "no" && mr.draft) return false;
   if (f.labels.some(l => !mr.labels.includes(l))) return false;
   if (!merged && f.alerts && alertScore(mr) === 0) return false;
-  if (f.q) {
-    const haystack = `!${mr.iid} ${mr.title} ${mr.source_branch} ${mr.author?.name ?? ""} ${mr.labels.join(" ")}`.toLowerCase();
-    if (!f.q.toLowerCase().split(/\s+/).filter(Boolean).every(term => haystack.includes(term))) return false;
-  }
+  if (f.q && !matchesQuery(mr, f.q)) return false;
   return true;
+}
+
+// Virgule = ou, espace = et ; « !249 » vise la MR 249 seule, « 249 » cherche partout.
+function matchesQuery(mr, q) {
+  const haystack = `${mr.title} ${mr.source_branch} ${mr.author?.name ?? ""} ${mr.labels.join(" ")}`.toLowerCase();
+  const matchesTerm = term => /^!\d+$/.test(term) ? term === `!${mr.iid}` : `!${mr.iid} ${haystack}`.includes(term);
+  const alternatives = q.toLowerCase().split(",")
+    .map(alternative => alternative.split(/\s+/).filter(Boolean))
+    .filter(terms => terms.length);
+  return !alternatives.length || alternatives.some(terms => terms.every(matchesTerm));
 }
 
 // ---------- Rendu ----------

@@ -70,6 +70,9 @@ ensemble — puis `start.sh <nom>`.
   cloche. Après un rechargement, le navigateur ne laisse jouer un son qu'après un clic ou une touche dans
   la page.
 - `?lang=en` pour forcer l'anglais.
+- **Recherche** : les mots séparés par un espace doivent tous se trouver dans la MR (titre, branche,
+  auteur, labels, numéro) ; la virgule sépare des alternatives. `!249` vise la MR 249 seule, `249`
+  la cherche partout (`PROJ-2491` compris) : `!249,!250` n'affiche que ces deux MR.
 - Recharger la page ne sollicite ni GitLab ni git : elle réaffiche les données sauvegardées dans le
   navigateur et n'interroge GitLab que si l'actualisation des 5 minutes est due, comptées depuis la
   dernière, d'où qu'elle vienne (autre onglet compris). Le serveur ne fetch que si une page lui signale
