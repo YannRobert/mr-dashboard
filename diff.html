@@ -361,8 +361,8 @@
   const REVIEW_PROGRESS_KEY = "mr-dashboard.diffReviewProgress";
   // Diffs dont la progression de relecture est retenue, les plus récemment lus.
   const REVIEWS_KEPT = 50;
-  // Délai sans défilement avant de mesurer la progression de la relecture.
-  const REVIEW_SETTLE_MS = 300;
+  // Délai sans défilement avant de mesurer la progression de la relecture et de faire suivre le panneau des fichiers.
+  const SCROLL_SETTLE_MS = 300;
   const TEXT_SCALES = [0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3];
   const DEFAULT_TEXT_SCALE = 1.25;
   const TEXTS = {
@@ -589,8 +589,6 @@
   const LARGE_FILE_LINES = 1000;
   // Lignes colorées d'affilée, avant de rendre la main au défilement.
   const HIGHLIGHT_SLICE = 200;
-  // Délai sans fichier entré ni sorti de l'écran avant que le panneau des fichiers ne suive.
-  const FOLLOW_DELAY_MS = 150;
   // Fichiers volumineux dépliés, par chemin : le choix survit aux rendus du diff.
   const unfoldedFiles = new Set();
   // Colore les fichiers d'un gros diff à leur approche de l'écran ; null : diff coloré d'un coup.
@@ -1046,7 +1044,7 @@
     };
     const schedule = () => {
       clearTimeout(timer);
-      timer = setTimeout(measure, REVIEW_SETTLE_MS);
+      timer = setTimeout(measure, SCROLL_SETTLE_MS);
     };
     const observer = new IntersectionObserver(entries => {
       for (const entry of entries) {
@@ -1142,7 +1140,7 @@
         else visible.delete(entry.target);
       }
       clearTimeout(timer);
-      timer = setTimeout(update, FOLLOW_DELAY_MS);
+      timer = setTimeout(update, SCROLL_SETTLE_MS);
     }, { rootMargin: `-${document.querySelector("header").offsetHeight}px 0px 0px 0px` });
     for (const file of files) observer.observe(file);
     for (const [id, line] of lines) {
