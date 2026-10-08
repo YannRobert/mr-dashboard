@@ -531,8 +531,8 @@ def make_handler(
             if upstream_headers.get("Content-Type", "").startswith("text/html"):
                 self.send_json(
                     503,
-                    {"message": f"{service} répond par une page HTML au lieu de son API (HTTP {status}) : "
-                                "maintenance ou indisponibilité probable"}
+                    {"message": f"{service} semble en maintenance : il renvoie une page web au lieu de "
+                                f"répondre à l'API (HTTP {status})"}
                 )
                 return
             self.send_body(

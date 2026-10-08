@@ -79,8 +79,23 @@
     color: var(--muted); font-size: 0.85rem; border: 1px dashed var(--border-strong); border-radius: 0.5rem;
   }
   .cached-banner[hidden] { display: none; }
-  .cached-banner.failed { color: #ea8a0c; font-weight: 600; border: 1px solid #ea8a0c; }
-  .message.error { color: var(--red-fg); }
+  .cached-banner.failed {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.2rem 1rem;
+    color: var(--text); border: 1px solid #ea8a0c; border-left-width: 4px; background: var(--surface);
+  }
+  .cached-banner.failed strong { color: #ea8a0c; }
+  .cached-banner .detail, .unavailable .detail { flex-basis: 100%; order: 1; color: var(--muted); font-size: 0.8rem; }
+  .unavailable {
+    margin-top: 1.5rem; padding: 1.2rem 1.4rem; background: var(--surface);
+    border: 1px solid var(--border-strong); border-left: 4px solid var(--red-line); border-radius: 0.5rem;
+  }
+  .unavailable h2 { margin: 0 0 0.4rem; font-size: 1.05rem; color: var(--red-fg); }
+  .unavailable p { margin: 0 0 0.6rem; }
+  .retry {
+    font: inherit; font-size: 0.85rem; color: var(--text); padding: 0.25em 0.9em; cursor: pointer;
+    border: 1px solid var(--border-strong); border-radius: 0.5rem; background: var(--bg);
+  }
+  .cached-banner .retry { margin-left: auto; }
   .thread {
     background: var(--surface); border: 1px solid var(--border-strong); border-left: 3px solid var(--accent);
     border-radius: 0.5rem; overflow: hidden;
@@ -114,7 +129,7 @@
   </nav>
 </header>
 <p class="cached-banner" id="cached-banner" hidden></p>
-<main id="comments"><p class="message" id="loading"></p></main>
+<main id="comments"></main>
 <script src="notes.js"></script>
 <script src="tabs.js"></script>
 <script src="dates.js"></script>
@@ -123,10 +138,12 @@
     fr: {
       title: p => `Commentaires de !${p.iid}${p.title ? ` ${p.title}` : ""}`,
       loading: "Chargement des commentaires GitLab…",
-      failed: p => `Commentaires GitLab indisponibles : ${p}`,
+      unavailable: "Commentaires indisponibles",
+      noCopy: "Ils n'ont encore jamais été chargés sur ce poste : aucune copie à montrer en attendant GitLab.",
+      retry: "Réessayer",
       cachedUpdating: p => `Commentaires du ${p.date} à ${p.time} · mise à jour en cours…`,
-      cachedSlow: p => `GitLab ne répond pas : commentaires du ${p.date} à ${p.time}, toujours en attente de GitLab`,
-      cachedFailed: p => `Mise à jour impossible (${p.reason}) : commentaires du ${p.date} à ${p.time}`,
+      cachedSlow: p => `Copie du ${p.date} à ${p.time}, en lecture seule : GitLab ne répond pas, toujours en attente`,
+      cachedFailed: p => `Copie du ${p.date} à ${p.time}, en lecture seule : la mise à jour a échoué`,
       cachedReadOnly: "Répondre et résoudre attendent la réponse de GitLab",
       none: "Aucun commentaire général sur cette MR : seuls des diff notes, ou rien.",
       summary: p => `${p.n} commentaire${p.n > 1 ? "s" : ""} hors diff notes${p.open ? ` · ${p.open} non résolu${p.open > 1 ? "s" : ""}` : ""}`,
@@ -144,10 +161,12 @@
     en: {
       title: p => `Comments on !${p.iid}${p.title ? ` ${p.title}` : ""}`,
       loading: "Loading GitLab comments…",
-      failed: p => `GitLab comments unavailable: ${p}`,
+      unavailable: "Comments unavailable",
+      noCopy: "They were never loaded on this computer: no copy to show while waiting for GitLab.",
+      retry: "Retry",
       cachedUpdating: p => `Comments as of ${p.date} ${p.time} · updating…`,
-      cachedSlow: p => `GitLab does not answer: comments as of ${p.date} ${p.time}, still waiting for GitLab`,
-      cachedFailed: p => `Update failed (${p.reason}): comments as of ${p.date} ${p.time}`,
+      cachedSlow: p => `Copy from ${p.date} ${p.time}, read-only: GitLab does not answer, still waiting`,
+      cachedFailed: p => `Copy from ${p.date} ${p.time}, read-only: the update failed`,
       cachedReadOnly: "Reply and resolve wait for GitLab's answer",
       none: "No general comment on this MR: only diff notes, or nothing.",
       summary: p => `${p.n} comment${p.n > 1 ? "s" : ""} besides diff notes${p.open ? ` · ${p.open} unresolved` : ""}`,
@@ -188,8 +207,8 @@
     return `${Math.round(minutes / 1440)} ${lang === "fr" ? "j" : "d"}`;
   }
 
-  function showMessage(text, error) {
-    document.getElementById("comments").innerHTML = `<p class="message${error ? " error" : ""}">${escapeHtml(text)}</p>`;
+  function showMessage(text) {
+    document.getElementById("comments").innerHTML = `<p class="message">${escapeHtml(text)}</p>`;
   }
 
   function renderHeader(mr) {
@@ -301,12 +320,30 @@
     }
   }
 
-  function showBanner(text, failed) {
+  // Bandeau au-dessus de la copie affichée ; failure : true pour une attente trop longue, ou la cause d'un
+  // échec, affichée en petit avec de quoi réessayer.
+  function showBanner(
+      text,
+      failure
+  ) {
     const banner = document.getElementById("cached-banner");
-    banner.textContent = text ?? "";
+    banner.innerHTML = !text ? "" : !failure ? escapeHtml(text)
+      : `<strong>${escapeHtml(text)}</strong>`
+        // Réessayer seulement une fois la requête finie : une requête lente encore en cours peut aboutir.
+        + (typeof failure === "string" ? `<span class="detail">${escapeHtml(failure)}</span>`
+          + `<button type="button" class="retry">${escapeHtml(texts.retry)}</button>` : "");
     banner.title = text ? texts.cachedReadOnly : "";
-    banner.classList.toggle("failed", Boolean(failed));
+    banner.classList.toggle("failed", Boolean(failure));
     banner.hidden = !text;
+    banner.querySelector(".retry")?.addEventListener("click", load);
+  }
+
+  function showUnavailable(reason) {
+    document.getElementById("comments").innerHTML = `<section class="unavailable">`
+      + `<h2>${escapeHtml(texts.unavailable)}</h2><p>${escapeHtml(texts.noCopy)}</p>`
+      + `<p class="detail">${escapeHtml(reason)}</p>`
+      + `<button type="button" class="retry">${escapeHtml(texts.retry)}</button></section>`;
+    document.querySelector(".unavailable .retry").addEventListener("click", load);
   }
 
   function cachedAt(entry) {
@@ -347,7 +384,7 @@
       renderCached(cached);
       showBanner(texts.cachedUpdating(cachedAt(cached)));
     } else {
-      document.getElementById("loading").textContent = texts.loading;
+      showMessage(texts.loading);
       renderHeader(null);
     }
     const slow = cached && setTimeout(() => showBanner(texts.cachedSlow(cachedAt(cached)), true), SLOW_MS);
@@ -374,8 +411,8 @@
         },
       });
     } catch (error) {
-      if (cached) showBanner(texts.cachedFailed({ ...cachedAt(cached), reason: error.message }), true);
-      else showMessage(texts.failed(error.message), true);
+      if (cached) showBanner(texts.cachedFailed(cachedAt(cached)), error.message);
+      else showUnavailable(error.message);
     } finally {
       clearTimeout(slow);
     }
