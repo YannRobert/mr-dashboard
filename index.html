@@ -215,13 +215,13 @@
     background: var(--surface); border: 1px solid var(--border); border-radius: 0.8rem;
     box-shadow: var(--shadow);
   }
-  .filters input[type=search], .filters select {
+  .filters input[type=search], .filters select, .filters .people-button {
     font: inherit; font-size: 0.85rem; color: var(--text); background: var(--surface-2);
     border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.3em 0.55em;
     transition: border-color .15s, box-shadow .15s;
   }
-  .filters input[type=search]:hover, .filters select:hover { border-color: var(--border-strong); }
-  .filters input[type=search]:focus, .filters select:focus {
+  .filters input[type=search]:hover, .filters select:hover, .filters .people-button:hover { border-color: var(--border-strong); }
+  .filters input[type=search]:focus, .filters select:focus, .filters .people-button:focus-visible {
     outline: none; border-color: var(--accent);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
   }
@@ -235,6 +235,27 @@
   }
   .filters label.check:hover { background: var(--surface-2); }
   .filters input[type=checkbox] { accent-color: var(--accent); width: 1em; height: 1em; }
+  /* Filtres de personnes : un select natif n'affiche que du texte, la pastille y fait reconnaître chacun
+     d'un coup d'œil. */
+  .people-filter { position: relative; }
+  .filters .people-button {
+    display: inline-flex; align-items: center; gap: 0.45em; cursor: pointer; padding-right: 1.8em;
+    background: var(--surface-2) no-repeat right 0.55em center / 0.7em
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239aa0ad' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  }
+  .people-list {
+    position: absolute; top: calc(100% + 0.25rem); left: 0; z-index: 40; min-width: 100%;
+    max-height: 60vh; overflow-y: auto; margin: 0; padding: 0.25rem; list-style: none;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; box-shadow: var(--shadow);
+  }
+  .people-list[hidden] { display: none; }
+  .people-list li {
+    display: flex; align-items: center; gap: 0.5em; padding: 0.3em 0.55em; border-radius: 0.35rem;
+    font-size: 0.85rem; white-space: nowrap; cursor: pointer;
+  }
+  .people-list li:hover, .people-list li:focus { outline: none; background: var(--surface-2); }
+  .people-list li[aria-selected="true"] { font-weight: 600; }
+  .people-filter .avatar { width: 1.6em; height: 1.6em; font-size: 0.62rem; }
   .reset-filters {
     font: inherit; font-size: 0.85rem; color: var(--muted); background: none; cursor: pointer;
     border: 1px solid transparent; border-radius: 0.5rem; padding: 0.25em 0.6em; margin-left: auto;
@@ -573,17 +594,27 @@
     <option value="90" data-i18n="period.90">Mergées ces 90 derniers jours</option>
     <option value="all" data-i18n="period.all">Toutes les MR mergées</option>
   </select>
+  <!-- Rangés du plus utile au moins utile. -->
+  <div class="people-filter" data-people="author">
+    <button type="button" class="people-button" aria-haspopup="listbox" aria-expanded="false" aria-label="Auteur" data-i18n-aria-label="filter.author"></button>
+    <ul class="people-list" role="listbox" aria-label="Auteur" data-i18n-aria-label="filter.author" hidden></ul>
+  </div>
   <select id="target" aria-label="Branche cible" data-i18n-aria-label="filter.target"></select>
-  <select id="author" aria-label="Auteur" data-i18n-aria-label="filter.author"></select>
-  <select id="reviewer" aria-label="Reviewer" data-i18n-aria-label="filter.reviewer"></select>
-  <select id="assignee" aria-label="Assignee" data-i18n-aria-label="filter.assignee"></select>
-  <select id="label" aria-label="Ajouter un label au filtre" data-i18n-aria-label="filter.label"></select>
   <select id="draft" aria-label="Draft" data-i18n-aria-label="filter.draft">
     <option value="" data-i18n="filter.draftAll">Draft : toutes</option>
     <option value="no" data-i18n="filter.draftNo">Hors Draft</option>
     <option value="yes" data-i18n="filter.draftYes">Draft seules</option>
   </select>
   <label class="check" id="alerts-control"><input type="checkbox" id="alerts"> <span data-i18n="filter.alerts">Avec alertes seulement</span></label>
+  <div class="people-filter" data-people="reviewer">
+    <button type="button" class="people-button" aria-haspopup="listbox" aria-expanded="false" aria-label="Reviewer" data-i18n-aria-label="filter.reviewer"></button>
+    <ul class="people-list" role="listbox" aria-label="Reviewer" data-i18n-aria-label="filter.reviewer" hidden></ul>
+  </div>
+  <div class="people-filter" data-people="assignee">
+    <button type="button" class="people-button" aria-haspopup="listbox" aria-expanded="false" aria-label="Assignee" data-i18n-aria-label="filter.assignee"></button>
+    <ul class="people-list" role="listbox" aria-label="Assignee" data-i18n-aria-label="filter.assignee" hidden></ul>
+  </div>
+  <select id="label" aria-label="Ajouter un label au filtre" data-i18n-aria-label="filter.label"></select>
   <div class="active-labels" id="activeLabels"></div>
   <button type="button" class="reset-filters" id="reset-filters" data-i18n="filter.reset">Réinitialiser les filtres</button>
 </div>
@@ -3128,15 +3159,67 @@ function populateFilterOptions() {
     }
     return [...map].sort((a, b) => a[1].localeCompare(b[1], locale()));
   };
-  fillSelect("author", t("filter.anyAuthor"), people("author"));
-  fillSelect("reviewer", t("filter.anyReviewer"), people("reviewers"));
-  fillSelect("assignee", t("filter.anyAssignee"), people("assignees"));
+  fillPeopleFilter("author", t("filter.anyAuthor"), people("author"));
+  fillPeopleFilter("reviewer", t("filter.anyReviewer"), people("reviewers"));
+  fillPeopleFilter("assignee", t("filter.anyAssignee"), people("assignees"));
   const targets = [...new Set(viewMrs().map(mr => mr.target_branch).concat(state.filters.target ? [state.filters.target] : []))].sort();
   fillSelect("target", t("filter.anyTarget"), targets.map(target => [target, "→ " + target]));
   const labels = [...new Set(viewMrs().flatMap(mr => mr.labels))].sort((a, b) => a.localeCompare(b, locale()));
   fillSelect("label", t("filter.addLabel"), labels.filter(l => !state.filters.labels.includes(l)).map(l => [l, l]));
   $("label").value = "";
 }
+
+const PEOPLE_FILTERS = ["author", "reviewer", "assignee"];
+// Personnes proposées par chaque filtre, [username, nom], et son libellé « tous ».
+const peopleFilters = {};
+
+// Une personne filtrée absente des MR affichées (lien partagé, autre vue) reste proposée, sous son username.
+function fillPeopleFilter(id, placeholder, people) {
+  const current = state.filters[id];
+  peopleFilters[id] = {
+    placeholder,
+    people: current && !people.some(([username]) => username === current) ? [...people, [current, current]] : people,
+  };
+  renderPeopleFilter(id);
+}
+
+const personHtml = name => avatar(name) + `<span>${escapeHtml(name)}</span>`;
+
+function renderPeopleFilter(id) {
+  const filter = peopleFilters[id];
+  if (!filter) return;
+  const current = state.filters[id];
+  const person = filter.people.find(([username]) => username === current);
+  const root = document.querySelector(`[data-people="${id}"]`);
+  root.querySelector("button").innerHTML = person ? personHtml(person[1]) : `<span>${escapeHtml(filter.placeholder)}</span>`;
+  root.querySelector("ul").innerHTML = [["", null], ...filter.people]
+    .map(([username, name]) => `<li role="option" tabindex="-1" data-value="${escapeHtml(username)}" aria-selected="${username === current}">`
+      + (name === null ? `<span>${escapeHtml(filter.placeholder)}</span>` : personHtml(name)) + "</li>")
+    .join("");
+}
+
+function openPeopleList(root) {
+  closePeopleLists();
+  root.querySelector("ul").hidden = false;
+  root.querySelector("button").setAttribute("aria-expanded", "true");
+  (root.querySelector('li[aria-selected="true"]') ?? root.querySelector("li"))?.focus();
+}
+
+function closePeopleLists() {
+  for (const root of document.querySelectorAll(".people-filter")) {
+    root.querySelector("ul").hidden = true;
+    root.querySelector("button").setAttribute("aria-expanded", "false");
+  }
+}
+
+function choosePerson(li) {
+  const root = li.closest(".people-filter");
+  closePeopleLists();
+  root.querySelector("button").focus();
+  updateFilters({ [root.dataset.people]: li.dataset.value });
+}
+
+const avatar = name => `<span class="avatar" style="--avatar-color:${Avatars.color(name)}" aria-hidden="true">${escapeHtml(Avatars.initials(name))}</span>`;
 
 function fillSelect(id, placeholder, options) {
   const select = $(id);
@@ -3162,6 +3245,7 @@ function syncControlsFromState() {
   $("q").value = f.q;
   $("draft").value = f.draft;
   $("alerts").checked = f.alerts;
+  PEOPLE_FILTERS.forEach(renderPeopleFilter);
   $("reset-filters").disabled = !filtersActive();
   $("activeLabels").innerHTML = f.labels
     .map(l => `<button type="button" class="label" data-remove-label="${escapeHtml(l)}" title="${escapeHtml(t("label.remove"))}">${escapeHtml(l)}</button>`)
@@ -3282,7 +3366,7 @@ function authorCell(mr) {
   const name = mr.author?.name ?? "?";
   const [first, ...rest] = name.trim().split(/\s+/);
   const lines = [first, rest.join(" ")].filter(Boolean).map(line => `<span>${escapeHtml(line)}</span>`).join("");
-  return `<span class="author"><span class="avatar" style="--avatar-color:${Avatars.color(name)}" aria-hidden="true">${escapeHtml(Avatars.initials(name))}</span><span class="author-name">${lines}</span></span>`;
+  return `<span class="author">${avatar(name)}<span class="author-name">${lines}</span></span>`;
 }
 
 function mrCell(mr) {
@@ -4467,12 +4551,48 @@ function updateFilters(change) {
 
 $("q").addEventListener("input", e => updateFilters({ q: e.target.value }));
 $("reset-filters").addEventListener("click", resetFilters);
-for (const id of ["target", "author", "reviewer", "assignee", "draft"]) {
+for (const id of ["target", "draft"]) {
   $(id).addEventListener("change", e => {
     if (id === "target") state.targetChosen = true;
     updateFilters({ [id]: e.target.value });
   });
 }
+document.addEventListener("click", e => {
+  const root = e.target.closest(".people-filter");
+  const li = e.target.closest(".people-list li");
+  if (li) choosePerson(li);
+  else if (e.target.closest(".people-button")) {
+    if (root.querySelector("ul").hidden) openPeopleList(root);
+    else closePeopleLists();
+  } else if (!root) closePeopleLists();
+});
+document.addEventListener("keydown", e => {
+  const root = e.target.closest?.(".people-filter");
+  if (!root) return;
+  const list = root.querySelector("ul");
+  if (e.target.matches(".people-button")) {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      openPeopleList(root);
+    }
+    return;
+  }
+  const items = [...list.querySelectorAll("li")];
+  const index = items.indexOf(e.target);
+  const move = { ArrowDown: index + 1, ArrowUp: index - 1, Home: 0, End: items.length - 1, PageDown: items.length - 1, PageUp: 0 }[e.key];
+  if (move !== undefined) {
+    e.preventDefault();
+    items[Math.max(0, Math.min(items.length - 1, move))].focus();
+  } else if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    choosePerson(e.target);
+  } else if (e.key === "Escape") {
+    closePeopleLists();
+    root.querySelector("button").focus();
+  } else if (e.key === "Tab") {
+    closePeopleLists();
+  }
+});
 $("period").addEventListener("change", e => {
   updateFilters({ period: e.target.value });
   loadMerged();
