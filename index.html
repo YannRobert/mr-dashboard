@@ -69,6 +69,8 @@
      sur un écran tient sur tous, et reste lisible sur un grand sans zoom (13 px jusqu'en 1730, ~14 px en 1920,
      ~19 px en 2560). A− / A+ l'ajustent, sans le zoom du navigateur qui vaut pour tout le site. */
   html { font-size: calc(clamp(13px, 0.75vw, 28px) * var(--text-scale, 1)); }
+  /* Plus petite taille de la page (11 px à 13 px de base) : métadonnées, libellés, commandes de l'en-tête. */
+  :root { --fs-small: 0.85rem; }
   body {
     margin: 0;
     background: var(--bg);
@@ -80,10 +82,10 @@
   a:hover { text-decoration: underline; }
   :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
-  /* Une bande : identité, commandes d'actualisation, préférences d'affichage. Les commandes prennent la
-     place restante et reviennent à la ligne dans leur colonne, collées aux préférences. */
+  /* Identité et préférences d'affichage en haut, commandes d'actualisation dessous, de gauche à droite. Une
+     bande unique ne tient pas : le texte suit la largeur de la fenêtre, les commandes aussi. */
   header {
-    display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 0.6rem 1.5rem;
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0.5rem 1.5rem;
     padding: 0.6rem 1.2rem;
     background: var(--surface); border-bottom: 1px solid var(--border);
     position: relative;
@@ -99,19 +101,18 @@
   }
   header .identity { display: flex; align-items: center; gap: 0.6rem; }
   header .header-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1.1rem; }
-  header .header-row.commands { justify-content: flex-end; }
-  /* Préférences séparées des commandes par un filet : elles servent rarement. */
-  header .header-row.prefs { gap: 0.5rem 0.7rem; padding-left: 1.5rem; border-left: 1px solid var(--border); }
+  header .header-row.commands { grid-column: 1 / -1; grid-row: 2; }
+  header .header-row.prefs { gap: 0.5rem 0.7rem; justify-content: flex-end; }
   /* Commandes de l'en-tête à la taille du texte du tableau : elles ne doivent pas l'emporter sur les données. */
-  header button { font-size: 0.75rem; }
+  header button { font-size: var(--fs-small); }
   /* Le slogan sous le nom, à hauteur de la pastille « MR » : moins de place en largeur. */
   header h1 { margin: 0; display: flex; flex-direction: column; font-size: 1.4rem; font-weight: 700; letter-spacing: -0.01em; }
   header h1 .name { font-size: 1rem; line-height: 1.15; }
   /* Le M et le R de « MisteR » reprennent la couleur des boutons principaux. */
   header h1 .initial { font-weight: inherit; color: var(--accent); }
-  header h1 .tagline { font-size: 0.72rem; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+  header h1 .tagline { font-size: var(--fs-small); font-weight: 500; color: var(--muted); letter-spacing: 0; }
   .summary-bar .project {
-    font-size: 0.75rem; color: var(--muted); background: var(--surface-2);
+    font-size: var(--fs-small); color: var(--muted); background: var(--surface-2);
     border: 1px solid var(--border); border-radius: 999px; padding: 0.1em 0.6em;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
@@ -120,14 +121,14 @@
   header .status { display: flex; align-items: center; gap: 0.6rem; }
   /* Hauteur réservée pour trois lignes (heure, date, progression ou échec) : sans elle, la ligne de
      progression apparue au rafraîchissement agrandissait l'en-tête et décalait toute la page. */
-  header .meta { color: var(--muted); font-size: 0.75rem; text-align: left; line-height: 1.35; min-height: calc(3 * 1.35em); min-width: 34ch; font-variant-numeric: tabular-nums; }
+  header .meta { color: var(--muted); font-size: var(--fs-small); text-align: left; line-height: 1.35; min-height: calc(3 * 1.35em); min-width: 34ch; font-variant-numeric: tabular-nums; }
   header .meta > span { display: block; white-space: nowrap; }
   header .meta .progress { color: var(--accent); }
   header .meta .failed { color: var(--orange-fg); font-weight: 600; }
   header .git-fetch-control { display: inline-flex; align-items: center; gap: 0.7rem; }
   header .git-fetch-control[hidden] { display: none; }
   /* Largeur réservée au plus long des états : le texte qui change ne décale pas les boutons voisins. */
-  header .git-fetch-status { color: var(--muted); font-size: 0.72rem; line-height: 1.35; white-space: nowrap; min-width: 26ch; font-variant-numeric: tabular-nums; }
+  header .git-fetch-status { color: var(--muted); font-size: var(--fs-small); line-height: 1.35; white-space: nowrap; min-width: 26ch; font-variant-numeric: tabular-nums; }
   header .git-fetch-status.running { color: var(--accent); }
   header .git-fetch-status.failed { color: var(--red-fg); font-weight: 600; }
   /* Charge mise sur GitLab, comme un load average : requêtes du serveur sur 1, 5 et 15 min. */
@@ -136,7 +137,7 @@
   .load-btn {
     display: inline-flex; flex-direction: column; align-items: flex-end; gap: 0.1rem; cursor: pointer;
     border: 1px solid var(--border); border-radius: 0.5rem; background: var(--surface-2); color: var(--muted);
-    padding: 0.2rem 0.55rem; font: inherit; font-size: 0.72rem; line-height: 1.15; white-space: nowrap;
+    padding: 0.2rem 0.55rem; font: inherit; font-size: var(--fs-small); line-height: 1.15; white-space: nowrap;
   }
   .load-btn:hover, .load-btn[aria-expanded="true"] { border-color: var(--accent); }
   .load-btn .values { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 0.85rem; color: var(--text); }
@@ -150,23 +151,23 @@
   }
   .load-panel[hidden] { display: none; }
   .load-panel h4 { margin: 0 0 0.5rem; font-size: 0.85rem; }
-  .load-panel table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+  .load-panel table { width: 100%; border-collapse: collapse; font-size: var(--fs-small); }
   .load-panel th, .load-panel td { padding: 0.2rem 0.4rem; text-align: right; }
   .load-panel th:first-child, .load-panel td:first-child { text-align: left; }
   .load-panel thead th { color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--border); }
   .load-panel td { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
   .load-panel td:first-child { font-family: inherit; }
-  .load-panel td .hint { display: block; color: var(--muted); font-size: 0.7rem; }
+  .load-panel td .hint { display: block; color: var(--muted); font-size: var(--fs-small); }
   .load-panel tfoot tr:first-child td { border-top: 1px solid var(--border); font-weight: 600; }
   .load-panel tfoot .errors td, .load-panel tfoot .cache td { color: var(--muted); }
   .load-panel tfoot .errors td.failed { color: var(--orange-fg); font-weight: 600; }
-  .load-panel p { margin: 0.6rem 0 0; color: var(--muted); font-size: 0.75rem; line-height: 1.35; white-space: normal; }
+  .load-panel p { margin: 0.6rem 0 0; color: var(--muted); font-size: var(--fs-small); line-height: 1.35; white-space: normal; }
   header .refresh-controls {
     display: inline-flex; align-items: center; gap: 0.7rem;
     padding: 0.25rem 0.25rem 0.5rem 0.6rem; border: 1px solid var(--border); border-radius: 0.6rem; background: var(--surface-2);
   }
   header label.auto {
-    display: inline-flex; gap: 0.4em; align-items: center; color: var(--muted); font-size: 0.68rem; cursor: pointer;
+    display: inline-flex; gap: 0.4em; align-items: center; color: var(--muted); font-size: var(--fs-small); cursor: pointer;
   }
   header label.auto input { accent-color: var(--accent); width: 0.8rem; height: 0.8rem; margin: 0; cursor: pointer; }
   /* Fraîcheur des données : 5 segments, un par minute, qui s'éteignent jusqu'à la prochaine actualisation
@@ -187,11 +188,11 @@
   @keyframes freshness-off { to { opacity: 0.15; } }
   .lang-switch, .view-switch { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 0.5rem; overflow: hidden; }
   .lang-switch button, .view-switch button {
-    border: 0; border-radius: 0; padding: 0.25em 0.55em; font-size: 0.72rem; font-weight: 600;
+    border: 0; border-radius: 0; padding: 0.25em 0.55em; font-size: var(--fs-small); font-weight: 600;
     color: var(--muted); background: var(--surface);
   }
   .lang-switch button:disabled { opacity: 0.4; cursor: default; }
-  .text-size output { align-self: center; min-width: 3.4em; text-align: center; font-size: 0.68rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .text-size output { align-self: center; min-width: 3.4em; text-align: center; font-size: var(--fs-small); color: var(--muted); font-variant-numeric: tabular-nums; }
   .lang-switch button[aria-pressed="true"], .view-switch button[aria-pressed="true"] { color: var(--accent-fg); background: var(--accent); }
   button {
     font: inherit; color: var(--text); background: var(--surface);
@@ -263,10 +264,10 @@
 
   .summary-bar { display: flex; flex-wrap: wrap; gap: 0.5rem 0.8rem; align-items: center; padding: 0.5rem 1.2rem 0.4rem; }
   .summary { flex: 1; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
-  .summary .gitlab-list { margin-left: auto; font-size: 0.8rem; }
+  .summary .gitlab-list { margin-left: auto; font-size: var(--fs-small); }
   .stat {
     display: inline-flex; align-items: baseline; gap: 0.4em;
-    font-size: 0.8rem; color: var(--muted);
+    font-size: var(--fs-small); color: var(--muted);
     background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 0.15em 0.7em;
     white-space: nowrap;
   }
@@ -300,7 +301,7 @@
   .commit-mood { margin-left: 0.3em; cursor: help; }
   table.mrs thead th {
     position: sticky; z-index: 1; background: var(--surface);
-    font-size: 0.8rem; font-weight: 600; color: var(--muted); white-space: nowrap;
+    font-size: var(--fs-small); font-weight: 600; color: var(--muted); white-space: nowrap;
   }
   /* Capitales pour les groupes seuls : les titres de colonnes, en minuscules, restent étroits et lisibles. */
   table.mrs thead tr.groups th { text-transform: uppercase; }
@@ -320,7 +321,7 @@
   table.mrs thead tr.groups th:first-child { border-top-left-radius: 0.8rem; }
   table.mrs thead tr.groups th:last-child { border-top-right-radius: 0.8rem; }
   table.mrs thead tr.groups th span {
-    display: block; font-size: 0.72rem; letter-spacing: 0.08em; color: var(--muted);
+    display: block; font-size: var(--fs-small); letter-spacing: 0.06em; color: var(--muted);
     border-bottom: 2px solid var(--border); padding-bottom: 0.2rem;
   }
   table.mrs thead tr.groups th.g-mr span { border-bottom-color: transparent; }
@@ -337,7 +338,7 @@
   table.mrs td.nowrap { white-space: nowrap; }
   table.mrs td.signal { white-space: nowrap; }
   table.mrs td.signal .stack { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; }
-  .running-note { font-size: 0.7rem; color: var(--muted); text-decoration: none; }
+  .running-note { font-size: var(--fs-small); color: var(--muted); text-decoration: none; }
   .running-note::before { content: "⟳ "; }
   .running-note:hover { color: var(--text); text-decoration: underline; }
 
@@ -350,7 +351,7 @@
   .mr-cell .title > :not(a) { flex: none; }
   .mr-cell .title a:hover { color: var(--link); }
   .mr-cell .title .draft {
-    font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;
+    font-weight: 600; font-size: var(--fs-small); text-transform: uppercase; letter-spacing: 0.05em;
     color: var(--grey-fg); background: var(--grey-bg); border: 1px dashed var(--border-strong);
     border-radius: 4px; padding: 1px 6px; vertical-align: 2px;
   }
@@ -358,7 +359,7 @@
   .mr-cell .sub { color: var(--muted); font-size: 0.85rem; margin-top: 0.2rem; contain: inline-size; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .mr-cell .sub .iid { font-weight: 600; color: var(--accent); }
   .mr-cell .sub code {
-    font-size: 0.8rem; background: var(--surface-2); border: 1px solid var(--border);
+    font-size: var(--fs-small); background: var(--surface-2); border: 1px solid var(--border);
     border-radius: 4px; padding: 0 5px;
   }
   .mr-cell .sub .diffstat { white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -372,7 +373,7 @@
   /* Prénom et nom sur deux lignes, coupés au premier espace : la colonne n'a que la largeur du plus long. */
   .author .author-name { display: flex; flex-direction: column; font-size: 0.85rem; line-height: 1.2; }
   /* Nom en plus petit : le prénom suffit à reconnaître, le nom complet reste lisible sur une capture. */
-  .author .author-name > span + span { font-size: 0.75em; }
+  .author .author-name > span + span { color: var(--muted); }
 
   .ok { color: var(--muted); }
   /* Valeur saine en texte ordinaire : la couleur est réservée aux écarts, qui ressortent sans concurrence. */
@@ -380,11 +381,11 @@
   .muted { color: var(--muted); }
 .local { color: var(--muted); font-style: italic; }
   .late-orange { color: var(--orange-fg); font-weight: 600; }
-  /* Repère toujours affiché, pas un texte à lire : aussi petit que possible. */
-  .behind-unit { color: var(--muted); font-size: 0.55rem; line-height: 1.1; }
+  /* Repère toujours affiché : à la plus petite taille de la page, pas en dessous. */
+  .behind-unit { color: var(--muted); font-size: var(--fs-small); line-height: 1.1; }
   .labels { display: flex; flex-wrap: wrap; gap: 4px; }
   .label {
-    font-size: 0.8rem; font-weight: 500; border-radius: 999px; padding: 0.1em 0.65em;
+    font-size: var(--fs-small); font-weight: 500; border-radius: 999px; padding: 0.1em 0.65em;
     background: var(--blue-bg); color: var(--blue-fg); border: 0; cursor: pointer;
   }
   .label:hover { filter: brightness(0.96); }
@@ -472,7 +473,7 @@
   }
   .bp-card + .bp-card { margin-top: 0.8rem; }
   .bp-label {
-    font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+    font-size: var(--fs-small); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
     color: var(--muted); border: 1px solid var(--border-strong); border-radius: 4px; padding: 1px 6px;
   }
   .bp-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.8rem; cursor: pointer; }
@@ -496,7 +497,7 @@
   @media (prefers-reduced-motion: reduce) { .bp-history-bars { transition: none; } }
   .bp-history-scale {
     display: flex; flex-direction: column; justify-content: space-between;
-    font-size: 0.7rem; line-height: 1; color: var(--muted); font-variant-numeric: tabular-nums;
+    font-size: var(--fs-small); line-height: 1; color: var(--muted); font-variant-numeric: tabular-nums;
   }
   .bp-all { font-size: 0.9rem; }
   .bp-builds { color: var(--muted); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
@@ -529,12 +530,6 @@
      cessent alors de coller en haut de la fenêtre. */
   @media (max-width: 1365px) {
     .table-wrap { overflow-x: auto; }
-  }
-  /* Fenêtre étroite : identité et préférences en haut, commandes dessous, de gauche à droite. */
-  @media (max-width: 1100px) {
-    header { grid-template-columns: minmax(0, 1fr) auto; }
-    header .header-row.commands { grid-column: 1 / -1; grid-row: 2; justify-content: flex-start; }
-    header .header-row.prefs { padding-left: 0; border-left: 0; justify-content: flex-end; }
   }
   @media (max-width: 720px) {
     header h1 .tagline { display: none; }
