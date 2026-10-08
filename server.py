@@ -30,6 +30,9 @@ Actions locales, en POST :
     /git/commits GET, mêmes paramètres : commits de la MR, du plus ancien au plus récent
     /git/branch GET ?branch=&target= : nombre de commits, date du dernier et retard sur la cible d'une
                 MR ouverte, d'après le clone local, sans réseau — repli de la page quand GitLab ne répond pas
+    /avatars    couleur de la pastille de chaque personne, la même dans tous les navigateurs (cf.
+                avatar_colors.py) : GET en donne l'attribution, POST {"names", "count"} en donne une, parmi
+                count, à chaque nom qui n'en a pas encore
     /stats      GET : requêtes envoyées à GitLab (API, git fetch) et à Sonar sur 1, 5 et 15 min, par
                 catégorie, erreurs de connexion, 4xx et 5xx comprises, et depuis le démarrage
                 (cf. request_stats.py)
@@ -66,6 +69,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 from ai_actions import AiActions, AiActionsError
+from avatar_colors import DEFAULT_PATH as AVATAR_COLORS_PATH, AvatarColors
 from git_actions import GitActions, GitError
 from orca_launcher import OrcaError, OrcaLauncher
 from relay_cache import TTL_S, RelayCache
@@ -267,7 +271,8 @@ def make_handler(
         orca,
         git,
         ai_actions,
-        stats
+        stats,
+        avatar_colors
 ):
     upstream = UpstreamPool()
     relay_cache = RelayCache()
@@ -299,6 +304,8 @@ def make_handler(
                 self.send_json(200, git.status())
             elif self.path == "/stats":
                 self.send_json(200, stats.snapshot())
+            elif self.path == "/avatars":
+                self.send_json(200, avatar_colors.snapshot())
             elif self.path.startswith("/git/diff?"):
                 self.git_diff(parse_qs(urlsplit(self.path).query))
             elif self.path.startswith("/git/commits?"):
@@ -338,7 +345,8 @@ def make_handler(
                 "/git/auto": self.git_auto,
                 "/gitlab/discussion": self.gitlab_discussion,
                 "/gitlab/reply": self.gitlab_reply,
-                "/gitlab/resolve": self.gitlab_resolve
+                "/gitlab/resolve": self.gitlab_resolve,
+                "/avatars": self.avatars
             }
             action = actions.get(self.path)
             if not action:
@@ -402,6 +410,18 @@ def make_handler(
                 self.send_json(400, {"message": "requête invalide"})
                 return
             self.send_json(200, git.status())
+
+        def avatars(self, payload):
+            names = payload.get("names") if isinstance(payload, dict) else None
+            count = payload.get("count") if isinstance(payload, dict) else None
+            if (not isinstance(names, list) or not all(isinstance(name, str) and name for name in names)
+                    or not isinstance(count, int) or isinstance(count, bool) or count < 1):
+                self.send_json(400, {"message": "requête invalide"})
+                return
+            self.send_json(200, avatar_colors.assign(
+                names,
+                count
+            ))
 
         def git_auto(self, payload):
             enabled = payload.get("enabled") if isinstance(payload, dict) else None
@@ -888,7 +908,8 @@ def main():
             orca,
             git,
             AiActions.detect(args.repo_dir),
-            stats
+            stats,
+            AvatarColors(AVATAR_COLORS_PATH)
         )
     )
     git.start_periodic_fetch()
