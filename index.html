@@ -34,9 +34,9 @@
     --accent-2: #7c3aed;
     --accent-fg: #ffffff;
     --red-bg: #fdecec; --red-fg: #b42318; --red-dot: #f04438;
-    --orange-bg: #fff4e0; --orange-fg: #93510a; --orange-dot: #f79009;
-    --green-bg: #e7f6ec; --green-fg: #146c3a; --green-dot: #12b76a;
-    --grey-bg: #eef0f4; --grey-fg: #555b69; --grey-dot: #98a2b3;
+    --orange-bg: #fff4e0; --orange-fg: #93510a; --orange-dot: #dc6803;
+    --green-bg: #e7f6ec; --green-fg: #146c3a; --green-dot: #079455;
+    --grey-bg: #eef0f4; --grey-fg: #555b69; --grey-dot: #7d8696;
     --blue-bg: #e9f0fd; --blue-fg: #1e4ea8;
     --quality-bg: #f6f5ff;
     --shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 6px 24px -8px rgba(16, 24, 40, .12);
@@ -97,7 +97,7 @@
   header .brand {
     width: 2rem; height: 2rem; border-radius: 0.5rem; flex: none;
     display: grid; place-items: center; font-weight: 800; font-size: 0.9rem;
-    color: #fff; background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: var(--accent-fg); background: linear-gradient(135deg, var(--accent), var(--accent-2));
   }
   header .header-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1.1rem; }
   /* Commandes d'actualisation alignées à droite, sous les préférences d'affichage. */
@@ -161,7 +161,7 @@
   .load-panel thead th { color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--border); }
   .load-panel td { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
   .load-panel td:first-child { font-family: inherit; }
-  .load-panel td .hint { display: block; color: var(--faint); font-size: 0.7rem; }
+  .load-panel td .hint { display: block; color: var(--muted); font-size: 0.7rem; }
   .load-panel tfoot tr:first-child td { border-top: 1px solid var(--border); font-weight: 600; }
   .load-panel tfoot .errors td, .load-panel tfoot .cache td { color: var(--muted); }
   .load-panel tfoot .errors td.failed { color: var(--orange-fg); font-weight: 600; }
@@ -322,7 +322,7 @@
   table.mrs thead tr.groups th:first-child { border-top-left-radius: 0.8rem; }
   table.mrs thead tr.groups th:last-child { border-top-right-radius: 0.8rem; }
   table.mrs thead tr.groups th span {
-    display: block; font-size: 0.72rem; letter-spacing: 0.08em; color: var(--faint);
+    display: block; font-size: 0.72rem; letter-spacing: 0.08em; color: var(--muted);
     border-bottom: 2px solid var(--border); padding-bottom: 0.2rem;
   }
   table.mrs thead tr.groups th.g-quality span { color: var(--accent); border-bottom-color: var(--accent); }
@@ -380,7 +380,8 @@
   .author .author-name > span + span { font-size: 0.75em; }
 
   .ok { color: var(--muted); }
-  .ok.good { color: var(--green-fg); font-weight: 600; }
+  /* Valeur saine en texte ordinaire : la couleur est réservée aux écarts, qui ressortent sans concurrence. */
+  .ok.good { color: var(--text); }
   .muted { color: var(--muted); }
 .local { color: var(--muted); font-style: italic; }
   .late-orange { color: var(--orange-fg); font-weight: 600; }
@@ -4316,10 +4317,12 @@ function behindCell(mr) {
   if (behind.count === 0) return `<span class="ok good${behind.localAt !== undefined ? " local" : ""}" title="${escapeHtml(t("behind.upToDate", { target: mr.target_branch }) + localNote(behind))}">${escapeHtml(t("behind.none"))}</span>`;
   // Le nombre et son ancienneté sur une ligne, l'unité en petit dessous : la colonne ne prend que la
   // largeur de son libellé le plus court.
-  const local = behind.localAt !== undefined ? ' class="local"' : "";
-  const count = `<span${local} title="${escapeHtml(t("behind.count", { n: behind.count, target: mr.target_branch }) + localNote(behind))}">${behind.count}</span>`;
   const hours = behind.since ? (gitlabNow() - new Date(behind.since)) / 3600000 : 0;
-  const tone = hours > BEHIND_ORANGE_HOURS ? "late-orange" : "muted";
+  // En retard, le nombre prend la couleur de son ancienneté : l'écart se lit sans viser la parenthèse.
+  const late = hours > BEHIND_ORANGE_HOURS;
+  const tone = late ? "late-orange" : "muted";
+  const countClass = [late && tone, behind.localAt !== undefined && "local"].filter(Boolean).join(" ");
+  const count = `<span${countClass ? ` class="${countClass}"` : ""} title="${escapeHtml(t("behind.count", { n: behind.count, target: mr.target_branch }) + localNote(behind))}">${behind.count}</span>`;
   const since = behind.since
     ? `<span class="${tone}" title="${escapeHtml(t("behind.since", { date: formatDate(behind.since), next: behind.next, base: behind.base }))}">(${compactDuration(gitlabNow() - new Date(behind.since))})</span>`
     : `<span class="muted" title="${escapeHtml(behind.error ?? "")}">(?)</span>`;
