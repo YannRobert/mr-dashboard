@@ -38,7 +38,6 @@
     --green-bg: #e7f6ec; --green-fg: #146c3a; --green-dot: #079455;
     --grey-bg: #eef0f4; --grey-fg: #555b69; --grey-dot: #7d8696;
     --blue-bg: #e9f0fd; --blue-fg: #1e4ea8;
-    --quality-bg: #f6f5ff;
     --shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 6px 24px -8px rgba(16, 24, 40, .12);
     --focus: #4f46e5;
     color-scheme: light;
@@ -63,7 +62,6 @@
     --green-bg: #12321f; --green-fg: #8fd8a4; --green-dot: #32d583;
     --grey-bg: #282b35; --grey-fg: #b4b9c6; --grey-dot: #6f7584;
     --blue-bg: #1b2b4a; --blue-fg: #a9c6f5;
-    --quality-bg: #1e1d2c;
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 28px -10px rgba(0, 0, 0, .6);
   }
   * { box-sizing: border-box; }
@@ -92,12 +90,12 @@
   }
   header::before {
     content: ""; position: absolute; inset: 0 0 auto 0; height: 3px;
-    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    background: var(--accent);
   }
   header .brand {
     width: 2rem; height: 2rem; border-radius: 0.5rem; flex: none;
     display: grid; place-items: center; font-weight: 800; font-size: 0.9rem;
-    color: var(--accent-fg); background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: var(--accent-fg); background: var(--accent);
   }
   header .header-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1.1rem; }
   /* Commandes d'actualisation alignées à droite, sous les préférences d'affichage. */
@@ -107,12 +105,8 @@
   /* Le slogan sous le nom, à hauteur de la pastille « MR » : moins de place en largeur. */
   header h1 { margin: 0; display: flex; flex-direction: column; font-size: 1.4rem; font-weight: 700; letter-spacing: -0.01em; }
   header h1 .name { font-size: 1rem; line-height: 1.15; }
-  /* Le M et le R de « MisteR » reprennent le dégradé des boutons principaux. */
-  header h1 .initial {
-    font-weight: inherit; color: var(--accent);
-    background: linear-gradient(135deg, var(--accent), var(--accent-2));
-    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
-  }
+  /* Le M et le R de « MisteR » reprennent la couleur des boutons principaux. */
+  header h1 .initial { font-weight: inherit; color: var(--accent); }
   header h1 .tagline { font-size: 0.72rem; font-weight: 500; color: var(--muted); letter-spacing: 0; }
   .summary-bar .project {
     font-size: 0.75rem; color: var(--muted); background: var(--surface-2);
@@ -197,14 +191,14 @@
   }
   .lang-switch button:disabled { opacity: 0.4; cursor: default; }
   .text-size output { align-self: center; min-width: 3.4em; text-align: center; font-size: 0.68rem; color: var(--muted); font-variant-numeric: tabular-nums; }
-  .lang-switch button[aria-pressed="true"], .view-switch button[aria-pressed="true"] { color: var(--accent-fg); background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
+  .lang-switch button[aria-pressed="true"], .view-switch button[aria-pressed="true"] { color: var(--accent-fg); background: var(--accent); }
   button {
     font: inherit; color: var(--text); background: var(--surface);
     border: 1px solid var(--border-strong); border-radius: 0.5rem; padding: 0.25em 0.75em; cursor: pointer;
   }
   button.primary {
     color: var(--accent-fg); border-color: transparent; font-weight: 600;
-    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    background: var(--accent);
     box-shadow: 0 2px 8px -2px color-mix(in srgb, var(--accent) 55%, transparent);
   }
   button.primary:hover { filter: brightness(1.07); }
@@ -297,10 +291,9 @@
   table.mrs tbody tr:last-child td { border-bottom: 0; }
   table.mrs tbody tr { transition: background .12s; }
   table.mrs tbody tr:hover td { background: var(--surface-2); }
-  table.mrs tbody tr:hover td.g-quality { background: color-mix(in srgb, var(--quality-bg) 60%, var(--surface-2)); }
   table.mrs tbody tr:hover td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
-  /* Alerte laissée en plan : toute la ligne en rouge, qualité comprise. */
-  table.mrs tbody tr.stalled td, table.mrs tbody tr.stalled td.g-quality { background: var(--red-bg); }
+  /* Alerte laissée en plan : toute la ligne en rouge. */
+  table.mrs tbody tr.stalled td { background: var(--red-bg); }
   table.mrs tbody tr.stalled td:first-child { box-shadow: inset 3px 0 0 var(--red-dot); }
   .commit-mood { margin-left: 0.3em; cursor: help; }
   table.mrs thead th {
@@ -325,7 +318,6 @@
     display: block; font-size: 0.72rem; letter-spacing: 0.08em; color: var(--muted);
     border-bottom: 2px solid var(--border); padding-bottom: 0.2rem;
   }
-  table.mrs thead tr.groups th.g-quality span { color: var(--accent); border-bottom-color: var(--accent); }
   table.mrs thead tr.groups th.g-mr span { border-bottom-color: transparent; }
   table.mrs th button {
     all: unset; cursor: pointer; display: inline-flex; gap: 0.3em; align-items: center;
@@ -335,8 +327,6 @@
   table.mrs th[aria-sort] { color: var(--accent); }
   table.mrs th .arrow { font-size: 0.8em; min-width: 0.8em; }
   table.mrs td.num { font-variant-numeric: tabular-nums; }
-  table.mrs .g-quality { background: var(--quality-bg); }
-  table.mrs thead th.g-quality { background: var(--quality-bg); }
   table.mrs .g-first { border-left: 1px solid var(--border); }
   table.mrs td.g-time { color: var(--muted); font-variant-numeric: tabular-nums; }
   table.mrs td.nowrap { white-space: nowrap; }

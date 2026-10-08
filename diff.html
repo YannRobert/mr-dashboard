@@ -33,7 +33,6 @@
     --muted: #6a6f7d;
     --link: #2356c7;
     --accent: #4f46e5;
-    --accent-2: #7c3aed;
     --accent-fg: #ffffff;
     --red-bg: #fdecec; --red-fg: #b42318; --red-line: #d92d20;
     --orange-bg: #fff4e0; --orange-fg: #93510a; --orange-line: #f79009;
@@ -49,7 +48,6 @@
     --muted: #9ba1b0;
     --link: #86a9f7;
     --accent: #818cf8;
-    --accent-2: #a78bfa;
     --accent-fg: #0f1020;
     --red-bg: #3d1a1a; --red-fg: #ffb4ab; --red-line: #f97066;
     --orange-bg: #3d2a10; --orange-fg: #ffc77a; --orange-line: #fdb022;
@@ -102,7 +100,7 @@
   .note-thread.current { outline: 2px solid var(--accent); outline-offset: 1px; }
   .format button[aria-pressed="true"], .toggle[aria-pressed="true"] {
     color: var(--accent-fg); border-color: transparent; font-weight: 600;
-    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    background: var(--accent);
   }
   /* Pas de gras à l'activation : un bouton qui s'élargit décale les commandes à sa gauche. */
   .toggle[aria-pressed="true"] { font-weight: inherit; }
@@ -135,7 +133,7 @@
   }
   .commits-head strong { margin-right: auto; }
   .commits-head button { font-size: 0.75rem; padding: 0.1em 0.5em; border-radius: 0.4rem; }
-  .commits-head button[aria-pressed="true"] { color: var(--accent-fg); border-color: transparent; background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
+  .commits-head button[aria-pressed="true"] { color: var(--accent-fg); border-color: transparent; background: var(--accent); }
   .commits-head button:disabled { opacity: 0.4; cursor: default; }
   .commits-hint { padding: 0.25rem 0.6rem; font-size: 0.7rem; color: var(--muted); border-bottom: 1px solid var(--border); }
   .commits-warning { padding: 0.3rem 0.6rem; font-size: 0.75rem; color: var(--red-fg); background: var(--red-bg); }
