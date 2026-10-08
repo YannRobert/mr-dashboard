@@ -269,7 +269,12 @@
   .d2h-file-wrapper.wrap-lines .d2h-code-line, .d2h-file-wrapper.wrap-lines .d2h-code-side-line { white-space: normal; }
   .d2h-file-wrapper.wrap-lines .d2h-code-line-ctn { white-space: pre-wrap; overflow-wrap: anywhere; }
   .d2h-file-wrapper.wrap-lines .d2h-file-side-diff { overflow-x: hidden; }
-  .d2h-tag { font-size: 0.65rem; }
+  /* Témoin ADDED / CHANGED / DELETED / RENAMED en tête de l'en-tête, de largeur fixe : le nom du fichier commence
+     au même endroit quel que soit le témoin, que l'œil trouve toujours à la même place. */
+  .d2h-tag {
+    order: -1; flex: none; justify-content: center; box-sizing: border-box; width: 6.5em;
+    margin: 0 0.6rem 0 0; font-size: 0.65rem;
+  }
   .text-size { display: flex; align-items: center; gap: 0.25rem; }
   .text-size button { border-radius: 0.5rem; padding: 0.3em 0.6em; }
   .text-size button:disabled { opacity: 0.4; cursor: default; }
