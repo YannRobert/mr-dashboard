@@ -289,6 +289,9 @@
   table.mrs td.nowrap { white-space: nowrap; }
   table.mrs td.signal { white-space: nowrap; }
   table.mrs td.signal .stack { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; }
+  .running-note { font-size: 0.7rem; color: var(--muted); text-decoration: none; }
+  .running-note::before { content: "⟳ "; }
+  .running-note:hover { color: var(--text); text-decoration: underline; }
 
   /* Toute la largeur que les autres colonnes laissent : ses deux lignes y tiennent sans retour à la ligne. */
   .mr-cell { min-width: 22rem; width: 100%; }
@@ -924,6 +927,7 @@ const I18N = {
     "branchPipeline.buildsSame": p => p.duration,
     "branchPipeline.buildsTitle": p => `${p.count} derniers pipelines réussis : ${p.durations}`,
     "pipeline.title": p => `Pipeline #${p.id} : ${p.label}`,
+    "pipeline.runningTitle": p => `Pipeline #${p.id} : ${p.label} — au-dessus, le résultat du pipeline précédent #${p.previous}`,
     "reason.notApplicable": "Non applicable",
     "reason.pending": "En cours",
     "reason.noNote": "Sans note",
@@ -1162,6 +1166,7 @@ const I18N = {
     "branchPipeline.buildsSame": p => p.duration,
     "branchPipeline.buildsTitle": p => `Last ${p.count} successful pipelines: ${p.durations}`,
     "pipeline.title": p => `Pipeline #${p.id}: ${p.label}`,
+    "pipeline.runningTitle": p => `Pipeline #${p.id}: ${p.label} — above, the result of the previous pipeline #${p.previous}`,
     "reason.notApplicable": "Not applicable",
     "reason.pending": "Running",
     "reason.noNote": "No note",
@@ -2039,15 +2044,22 @@ async function loadSignals(mr) {
     const graphqlJobs = signals.pipeline && graphql?.headPipeline?.id === `gid://gitlab/Ci::Pipeline/${signals.pipeline.id}`
       ? graphql.headPipeline.jobs.nodes.map(restJob)
       : null;
-    const [behind, jobs, pitNote] = await Promise.all([
+    const [behind, jobs, pitNote, previousPipeline] = await Promise.all([
       loadBehind(mr, detail.diverged_commits_count),
       graphqlJobs ? Promise.resolve(graphqlJobs)
       : signals.pipeline
         ? gitlabAll(`${projectPath()}/pipelines/${signals.pipeline.id}/jobs?include_retried=false`)
         : Promise.resolve([]),
       pitNoteLoading,
+      signals.pipeline && PENDING_JOB_STATUSES.has(signals.pipeline.status)
+        ? loadPreviousPipeline(
+          mr,
+          signals.pipeline.id
+        )
+        : Promise.resolve(null),
     ]);
     signals.behind = behind;
+    signals.previousPipeline = previousPipeline;
     const job = name => jobs.filter(j => j.name === name).sort((a, b) => b.id - a.id)[0];
     if (pitTracked()) signals.pit = pitSignal(job(state.config.pitJob), pitNote, mr);
     if (sonarTracked()) signals.sonar = await sonarSignal(job(state.config.sonarJob), mr);
@@ -2104,6 +2116,21 @@ async function withLocalGit(
 
 const localNote = signal => (signal?.localAt === undefined ? ""
   : "\n" + t("local.title", { date: signal.localAt ? formatDate(signal.localAt) : "—" }));
+
+// Pipeline de tête en cours : le dernier pipeline terminé de la MR reste sa dernière valeur connue. Un
+// pipeline annulé ou sauté ne dit rien du code : on remonte au précédent.
+async function loadPreviousPipeline(
+  mr,
+  headId
+) {
+  try {
+    const pipelines = (await api(`/gitlab/${projectPath()}/merge_requests/${mr.iid}/pipelines?per_page=20`)).body;
+    const previous = pipelines.find(p => p.id !== headId && ["success", "failed"].includes(p.status));
+    return previous ? (await api(`/gitlab/${projectPath()}/pipelines/${previous.id}`)).body : null;
+  } catch (ignored) {
+    return null;
+  }
+}
 
 // Un thread = une discussion résoluble (commentaire de revue, diff note) : les compteurs de GitLab,
 // qui ignorent notes système et commentaires simples, sans charger les discussions.
@@ -2335,11 +2362,33 @@ function pipelineCell(mr) {
   const pending = loadingOrError(s);
   if (pending) return pending;
   if (!s.pipeline) return pill("grey", t("pipeline.none"));
+  if (!PENDING_JOB_STATUSES.has(s.pipeline.status)) return pipelinePill(s.pipeline);
+  // En cours : le résultat du pipeline précédent, puis « En cours » en petit.
   const { id, web_url: link } = s.pipeline;
-  const { text, label, group } = pipelineStatus(s.pipeline);
+  const { label } = pipelineStatus(s.pipeline);
+  const value = s.previousPipeline
+    ? pipelinePill(s.previousPipeline).replace(' class="ok good"', ' class="ok"')
+    : `<span class="muted">—</span>`;
+  const title = s.previousPipeline
+    ? t("pipeline.runningTitle", { id, label, previous: s.previousPipeline.id })
+    : t("pipeline.title", { id, label });
+  return `<div class="stack">${value}${runningNote(title, link)}</div>`;
+}
+
+function pipelinePill(pipeline) {
+  const { id, web_url: link } = pipeline;
+  const { text, label, group } = pipelineStatus(pipeline);
   const title = t("pipeline.title", { id, label });
   if (group === "success") return `<a class="ok good" href="${escapeHtml(link)}" target="_blank" rel="noopener" title="${escapeHtml(title)}">${escapeHtml(text)}</a>`;
   return pill(PIPELINE_TONE[group] ?? "grey", text, title, link);
+}
+
+// Sous la dernière valeur connue : un job ou un pipeline tourne, la valeur va bientôt changer.
+function runningNote(
+  title,
+  link
+) {
+  return `<a class="running-note" href="${escapeHtml(link)}" target="_blank" rel="noopener" title="${escapeHtml(title)}">${escapeHtml(t("refreshing"))}</a>`;
 }
 
 // head_pipeline porte detailed_status ; repli sur le statut brut s'il manquait.
@@ -2368,6 +2417,9 @@ function pitCell(mr) {
 
 // Signal inexploitable (absent, en cours, non configuré…) : sa raison, en pastille grise.
 function reasonPill(kind, signal) {
+  if (signal.reason === "pending") {
+    return `<div class="stack"><span class="muted">—</span>${runningNote(t(`${kind}.pending`, signal.info), signal.link)}</div>`;
+  }
   return pill("grey", t(`reason.${signal.reason}`), t(`${kind}.${signal.reason}`, signal.info), signal.link);
 }
 
@@ -2490,19 +2542,19 @@ function dateCell(iso, key) {
   return `<span title="${escapeHtml(t(key, { date: formatDate(iso) }))}">${relative(iso)}</span>`;
 }
 
-// Valeurs d'un run précédent pendant qu'un nouveau job tourne : préfixées d'une pastille « En cours »,
-// et jamais affichées en vert — un signal propre peut encore se dégrader à la fin du job.
-function refreshingPill(signal) {
+// Valeurs d'un run précédent pendant qu'un nouveau job tourne : suivies d'un « En cours » en petit, et
+// jamais affichées en vert — un signal propre peut encore se dégrader à la fin du job.
+function refreshingNote(signal) {
   const r = signal.refreshing;
   if (!r) return "";
-  return pill("grey", t("refreshing"), t("refreshing.title", { job: r.job, status: r.status, date: formatDate(r.valuesDate) }), r.link);
+  return runningNote(t("refreshing.title", { job: r.job, status: r.status, date: formatDate(r.valuesDate) }), r.link);
 }
 
 function signalStack(signal, alerts, clean) {
-  const head = refreshingPill(signal);
-  if (!head && !alerts.length) return clean;
-  const body = alerts.length ? alerts : [head ? clean.replace(' class="ok good"', ' class="ok"') : clean];
-  return `<div class="stack">${[head, ...body].join("")}</div>`;
+  const note = refreshingNote(signal);
+  if (!note && !alerts.length) return clean;
+  const body = alerts.length ? alerts : [note ? clean.replace(' class="ok good"', ' class="ok"') : clean];
+  return `<div class="stack">${[...body, note].join("")}</div>`;
 }
 
 function pill(tone, text, title = "", link = null) {
