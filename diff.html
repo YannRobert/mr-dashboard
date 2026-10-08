@@ -951,16 +951,20 @@
   // Le fichier en haut de l'écran est surligné dans la liste, que le panneau garde en vue. Le panneau ne suit
   // qu'une fois le défilement posé : pendant, l'observateur ne fait que tenir la liste des fichiers visibles,
   // sans rien mesurer ni défiler, pour ne pas imposer une mise en page à chaque fichier qui passe.
+  // Un fichier choisi dans la liste reste le courant tant qu'il est à l'écran : en fin de diff, trop court pour
+  // monter en haut de l'écran, il laisserait sinon le précédent y rester, et la liste désigner celui-ci.
   function followCurrentFile(container, lines) {
     const files = [...container.querySelectorAll(".d2h-file-wrapper")];
     const order = new Map(files.map((file, i) => [file, i]));
     const visible = new Set();
     const panel = document.getElementById("files");
     let current = null;
+    let chosen = null;
     let timer = 0;
     const update = () => {
+      if (chosen && !visible.has(chosen)) chosen = null;
       // Le plus haut des fichiers visibles est le premier dans l'ordre du diff.
-      const top = [...visible].reduce((first, file) => (!first || order.get(file) < order.get(first) ? file : first), null);
+      const top = chosen ?? [...visible].reduce((first, file) => (!first || order.get(file) < order.get(first) ? file : first), null);
       const line = top && lines.get(top.id);
       if (!line || line === current) return;
       current?.classList.remove("current");
@@ -980,6 +984,14 @@
       timer = setTimeout(update, FOLLOW_DELAY_MS);
     }, { rootMargin: `-${document.querySelector("header").offsetHeight}px 0px 0px 0px` });
     for (const file of files) observer.observe(file);
+    for (const [id, line] of lines) {
+      line.addEventListener("click", () => {
+        chosen = document.getElementById(id);
+        visible.add(chosen);
+        clearTimeout(timer);
+        update();
+      });
+    }
   }
 
   function renderCommits(listScroll) {
