@@ -1,8 +1,9 @@
 """Actions git sur le clone local du projet suivi : fetch et diff d'une MR, ouverte ou mergée.
 
 Tant que le fetch automatique est activé, il tourne aussi tout seul à intervalle régulier : les branches
-distantes restent à jour même sans page ouverte, et le restent pendant une coupure de GitLab — on peut
-alors relire et committer sur origin/<branche>, puis pousser à son retour.
+distantes restent à jour même sans page ouverte, et restent en place pendant une coupure de GitLab, même
+quand il sert une page de maintenance à la place du dépôt — on peut alors relire et committer sur
+origin/<branche>, puis pousser à son retour.
 
 Fetch et diff se font dans le worktree principal, retrouvé depuis n'importe quel worktree du clone,
 sans jamais rien y extraire : il porte le travail en cours.
@@ -125,6 +126,15 @@ class GitActions:
     def _run_fetch(self):
         at = datetime.now(timezone.utc).isoformat()
         try:
+            # Une page de maintenance servie en 200 à la place du dépôt passe pour un dépôt sans branche :
+            # git ne signale rien, et --prune effacerait alors toutes les branches origin/*. Sans branche
+            # annoncée, pas de fetch.
+            advertised = self._git(["ls-remote", "--heads", "origin"], timeout=FETCH_TIMEOUT_S)
+            if advertised.returncode != 0:
+                return {"at": at, "ok": False, "message": last_line(advertised.stderr) or f"code {advertised.returncode}"}
+            if not advertised.stdout.strip():
+                return {"at": at, "ok": False, "message": "origin n'annonce aucune branche (maintenance ?) : "
+                                                          "fetch annulé pour garder les branches origin/*"}
             completed = self._git(["fetch", "--prune", "origin"], timeout=FETCH_TIMEOUT_S)
         except subprocess.TimeoutExpired:
             return {"at": at, "ok": False, "message": f"aucune réponse de git fetch en {FETCH_TIMEOUT_S} s"}
