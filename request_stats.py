@@ -9,6 +9,13 @@ from collections import deque
 WINDOWS_S = (60, 300, 900)
 
 
+def http_error(status):
+    """Classe d'erreur d'une réponse HTTP, None si elle a abouti."""
+    if status >= 500:
+        return "5xx"
+    return "4xx" if status >= 400 else None
+
+
 class RequestStats:
 
     def __init__(self):
@@ -16,23 +23,24 @@ class RequestStats:
         # Depuis le démarrage du serveur, par catégorie.
         self._totals = {}
         self._lock = threading.Lock()
-        # (instant monotone, catégorie, en échec), du plus ancien au plus récent.
+        # (instant monotone, catégorie, erreur ou None), du plus ancien au plus récent. Erreurs :
+        # "connection" (aucune réponse), "4xx", "5xx", "git" (commande git en échec).
         self._events = deque()
 
     def record(
             self,
             kind,
-            failed
+            error
     ):
         now = time.monotonic()
         with self._lock:
-            self._events.append((now, kind, failed))
+            self._events.append((now, kind, error))
             self._totals[kind] = self._totals.get(kind, 0) + 1
             self._forget(now)
 
     def snapshot(self):
-        """Pour chaque fenêtre, le nombre de requêtes et d'échecs par catégorie ; et le total par
-        catégorie depuis le démarrage du serveur."""
+        """Pour chaque fenêtre, le nombre de requêtes et d'erreurs, par classe, de chaque catégorie ; et
+        le total par catégorie depuis le démarrage du serveur."""
         now = time.monotonic()
         with self._lock:
             self._forget(now)
@@ -40,12 +48,14 @@ class RequestStats:
             totals = dict(self._totals)
         result = []
         for seconds in WINDOWS_S:
-            counts, failures = {}, {}
-            for at, kind, failed in events:
+            counts, errors = {}, {}
+            for at, kind, error in events:
                 if now - at <= seconds:
                     counts[kind] = counts.get(kind, 0) + 1
-                    failures[kind] = failures.get(kind, 0) + int(failed)
-            result.append({"seconds": seconds, "counts": counts, "failures": failures})
+                    if error:
+                        by_error = errors.setdefault(kind, {})
+                        by_error[error] = by_error.get(error, 0) + 1
+            result.append({"seconds": seconds, "counts": counts, "errors": errors})
         return {"windows": result, "sinceStart": totals, "startedAt": int(self._started_at * 1000)}
 
     def _forget(self, now):

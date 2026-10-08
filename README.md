@@ -87,8 +87,8 @@ ensemble — puis `start.sh <nom>`.
 - **Requêtes GitLab · 1 / 5 / 15 min**, dans l'en-tête : ce que le serveur a envoyé à GitLab, API et
   `git fetch`, sur la dernière minute et les 5 et 15 dernières, tous onglets confondus — le navigateur
   ne parle jamais à GitLab en direct. Au clic, un tableau : lectures, écritures et fetch par fenêtre,
-  total, échecs, cumul et moyenne par minute depuis le démarrage du serveur, et Sonar à part ; en
-  orange, un échec dans les 5 dernières minutes. Pour vérifier que le dashboard ne surcharge pas GitLab.
+  total, erreurs (connexion, 4xx, 5xx, git fetch), cumul et moyenne par minute depuis le démarrage du serveur, et Sonar à part ; en
+  orange, une erreur hors 4xx dans les 5 dernières minutes. Pour vérifier que le dashboard ne surcharge pas GitLab.
 
 ### Aucune notification ne s'affiche
 

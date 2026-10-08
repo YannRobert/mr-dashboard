@@ -163,8 +163,8 @@
   .load-panel td:first-child { font-family: inherit; }
   .load-panel td .hint { display: block; color: var(--faint); font-size: 0.7rem; }
   .load-panel tfoot tr:first-child td { border-top: 1px solid var(--border); font-weight: 600; }
-  .load-panel tfoot .failures td { color: var(--muted); }
-  .load-panel tfoot .failures td.failed { color: var(--orange-fg); font-weight: 600; }
+  .load-panel tfoot .errors td { color: var(--muted); }
+  .load-panel tfoot .errors td.failed { color: var(--orange-fg); font-weight: 600; }
   .load-panel p { margin: 0.6rem 0 0; color: var(--muted); font-size: 0.75rem; line-height: 1.35; white-space: normal; }
   header .refresh-controls {
     display: inline-flex; align-items: center; gap: 0.7rem;
@@ -1023,8 +1023,15 @@ const I18N = {
     "stats.git": "git fetch",
     "stats.git.hint": () => `clone local${gitFetchIntervalText(", toutes les ", " min")} et sur changement repéré`,
     "stats.total": "Total",
-    "stats.failures": "dont en échec",
-    "stats.sonar": p => `Sonar, autre serveur, hors total : ${p.counts}.`,
+    "stats.error.connection": "Erreurs de connexion",
+    "stats.error.connection.hint": "aucune réponse : réseau, proxy, délai dépassé",
+    "stats.error.4xx": "Erreurs 4xx",
+    "stats.error.4xx.hint": "requête refusée : jeton, droits, introuvable",
+    "stats.error.5xx": "Erreurs 5xx",
+    "stats.error.5xx.hint": "GitLab en panne ou en maintenance",
+    "stats.error.git": "git fetch en échec",
+    "stats.error.git.hint": "dépôt injoignable ou refusé",
+    "stats.sonar": p => `Sonar, autre serveur, hors total : ${p.counts} requêtes, dont ${p.errors} en erreur.`,
     "stats.since": p => `${p.n} requête${plural(p.n)} à GitLab depuis le démarrage du serveur (il y a ${p.since}), soit ${p.rate} par minute en moyenne. Tous onglets confondus : le navigateur ne parle jamais à GitLab en direct.`,
     "gitFetch.never": "jamais fetché",
     "gitFetch.ok": p => `fetché à ${p.time}`,
@@ -1276,8 +1283,15 @@ const I18N = {
     "stats.git": "git fetch",
     "stats.git.hint": () => `local clone${gitFetchIntervalText(", every ", " min")} and on every change seen`,
     "stats.total": "Total",
-    "stats.failures": "of which failed",
-    "stats.sonar": p => `Sonar, another server, not in the total: ${p.counts}.`,
+    "stats.error.connection": "Connection errors",
+    "stats.error.connection.hint": "no answer: network, proxy, timeout",
+    "stats.error.4xx": "4xx errors",
+    "stats.error.4xx.hint": "request refused: token, permissions, not found",
+    "stats.error.5xx": "5xx errors",
+    "stats.error.5xx.hint": "GitLab down or under maintenance",
+    "stats.error.git": "Failed git fetch",
+    "stats.error.git.hint": "repository unreachable or refused",
+    "stats.sonar": p => `Sonar, another server, not in the total: ${p.counts} requests, of which ${p.errors} failed.`,
     "stats.since": p => `${p.n} GitLab request${pluralEn(p.n)} since the server started (${p.since} ago), i.e. ${p.rate} per minute on average. All tabs together: the browser never talks to GitLab directly.`,
     "gitFetch.autoTitle": () => `Fetches the local repository on every change seen on GitLab${gitFetchIntervalText(" and every ", " minutes")}, even with the page closed`,
     "gitFetch.running": "fetching…",
@@ -3368,6 +3382,10 @@ async function loadGitFetchStatus() {
 // Requêtes du serveur à GitLab : le navigateur ne lui parle jamais en direct, le compte du serveur vaut
 // pour tous les onglets. git fetch compris, Sonar à part : ce n'est pas GitLab.
 const GITLAB_KINDS = ["gitlab", "gitlab-write", "git"];
+const REQUEST_ERRORS = ["connection", "4xx", "5xx", "git"];
+// Un 4xx vient le plus souvent d'une ressource absente, attendue : seules les autres erreurs disent
+// que GitLab va mal, et colorent le bouton.
+const ALARMING_ERRORS = ["connection", "5xx", "git"];
 // Relu chaque seconde, comme un compteur ; jamais deux lectures à la fois si le serveur traîne.
 const REQUEST_STATS_POLL_MS = 1000;
 const REQUEST_STATS_ROWS = [
@@ -3392,12 +3410,15 @@ async function loadRequestStats() {
 function renderRequestStats(stats) {
   const sum = (counts, kinds) => kinds.reduce((n, kind) => n + (counts?.[kind] ?? 0), 0);
   const cells = (field, kinds) => stats.windows.map(w => sum(w[field], kinds));
+  const errorCells = (
+    kinds,
+    errors
+  ) => stats.windows.map(w => kinds.reduce((n, kind) => n + sum(w.errors[kind], errors), 0));
   const totals = cells("counts", GITLAB_KINDS);
-  const failures = cells("failures", GITLAB_KINDS);
   $("request-stats").hidden = $("request-stats-divider").hidden = false;
   const button = $("load");
   button.title = t("stats.title");
-  button.classList.toggle("failed", failures[1] > 0);
+  button.classList.toggle("failed", errorCells(GITLAB_KINDS, ALARMING_ERRORS)[1] > 0);
   button.innerHTML = `<span>${escapeHtml(t("stats.label"))}</span><span class="values"><b>${totals[0]}</b>` +
     totals.slice(1).map(n => `<span class="sep"> · </span>${n}`).join("") + `</span>`;
   const rows = REQUEST_STATS_ROWS.map(([kind, key]) => `<tr><td>${escapeHtml(t(key))}` +
@@ -3409,15 +3430,19 @@ function renderRequestStats(stats) {
     `<table><thead><tr><th></th>${stats.windows.map(w => `<th>${w.seconds / 60} min</th>`).join("")}</tr></thead>` +
     `<tbody>${rows}</tbody><tfoot>` +
     `<tr><td>${escapeHtml(t("stats.total"))}</td>${totals.map(n => `<td>${n}</td>`).join("")}</tr>` +
-    `<tr class="failures"><td>${escapeHtml(t("stats.failures"))}</td>` +
-    failures.map(n => `<td${n ? ` class="failed"` : ""}>${n}</td>`).join("") + `</tr>` +
+    REQUEST_ERRORS.map(error => `<tr class="errors"><td>${escapeHtml(t(`stats.error.${error}`))}` +
+      `<span class="hint">${escapeHtml(t(`stats.error.${error}.hint`))}</span></td>` +
+      errorCells(GITLAB_KINDS, [error]).map(n => `<td${n ? ` class="failed"` : ""}>${n}</td>`).join("") + `</tr>`).join("") +
     `</tfoot></table>` +
     `<p>${escapeHtml(t("stats.since", {
       n: sinceStart,
       since: compactDuration(Date.now() - stats.startedAt),
       rate: (Math.round(sinceStart / minutes * 10) / 10).toLocaleString(locale()),
     }))}</p>` +
-    `<p>${escapeHtml(t("stats.sonar", { counts: cells("counts", ["sonar"]).join(" / ") }))}</p>`;
+    `<p>${escapeHtml(t("stats.sonar", {
+      counts: cells("counts", ["sonar"]).join(" / "),
+      errors: errorCells(["sonar"], REQUEST_ERRORS).join(" / "),
+    }))}</p>`;
 }
 
 function toggleRequestStats(open) {

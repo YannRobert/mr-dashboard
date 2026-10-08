@@ -31,7 +31,8 @@ Actions locales, en POST :
     /git/branch GET ?branch=&target= : nombre de commits, date du dernier et retard sur la cible d'une
                 MR ouverte, d'après le clone local, sans réseau — repli de la page quand GitLab ne répond pas
     /stats      GET : requêtes envoyées à GitLab (API, git fetch) et à Sonar sur 1, 5 et 15 min, par
-                catégorie, échecs compris, et depuis le démarrage (cf. request_stats.py)
+                catégorie, erreurs de connexion, 4xx et 5xx comprises, et depuis le démarrage
+                (cf. request_stats.py)
 
 Usage — d'ordinaire via scripts/mr-dashboard/start.sh, qui lit ces options dans un profil
 (scripts/mr-dashboard/profiles/<nom>.conf) :
@@ -66,7 +67,7 @@ from urllib.parse import parse_qs, quote, unquote, urlsplit
 from ai_actions import AiActions, AiActionsError
 from git_actions import GitActions, GitError
 from orca_launcher import OrcaError, OrcaLauncher
-from request_stats import RequestStats
+from request_stats import RequestStats, http_error
 
 DEFAULT_PORT = 8765
 DEFAULT_GIT_FETCH_INTERVAL_S = 300
@@ -461,7 +462,7 @@ def make_handler(
             except (OSError, http.client.HTTPException) as error:
                 stats.record(
                     "gitlab-write",
-                    True
+                    "connection"
                 )
                 self.send_json(
                     502,
@@ -470,7 +471,7 @@ def make_handler(
                 return
             stats.record(
                 "gitlab-write",
-                status >= 500
+                http_error(status)
             )
             self.send_body(
                 status,
@@ -556,7 +557,7 @@ def make_handler(
             except (OSError, http.client.HTTPException) as error:
                 stats.record(
                     service.lower(),
-                    True
+                    "connection"
                 )
                 self.send_json(
                     502,
@@ -564,9 +565,10 @@ def make_handler(
                 )
                 return
             maintenance = upstream_headers.get("Content-Type", "").startswith("text/html")
+            # Page de maintenance : relayée en 503, comptée comme telle.
             stats.record(
                 service.lower(),
-                maintenance or status >= 500
+                "5xx" if maintenance else http_error(status)
             )
             # Une API ne répond jamais en HTML : c'est la page de maintenance ou d'erreur d'un serveur
             # indisponible, que la page ne saurait lire.
@@ -817,7 +819,7 @@ def main():
     git = GitActions.detect(
         args.repo_dir,
         args.git_fetch_interval,
-        lambda failed: stats.record("git", failed)
+        lambda failed: stats.record("git", "git" if failed else None)
     )
     if not sonar_token and not args.no_sonar:
         print("⚠️  SONAR_TOKEN absent : les pastilles Sonar resteront grises.")
