@@ -135,11 +135,37 @@
   header .git-fetch-status { color: var(--muted); font-size: 0.72rem; line-height: 1.35; white-space: nowrap; min-width: 26ch; font-variant-numeric: tabular-nums; }
   header .git-fetch-status.running { color: var(--accent); }
   header .git-fetch-status.failed { color: var(--red-fg); font-weight: 600; }
-  header .request-stats { color: var(--muted); font-size: 0.72rem; line-height: 1.35; white-space: nowrap; font-variant-numeric: tabular-nums; cursor: help; }
-  header .request-stats > span { display: block; }
-  header .request-stats .count { color: var(--text); font-size: 0.85rem; font-weight: 600; }
-  header .request-stats.failed .count { color: var(--orange-fg); }
+  /* Charge mise sur GitLab, comme un load average : requêtes du serveur sur 1, 5 et 15 min. */
+  header .request-stats { position: relative; }
   header .request-stats[hidden] { display: none; }
+  .load-btn {
+    display: inline-flex; flex-direction: column; align-items: flex-end; gap: 0.1rem; cursor: pointer;
+    border: 1px solid var(--border); border-radius: 0.5rem; background: var(--surface-2); color: var(--muted);
+    padding: 0.2rem 0.55rem; font: inherit; font-size: 0.72rem; line-height: 1.15; white-space: nowrap;
+  }
+  .load-btn:hover, .load-btn[aria-expanded="true"] { border-color: var(--accent); }
+  .load-btn .values { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 0.85rem; color: var(--text); }
+  .load-btn .values b { color: var(--accent); font-weight: 600; }
+  .load-btn .values .sep { color: var(--faint); }
+  .load-btn.failed .values b { color: var(--orange-fg); }
+  .load-panel {
+    position: absolute; top: calc(100% + 0.4rem); right: 0; z-index: 30; min-width: 22rem;
+    padding: 0.7rem 0.8rem; border: 1px solid var(--border); border-radius: 0.6rem;
+    background: var(--surface); color: var(--text); box-shadow: 0 8px 24px rgb(0 0 0 / 35%);
+  }
+  .load-panel[hidden] { display: none; }
+  .load-panel h4 { margin: 0 0 0.5rem; font-size: 0.85rem; }
+  .load-panel table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+  .load-panel th, .load-panel td { padding: 0.2rem 0.4rem; text-align: right; }
+  .load-panel th:first-child, .load-panel td:first-child { text-align: left; }
+  .load-panel thead th { color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--border); }
+  .load-panel td { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+  .load-panel td:first-child { font-family: inherit; }
+  .load-panel td .hint { display: block; color: var(--faint); font-size: 0.7rem; }
+  .load-panel tfoot tr:first-child td { border-top: 1px solid var(--border); font-weight: 600; }
+  .load-panel tfoot .failures td { color: var(--muted); }
+  .load-panel tfoot .failures td.failed { color: var(--orange-fg); font-weight: 600; }
+  .load-panel p { margin: 0.6rem 0 0; color: var(--muted); font-size: 0.75rem; line-height: 1.35; white-space: normal; }
   header .refresh-controls {
     display: inline-flex; align-items: center; gap: 0.7rem;
     padding: 0.25rem 0.25rem 0.5rem 0.6rem; border: 1px solid var(--border); border-radius: 0.6rem; background: var(--surface-2);
@@ -528,7 +554,10 @@
       </div>
     </div>
     <span class="divider" id="git-fetch-divider" aria-hidden="true" hidden></span>
-    <span class="request-stats" id="request-stats" tabindex="0" hidden></span>
+    <div class="request-stats" id="request-stats" hidden>
+      <button type="button" class="load-btn" id="load" aria-expanded="false" aria-controls="load-panel"></button>
+      <div class="load-panel" id="load-panel" hidden></div>
+    </div>
     <span class="divider" id="request-stats-divider" aria-hidden="true" hidden></span>
     <label class="auto" id="notify-control" data-i18n-title="notify.title"><input type="checkbox" id="notify" autocomplete="off"> <span data-i18n="notify">Notifications</span></label>
     <label class="auto" id="sound-control" data-i18n-title="sound.title"><input type="checkbox" id="sound" autocomplete="off"> <span data-i18n="sound">Sons</span></label>
@@ -984,10 +1013,19 @@ const I18N = {
     "gitFetch.auto": "Fetch auto",
     "gitFetch.autoTitle": () => `Fetch le dépôt local à chaque changement repéré sur GitLab${gitFetchIntervalText(" et toutes les ", " minutes")}, même page fermée`,
     "gitFetch.running": "fetch en cours…",
-    "stats.label": "Requêtes GitLab 1 / 5 / 15 min",
-    "stats.title": p => `Requêtes envoyées par le serveur, tous onglets confondus, sur 1 / 5 / 15 min :\n` +
-      `API GitLab, lecture : ${p.read}\nAPI GitLab, écriture : ${p.write}\ngit fetch : ${p.git}\n` +
-      `dont en échec : ${p.failed}\nSonar (hors total) : ${p.sonar}`,
+    "stats.label": "Requêtes GitLab · 1 / 5 / 15 min",
+    "stats.title": "Requêtes envoyées à GitLab par le serveur sur la dernière minute, les 5 et les 15 dernières minutes",
+    "stats.heading": "Requêtes envoyées à GitLab",
+    "stats.read": "Lectures API",
+    "stats.read.hint": "actualisation des onglets, volets, diff et commentaires",
+    "stats.write": "Écritures API",
+    "stats.write.hint": "commentaires, réponses, fils résolus ou rouverts",
+    "stats.git": "git fetch",
+    "stats.git.hint": () => `clone local${gitFetchIntervalText(", toutes les ", " min")} et sur changement repéré`,
+    "stats.total": "Total",
+    "stats.failures": "dont en échec",
+    "stats.sonar": p => `Sonar, autre serveur, hors total : ${p.counts}.`,
+    "stats.since": p => `${p.n} requête${plural(p.n)} à GitLab depuis le démarrage du serveur (il y a ${p.since}), soit ${p.rate} par minute en moyenne. Tous onglets confondus : le navigateur ne parle jamais à GitLab en direct.`,
     "gitFetch.never": "jamais fetché",
     "gitFetch.ok": p => `fetché à ${p.time}`,
     "gitFetch.failed": p => `fetch en échec à ${p.time}`,
@@ -1228,10 +1266,19 @@ const I18N = {
     "gitFetch.title": "Run a git fetch of the local repository now",
     "gitFetch.group": "Local repository fetch",
     "gitFetch.auto": "Auto-fetch",
-    "stats.label": "GitLab requests 1 / 5 / 15 min",
-    "stats.title": p => `Requests sent by the server, all tabs together, over 1 / 5 / 15 min:\n` +
-      `GitLab API, read: ${p.read}\nGitLab API, write: ${p.write}\ngit fetch: ${p.git}\n` +
-      `of which failed: ${p.failed}\nSonar (not in the total): ${p.sonar}`,
+    "stats.label": "GitLab requests · 1 / 5 / 15 min",
+    "stats.title": "Requests sent to GitLab by the server over the last minute, the last 5 and the last 15 minutes",
+    "stats.heading": "Requests sent to GitLab",
+    "stats.read": "API reads",
+    "stats.read.hint": "refresh of the tabs, panels, diffs and comments",
+    "stats.write": "API writes",
+    "stats.write.hint": "comments, replies, threads resolved or reopened",
+    "stats.git": "git fetch",
+    "stats.git.hint": () => `local clone${gitFetchIntervalText(", every ", " min")} and on every change seen`,
+    "stats.total": "Total",
+    "stats.failures": "of which failed",
+    "stats.sonar": p => `Sonar, another server, not in the total: ${p.counts}.`,
+    "stats.since": p => `${p.n} GitLab request${pluralEn(p.n)} since the server started (${p.since} ago), i.e. ${p.rate} per minute on average. All tabs together: the browser never talks to GitLab directly.`,
     "gitFetch.autoTitle": () => `Fetches the local repository on every change seen on GitLab${gitFetchIntervalText(" and every ", " minutes")}, even with the page closed`,
     "gitFetch.running": "fetching…",
     "gitFetch.never": "never fetched",
@@ -3321,30 +3368,62 @@ async function loadGitFetchStatus() {
 // Requêtes du serveur à GitLab : le navigateur ne lui parle jamais en direct, le compte du serveur vaut
 // pour tous les onglets. git fetch compris, Sonar à part : ce n'est pas GitLab.
 const GITLAB_KINDS = ["gitlab", "gitlab-write", "git"];
-const REQUEST_STATS_POLL_MS = 10_000;
+// Relu chaque seconde, comme un compteur ; jamais deux lectures à la fois si le serveur traîne.
+const REQUEST_STATS_POLL_MS = 1000;
+const REQUEST_STATS_ROWS = [
+  ["gitlab", "stats.read"],
+  ["gitlab-write", "stats.write"],
+  ["git", "stats.git"],
+];
+let requestStatsPending = false;
 
 async function loadRequestStats() {
-  const el = $("request-stats");
-  let windows;
+  if (document.hidden || requestStatsPending) return;
+  requestStatsPending = true;
   try {
-    windows = (await api("/stats")).body;
+    renderRequestStats((await api("/stats")).body);
   } catch (ignored) {
-    el.hidden = $("request-stats-divider").hidden = true;
-    return;
+    $("request-stats").hidden = $("request-stats-divider").hidden = true;
+  } finally {
+    requestStatsPending = false;
   }
-  const sum = (counts, kinds) => kinds.reduce((n, kind) => n + (counts[kind] ?? 0), 0);
-  const per = (field, kinds) => windows.map(w => sum(w[field], kinds)).join(" / ");
-  el.hidden = $("request-stats-divider").hidden = false;
-  el.classList.toggle("failed", sum(windows[1].failures, GITLAB_KINDS) > 0);
-  el.innerHTML = `<span>${escapeHtml(t("stats.label"))}</span>` +
-    `<span class="count">${escapeHtml(windows.map(w => sum(w.counts, GITLAB_KINDS)).join(" · "))}</span>`;
-  el.title = t("stats.title", {
-    read: per("counts", ["gitlab"]),
-    write: per("counts", ["gitlab-write"]),
-    git: per("counts", ["git"]),
-    failed: per("failures", GITLAB_KINDS),
-    sonar: per("counts", ["sonar"]),
-  });
+}
+
+function renderRequestStats(stats) {
+  const sum = (counts, kinds) => kinds.reduce((n, kind) => n + (counts?.[kind] ?? 0), 0);
+  const cells = (field, kinds) => stats.windows.map(w => sum(w[field], kinds));
+  const totals = cells("counts", GITLAB_KINDS);
+  const failures = cells("failures", GITLAB_KINDS);
+  $("request-stats").hidden = $("request-stats-divider").hidden = false;
+  const button = $("load");
+  button.title = t("stats.title");
+  button.classList.toggle("failed", failures[1] > 0);
+  button.innerHTML = `<span>${escapeHtml(t("stats.label"))}</span><span class="values"><b>${totals[0]}</b>` +
+    totals.slice(1).map(n => `<span class="sep"> · </span>${n}`).join("") + `</span>`;
+  const rows = REQUEST_STATS_ROWS.map(([kind, key]) => `<tr><td>${escapeHtml(t(key))}` +
+    `<span class="hint">${escapeHtml(t(`${key}.hint`))}</span></td>` +
+    cells("counts", [kind]).map(n => `<td>${n}</td>`).join("") + `</tr>`).join("");
+  const sinceStart = sum(stats.sinceStart, GITLAB_KINDS);
+  const minutes = Math.max(1, (Date.now() - stats.startedAt) / 60000);
+  $("load-panel").innerHTML = `<h4>${escapeHtml(t("stats.heading"))}</h4>` +
+    `<table><thead><tr><th></th>${stats.windows.map(w => `<th>${w.seconds / 60} min</th>`).join("")}</tr></thead>` +
+    `<tbody>${rows}</tbody><tfoot>` +
+    `<tr><td>${escapeHtml(t("stats.total"))}</td>${totals.map(n => `<td>${n}</td>`).join("")}</tr>` +
+    `<tr class="failures"><td>${escapeHtml(t("stats.failures"))}</td>` +
+    failures.map(n => `<td${n ? ` class="failed"` : ""}>${n}</td>`).join("") + `</tr>` +
+    `</tfoot></table>` +
+    `<p>${escapeHtml(t("stats.since", {
+      n: sinceStart,
+      since: compactDuration(Date.now() - stats.startedAt),
+      rate: (Math.round(sinceStart / minutes * 10) / 10).toLocaleString(locale()),
+    }))}</p>` +
+    `<p>${escapeHtml(t("stats.sonar", { counts: cells("counts", ["sonar"]).join(" / ") }))}</p>`;
+}
+
+function toggleRequestStats(open) {
+  $("load-panel").hidden = !open;
+  $("load").setAttribute("aria-expanded", String(open));
+  if (open) loadRequestStats();
 }
 
 function renderGitFetch() {
@@ -4487,6 +4566,13 @@ setInterval(renderStatus, 30 * 1000);
 setInterval(loadGitFetchStatus, 30 * 1000);
 loadRequestStats();
 setInterval(loadRequestStats, REQUEST_STATS_POLL_MS);
+$("load").addEventListener("click", () => toggleRequestStats($("load-panel").hidden));
+document.addEventListener("click", e => {
+  if (!$("load-panel").hidden && !e.target.closest("#request-stats")) toggleRequestStats(false);
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && !$("load-panel").hidden) toggleRequestStats(false);
+});
 $("git-fetch").addEventListener("click", () => gitFetch());
 $("git-fetch-auto").addEventListener("change", e => setGitFetchAuto(e.target.checked));
 

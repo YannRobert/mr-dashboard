@@ -31,7 +31,7 @@ Actions locales, en POST :
     /git/branch GET ?branch=&target= : nombre de commits, date du dernier et retard sur la cible d'une
                 MR ouverte, d'après le clone local, sans réseau — repli de la page quand GitLab ne répond pas
     /stats      GET : requêtes envoyées à GitLab (API, git fetch) et à Sonar sur 1, 5 et 15 min, par
-                catégorie, échecs compris (cf. request_stats.py)
+                catégorie, échecs compris, et depuis le démarrage (cf. request_stats.py)
 
 Usage — d'ordinaire via scripts/mr-dashboard/start.sh, qui lit ces options dans un profil
 (scripts/mr-dashboard/profiles/<nom>.conf) :
@@ -294,7 +294,7 @@ def make_handler(
             elif self.path == "/git/status":
                 self.send_json(200, git.status())
             elif self.path == "/stats":
-                self.send_json(200, stats.windows())
+                self.send_json(200, stats.snapshot())
             elif self.path.startswith("/git/diff?"):
                 self.git_diff(parse_qs(urlsplit(self.path).query))
             elif self.path.startswith("/git/commits?"):

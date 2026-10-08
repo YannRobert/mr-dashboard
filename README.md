@@ -84,11 +84,11 @@ ensemble — puis `start.sh <nom>`.
   calendaire. Le volet d'activité des commits s'y arrête au merge. Chargée à la demande, par paquets
   de 50 au fil du défilement — toute la période dès qu'on trie sur une autre colonne que la date de
   merge —, elle n'est ni sauvegardée, ni actualisée automatiquement, ni notifiée.
-- **Requêtes GitLab 1 / 5 / 15 min**, dans l'en-tête : ce que le serveur a envoyé à GitLab, API et
+- **Requêtes GitLab · 1 / 5 / 15 min**, dans l'en-tête : ce que le serveur a envoyé à GitLab, API et
   `git fetch`, sur la dernière minute et les 5 et 15 dernières, tous onglets confondus — le navigateur
-  ne parle jamais à GitLab en direct. Au survol, le détail lecture / écriture / fetch, les échecs et
-  Sonar ; en orange, un échec dans les 5 dernières minutes. Pour vérifier que le dashboard ne
-  surcharge pas GitLab.
+  ne parle jamais à GitLab en direct. Au clic, un tableau : lectures, écritures et fetch par fenêtre,
+  total, échecs, cumul et moyenne par minute depuis le démarrage du serveur, et Sonar à part ; en
+  orange, un échec dans les 5 dernières minutes. Pour vérifier que le dashboard ne surcharge pas GitLab.
 
 ### Aucune notification ne s'affiche
 
