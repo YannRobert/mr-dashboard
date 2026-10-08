@@ -163,7 +163,7 @@
   .load-panel td:first-child { font-family: inherit; }
   .load-panel td .hint { display: block; color: var(--faint); font-size: 0.7rem; }
   .load-panel tfoot tr:first-child td { border-top: 1px solid var(--border); font-weight: 600; }
-  .load-panel tfoot .errors td { color: var(--muted); }
+  .load-panel tfoot .errors td, .load-panel tfoot .cache td { color: var(--muted); }
   .load-panel tfoot .errors td.failed { color: var(--orange-fg); font-weight: 600; }
   .load-panel p { margin: 0.6rem 0 0; color: var(--muted); font-size: 0.75rem; line-height: 1.35; white-space: normal; }
   header .refresh-controls {
@@ -1032,7 +1032,9 @@ const I18N = {
     "stats.error.5xx.hint": "GitLab en panne ou en maintenance",
     "stats.error.git": "git fetch en échec",
     "stats.error.git.hint": "dépôt injoignable ou refusé",
-    "stats.sonar": p => `Sonar, autre serveur, hors total : ${p.counts} requêtes, dont ${p.errors} en erreur.`,
+    "stats.cache": "Servies par le cache",
+    "stats.cache.hint": p => `lectures demandées dans les ${p.seconds} s, gardées par le serveur : pas de requête à GitLab, hors total`,
+    "stats.sonar": p => `Sonar, autre serveur, hors total : ${p.counts} requêtes, dont ${p.errors} en erreur ; ${p.cached} servies par le cache.`,
     "stats.since": p => `${p.n} requête${plural(p.n)} à GitLab depuis le démarrage du serveur (il y a ${p.since}), soit ${p.rate} par minute en moyenne. Tous onglets confondus : le navigateur ne parle jamais à GitLab en direct.`,
     "gitFetch.never": "jamais fetché",
     "gitFetch.ok": p => `fetché à ${p.time}`,
@@ -1292,7 +1294,9 @@ const I18N = {
     "stats.error.5xx.hint": "GitLab down or under maintenance",
     "stats.error.git": "Failed git fetch",
     "stats.error.git.hint": "repository unreachable or refused",
-    "stats.sonar": p => `Sonar, another server, not in the total: ${p.counts} requests, of which ${p.errors} failed.`,
+    "stats.cache": "Served from the cache",
+    "stats.cache.hint": p => `reads asked for within ${p.seconds} s, kept by the server: no request to GitLab, not in the total`,
+    "stats.sonar": p => `Sonar, another server, not in the total: ${p.counts} requests, of which ${p.errors} failed; ${p.cached} served from the cache.`,
     "stats.since": p => `${p.n} GitLab request${pluralEn(p.n)} since the server started (${p.since} ago), i.e. ${p.rate} per minute on average. All tabs together: the browser never talks to GitLab directly.`,
     "gitFetch.autoTitle": () => `Fetches the local repository on every change seen on GitLab${gitFetchIntervalText(" and every ", " minutes")}, even with the page closed`,
     "gitFetch.running": "fetching…",
@@ -1486,6 +1490,9 @@ async function api(
   path,
   init
 ) {
+  // Le serveur garde ses lectures de GitLab et de Sonar quelques secondes ; le bouton « Rafraîchir » veut
+  // l'état du moment.
+  if (state.bypassCache && !init?.method) init = { ...init, headers: { ...init?.headers, "Cache-Control": "no-cache" } };
   const sentAt = Date.now();
   const response = await fetch(
     path,
@@ -3447,6 +3454,9 @@ function renderRequestStats(stats) {
     REQUEST_ERRORS.map(error => `<tr class="errors"><td>${escapeHtml(t(`stats.error.${error}`))}` +
       `<span class="hint">${escapeHtml(t(`stats.error.${error}.hint`))}</span></td>` +
       errorCells(GITLAB_KINDS, [error]).map(n => `<td${n ? ` class="failed"` : ""}>${n}</td>`).join("") + `</tr>`).join("") +
+    `<tr class="cache"><td>${escapeHtml(t("stats.cache"))}` +
+    `<span class="hint">${escapeHtml(t("stats.cache.hint", { seconds: stats.cacheSeconds }))}</span></td>` +
+    cells("counts", ["gitlab-cache"]).map(n => `<td>${n}</td>`).join("") + `</tr>` +
     `</tfoot></table>` +
     `<p>${escapeHtml(t("stats.since", {
       n: sinceStart,
@@ -3456,6 +3466,7 @@ function renderRequestStats(stats) {
     `<p>${escapeHtml(t("stats.sonar", {
       counts: cells("counts", ["sonar"]).join(" / "),
       errors: errorCells(["sonar"], REQUEST_ERRORS).join(" / "),
+      cached: cells("counts", ["sonar-cache"]).join(" / "),
     }))}</p>`;
 }
 
@@ -4570,7 +4581,14 @@ new ResizeObserver(([entry]) => {
   fitTitles();
 }).observe(document.querySelector("table.mrs"));
 $("clear-storage").addEventListener("click", clearStorage);
-$("refresh").addEventListener("click", () => (mergedView() ? loadMerged({ force: true }) : refresh()));
+$("refresh").addEventListener("click", async () => {
+  state.bypassCache = true;
+  try {
+    await (mergedView() ? loadMerged({ force: true }) : refresh());
+  } finally {
+    state.bypassCache = false;
+  }
+});
 $("autoRefresh").addEventListener("change", e => {
   state.autoRefresh = e.target.checked;
   saveAutoRefresh(state.autoRefresh);

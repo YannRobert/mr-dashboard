@@ -90,6 +90,10 @@ ensemble — puis `start.sh <nom>`.
   ne parle jamais à GitLab en direct. Au clic, un tableau : lectures, écritures et fetch par fenêtre,
   total, erreurs (connexion, 4xx, 5xx, git fetch), cumul et moyenne par minute depuis le démarrage du serveur, et Sonar à part ; en
   orange, une erreur hors 4xx dans les 5 dernières minutes. Pour vérifier que le dashboard ne surcharge pas GitLab.
+- Le serveur garde 30 s ses lectures réussies de GitLab et de Sonar : des onglets ou des navigateurs qui
+  demandent la même chose dans ce délai, ou en même temps, n'envoient qu'une requête (ligne « Servies par
+  le cache » du tableau des requêtes). Une écriture (commentaire, réponse, résolution) vide le cache ;
+  **Rafraîchir** passe outre. Une modification faite dans GitLab même peut donc mettre 30 s à apparaître.
 
 ### Aucune notification ne s'affiche
 

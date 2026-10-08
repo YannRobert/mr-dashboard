@@ -61,12 +61,14 @@ import threading
 import time
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from copy import copy
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 from ai_actions import AiActions, AiActionsError
 from git_actions import GitActions, GitError
 from orca_launcher import OrcaError, OrcaLauncher
+from relay_cache import TTL_S, RelayCache
 from request_stats import RequestStats, http_error
 
 DEFAULT_PORT = 8765
@@ -268,6 +270,7 @@ def make_handler(
         stats
 ):
     upstream = UpstreamPool()
+    relay_cache = RelayCache()
 
     class Handler(BaseHTTPRequestHandler):
 
@@ -464,6 +467,8 @@ def make_handler(
                     "gitlab-write",
                     "connection"
                 )
+                # Sans réponse, l'écriture a pu aboutir quand même.
+                relay_cache.clear()
                 self.send_json(
                     502,
                     {"message": f"relay failed: {error}"}
@@ -473,6 +478,7 @@ def make_handler(
                 "gitlab-write",
                 http_error(status)
             )
+            relay_cache.clear()
             self.send_body(
                 status,
                 content,
@@ -549,30 +555,52 @@ def make_handler(
                 url,
                 headers
         ):
+            kind = service.lower()
+
+            def load():
+                try:
+                    response = upstream.get(
+                        url,
+                        {**headers, "Accept-Encoding": "gzip"}
+                    )
+                except (OSError, http.client.HTTPException):
+                    stats.record(
+                        kind,
+                        "connection"
+                    )
+                    raise
+                # Page de maintenance : relayée en 503, comptée comme telle.
+                stats.record(
+                    kind,
+                    "5xx" if is_html(response[2]) else http_error(response[0])
+                )
+                return response
+
             try:
-                status, body, upstream_headers = upstream.get(
+                (status, body, upstream_headers), cached = relay_cache.get(
                     url,
-                    {**headers, "Accept-Encoding": "gzip"}
+                    load,
+                    lambda response: response[0] == 200 and not is_html(response[2]),
+                    # Envoyé par le bouton « Rafraîchir » : il veut l'état de GitLab, pas une réponse gardée.
+                    self.headers.get("Cache-Control") == "no-cache"
                 )
             except (OSError, http.client.HTTPException) as error:
-                stats.record(
-                    service.lower(),
-                    "connection"
-                )
                 self.send_json(
                     502,
                     {"message": f"relay failed: {error}"}
                 )
                 return
-            maintenance = upstream_headers.get("Content-Type", "").startswith("text/html")
-            # Page de maintenance : relayée en 503, comptée comme telle.
-            stats.record(
-                service.lower(),
-                "5xx" if maintenance else http_error(status)
-            )
-            # Une API ne répond jamais en HTML : c'est la page de maintenance ou d'erreur d'un serveur
-            # indisponible, que la page ne saurait lire.
-            if maintenance:
+            if cached:
+                stats.record(
+                    kind + "-cache",
+                    None
+                )
+                # L'heure de GitLab d'une réponse gardée a vieilli : la page en déduirait un faux écart
+                # d'horloge.
+                upstream_headers = copy(upstream_headers)
+                del upstream_headers["Date"]
+            # Que la page ne saurait lire.
+            if is_html(upstream_headers):
                 self.send_json(
                     503,
                     {"message": f"{service} semble en maintenance : il renvoie une page web au lieu de "
@@ -627,6 +655,12 @@ def make_handler(
                 super().log_message(fmt, *args)
 
     return Handler
+
+
+def is_html(upstream_headers):
+    """Une API ne répond jamais en HTML : c'est la page de maintenance ou d'erreur d'un serveur
+    indisponible."""
+    return upstream_headers.get("Content-Type", "").startswith("text/html")
 
 
 def discussion_request(payload):
@@ -815,7 +849,7 @@ def main():
 
     sonar_token = os.environ.get("SONAR_TOKEN")
     orca = OrcaLauncher.detect(args.repo_dir)
-    stats = RequestStats()
+    stats = RequestStats(TTL_S)
     git = GitActions.detect(
         args.repo_dir,
         args.git_fetch_interval,

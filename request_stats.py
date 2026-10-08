@@ -18,13 +18,16 @@ def http_error(status):
 
 class RequestStats:
 
-    def __init__(self):
+    def __init__(self, cache_seconds):
+        # Durée de vie des réponses gardées par le cache du relais, citée par la page.
+        self._cache_seconds = cache_seconds
         self._started_at = time.time()
         # Depuis le démarrage du serveur, par catégorie.
         self._totals = {}
         self._lock = threading.Lock()
         # (instant monotone, catégorie, erreur ou None), du plus ancien au plus récent. Erreurs :
-        # "connection" (aucune réponse), "4xx", "5xx", "git" (commande git en échec).
+        # "connection" (aucune réponse), "4xx", "5xx", "git" (commande git en échec). Catégories
+        # "gitlab-cache" et "sonar-cache" : lectures servies par le cache, sans requête.
         self._events = deque()
 
     def record(
@@ -56,7 +59,8 @@ class RequestStats:
                         by_error = errors.setdefault(kind, {})
                         by_error[error] = by_error.get(error, 0) + 1
             result.append({"seconds": seconds, "counts": counts, "errors": errors})
-        return {"windows": result, "sinceStart": totals, "startedAt": int(self._started_at * 1000)}
+        return {"windows": result, "sinceStart": totals, "startedAt": int(self._started_at * 1000),
+                "cacheSeconds": self._cache_seconds}
 
     def _forget(self, now):
         while self._events and now - self._events[0][0] > WINDOWS_S[-1]:
