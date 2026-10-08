@@ -79,6 +79,9 @@
     -webkit-font-smoothing: antialiased;
   }
   a { color: var(--link); text-decoration: none; }
+  /* Sélection et barres de défilement aux couleurs de la page, pas celles du navigateur. */
+  ::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+  html { scrollbar-color: var(--border-strong) transparent; }
   a:hover { text-decoration: underline; }
   :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
@@ -389,7 +392,8 @@
     background: var(--blue-bg); color: var(--blue-fg); border: 0; cursor: pointer;
   }
   .label:hover { filter: brightness(0.96); }
-  .mr-cell .title .pill { font-size: 0.8rem; font-weight: 600; }
+  /* Pastille d'état entière : seul le titre se raccourcit. */
+  .mr-cell .title .pill { flex: none; font-size: var(--fs-small); font-weight: 600; }
   .actions-cell .actions { display: flex; flex-direction: column; align-items: stretch; gap: 0.2rem; }
   /* Actions sur la MR (diff, commentaires, AI) : boutons discrets, les signaux restent ce qui attire l'œil. */
   .mr-action { flex: none; white-space: nowrap; font-size: 0.85rem; font-weight: 600; padding: 0.15em 0.7em; color: var(--muted); }
@@ -408,7 +412,7 @@
   .commit-activity {
     position: fixed; z-index: 50; right: 1rem; bottom: 1rem; width: min(44rem, calc(100vw - 2rem)); max-height: 60vh; overflow: auto;
     padding: 0.8rem 1rem 1rem; background: var(--surface); color: var(--text);
-    border: 1px solid var(--border-strong); border-top: 3px solid var(--accent); border-radius: 0.8rem;
+    border: 1px solid var(--border-strong); border-radius: 0.8rem;
     box-shadow: 0 0.4rem 1.6rem rgb(0 0 0 / 0.25);
   }
   .commit-activity[hidden] { display: none; }
@@ -459,7 +463,9 @@
     margin: 0.6rem 1.2rem 0; padding: 0.7rem 1rem; border-radius: 0.6rem;
     background: var(--red-bg); color: var(--red-fg); border: 1px solid color-mix(in srgb, var(--red-fg) 25%, transparent);
   }
-  .empty { padding: 3rem 1.5rem; color: var(--muted); text-align: center; }
+  table.mrs td.empty { padding: 3rem 1.5rem; color: var(--muted); text-align: center; }
+  /* Sans ligne, la colonne MR garderait la largeur de son seul titre. */
+  table.mrs:has(td.empty) thead tr.columns th:first-child { width: 30%; }
 
   /* Dernier pipeline de la branche suivie : stages reliés comme dans GitLab, jobs listés sous chacun. */
   .branch-pipeline { padding: 0 1.2rem 1.2rem; }

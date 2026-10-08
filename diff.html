@@ -270,6 +270,9 @@
   .tip[hidden] { display: none; }
   /* En-tête de fichier collé sous celui de la page, que le sien (stickyFileHeaders) passerait dessous. */
   .d2h-file-header { position: sticky; top: var(--header-height, 0); z-index: 2; }
+  /* Sélection et barres de défilement aux couleurs de la page, pas celles du navigateur. */
+  ::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+  html { scrollbar-color: var(--border-strong) transparent; }
 </style>
 </head>
 <body>

@@ -115,6 +115,9 @@
   .note { padding: 0.6rem 0.8rem; }
   .note-meta { margin-bottom: 0.3rem; font-size: 0.78rem; color: var(--muted); }
   .note-meta strong { color: var(--text); }
+  /* Sélection et barres de défilement aux couleurs de la page, pas celles du navigateur. */
+  ::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+  html { scrollbar-color: var(--border-strong) transparent; }
 </style>
 </head>
 <body>
