@@ -1465,8 +1465,10 @@ const projectPath = () => `projects/${encodeURIComponent(state.config.gitlabProj
 
 // ---------- Chargement ----------
 
-// Le premier chargement s'affiche au fil de l'eau : il n'y a rien d'autre à montrer. Les suivants
-// chargent un instantané complet à part, sans toucher au tableau, puis le substituent d'un bloc.
+// Le tableau suit le chargement au fil de l'eau : la liste dès que GitLab la donne, puis les signaux de
+// chaque MR dès qu'ils arrivent, pour qu'une MR lente ne retienne pas les autres. Une MR déjà affichée
+// garde ses signaux précédents jusque-là. Ce qui porte sur l'ensemble (notifications, sauvegarde,
+// erreurs, heure de mise à jour) attend l'instantané complet, substitué d'un bloc à la fin.
 async function refresh() {
   if (state.refreshing) return;
   const initial = !state.refreshedAt;
@@ -1492,19 +1494,23 @@ async function refresh() {
     snapshot.mrs = mrs;
     snapshot.branchPipeline = branchPipeline;
     snapshot.signals = new Map(mrs.map(mr => [mr.iid, { loading: true }]));
-    if (initial) {
-      state.mrs = snapshot.mrs;
-      state.branchPipeline = snapshot.branchPipeline;
-      state.signals = snapshot.signals;
-      populateFilterOptions();
-      render();
-    }
+    state.signals = initial ? snapshot.signals
+      : new Map(mrs.map(mr => [mr.iid, state.signals.get(mr.iid) ?? { loading: true }]));
+    state.mrs = snapshot.mrs;
+    state.branchPipeline = snapshot.branchPipeline;
+    populateFilterOptions();
+    render();
     state.progress = { done: 0, total: mrs.length };
     renderStatus();
     await runLimited(mrs, MAX_PARALLEL_MRS, async mr => {
-      snapshot.signals.set(mr.iid, await loadSignals(mr));
+      const signals = await loadSignals(mr);
+      snapshot.signals.set(mr.iid, signals);
+      // Une MR dont la mise à jour échoue garde à l'écran ses signaux précédents, tant qu'ils sont bons.
+      const previous = state.signals.get(mr.iid);
+      const kept = signals.error && previous && !previous.loading && !previous.error;
+      state.signals.set(mr.iid, kept ? previous : signals);
       state.progress.done++;
-      if (initial) render();
+      render();
       renderStatus();
     });
     state.lastFailure = null;
@@ -3755,8 +3761,9 @@ async function pollBranchPipeline() {
     renderBranchPipeline();
     fetchIfRepoChanged();
     // Sauvegardé à la date de la dernière mise à jour complète, et seulement si la sauvegarde est encore
-    // celle qu'affiche cet onglet : un autre onglet a pu en écrire une plus récente depuis.
-    if (readSnapshot()?.at.getTime() === state.refreshedAt?.getTime()) {
+    // celle qu'affiche cet onglet : un autre onglet a pu en écrire une plus récente depuis. Pas pendant une
+    // mise à jour : le tableau mêle alors signaux anciens et nouveaux.
+    if (!state.refreshing && readSnapshot()?.at.getTime() === state.refreshedAt?.getTime()) {
       saveSnapshot({
         at: state.refreshedAt,
         config: state.config,
@@ -4002,7 +4009,9 @@ function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 }
 
+// Un même message n'est affiché qu'une fois : plusieurs appels peuvent échouer pour la même raison.
 function showError(message) {
+  if ([...$("errors").children].some(banner => banner.textContent === message)) return;
   $("errors").insertAdjacentHTML("beforeend", `<div class="error-banner">${escapeHtml(message)}</div>`);
 }
 
