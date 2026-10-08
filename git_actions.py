@@ -14,6 +14,7 @@ import re
 import subprocess
 import threading
 import time
+from collections import deque
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -23,6 +24,8 @@ MAX_DIFF_BYTES = 5_000_000
 # Jamais d'invite d'identifiants : sans terminal pour y répondre, git attendrait jusqu'au délai.
 GIT_ENV = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
 SHA = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
+# États des MR déjà signalés, retenus pour ne pas refetcher quand une page en rejoue un ancien.
+SEEN_SIGNATURES = 100
 # Commandes qui interrogent le dépôt distant, donc GitLab.
 REMOTE_COMMANDS = ("fetch", "ls-remote")
 
@@ -49,8 +52,8 @@ class GitActions:
         self._running = False
         self._last = None
         self._last_success_at = None
-        # État des MR qui a déclenché le dernier fetch sur changement, partagé par tous les onglets.
-        self._repo_signature = None
+        # États des MR déjà signalés par les pages, tous onglets et navigateurs confondus.
+        self._seen_signatures = deque(maxlen=SEEN_SIGNATURES)
         self._auto = True
         self._wake = threading.Event()
         # Échéance du prochain fetch automatique, en temps monotone : chaque fetch, d'où qu'il vienne,
@@ -123,12 +126,13 @@ class GitActions:
             return result
 
     def fetch_if_changed(self, signature):
-        """Fetch si l'état des MR vu par la page diffère du dernier signalé : une page rechargée, ou un
-        autre onglet qui voit le même état, ne relance pas de fetch."""
+        """Fetch si l'état des MR vu par la page n'a jamais été signalé. Un état déjà vu a déjà été fetché :
+        une page rechargée, qui rejoue sa sauvegarde avant de se mettre à jour, ou un autre navigateur,
+        dont la sauvegarde est plus ancienne, ne relancent pas de fetch en alternant entre deux états."""
         with self._state_lock:
-            if signature == self._repo_signature:
+            if signature in self._seen_signatures:
                 return self._last
-            self._repo_signature = signature
+            self._seen_signatures.append(signature)
         return self.fetch()
 
     def _run_fetch(self):
