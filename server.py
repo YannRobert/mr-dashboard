@@ -293,11 +293,13 @@ def make_handler(
                 self.git_commits(parse_qs(urlsplit(self.path).query))
             elif self.path.startswith("/gitlab/"):
                 self.relay(
+                    "GitLab",
                     settings["gitlab_host"] + "/api/v4/" + self.path[len("/gitlab/"):],
                     {"PRIVATE-TOKEN": settings["gitlab_token"]}
                 )
             elif self.path.startswith("/graphql?"):
                 self.relay(
+                    "GitLab",
                     settings["gitlab_host"] + "/api" + self.path,
                     {"PRIVATE-TOKEN": settings["gitlab_token"]}
                 )
@@ -306,6 +308,7 @@ def make_handler(
                     self.send_json(503, {"message": "SONAR_TOKEN absent de l'environnement du serveur"})
                     return
                 self.relay(
+                    "Sonar",
                     settings["sonar_host"] + "/api/" + self.path[len("/sonar/"):],
                     {"Authorization": "Bearer " + settings["sonar_token"]}
                 )
@@ -508,6 +511,7 @@ def make_handler(
 
         def relay(
                 self,
+                service,
                 url,
                 headers
         ):
@@ -520,6 +524,15 @@ def make_handler(
                 self.send_json(
                     502,
                     {"message": f"relay failed: {error}"}
+                )
+                return
+            # Une API ne répond jamais en HTML : c'est la page de maintenance ou d'erreur d'un serveur
+            # indisponible, que la page ne saurait lire.
+            if upstream_headers.get("Content-Type", "").startswith("text/html"):
+                self.send_json(
+                    503,
+                    {"message": f"{service} répond par une page HTML au lieu de son API (HTTP {status}) : "
+                                "maintenance ou indisponibilité probable"}
                 )
                 return
             self.send_body(
