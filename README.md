@@ -208,7 +208,9 @@ Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut
   « Signaux anciens » (date et cause au survol). Nombre de commits, date du dernier commit et retard sur
   la cible viennent alors du clone local, en gris italique, quand GitLab n'en a rien donné ou que le
   dernier fetch est plus récent que ses données (`git_actions.py`, `/git/branch`) ; la date est celle du
-  commit, le clone ne sachant pas quand il a été poussé.
+  commit, le clone ne sachant pas quand il a été poussé. Le volet d'activité des commits prend alors
+  ses commits du clone (`/git/commits`) et ses commentaires de la dernière ouverture du volet sur cette
+  MR, gardés dans le navigateur.
 - Un `git fetch` ou `git pull` lancé à la main pendant un fetch automatique peut répondre
   « cannot lock ref » : le relancer.
 

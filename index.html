@@ -628,6 +628,10 @@ const BUILD_HISTORY_HEIGHT = 32;
 const BRANCH_PIPELINE_POLL_MS = 60_000;
 // Verrou partagé entre onglets : une seule mise à jour automatique à la fois pour tout le navigateur.
 const REFRESH_LOCK = "mr-dashboard.refresh";
+// Commentaires des MR, gardés à chaque ouverture du volet d'activité des commits : GitLab injoignable,
+// le volet les reprend, ses commits venant du clone local. Seules les plus récemment lues sont gardées.
+const ACTIVITY_COMMENTS_KEY = "mr-dashboard.activity-comments";
+const ACTIVITY_COMMENTS_SIZE = 100;
 
 // Notifications système. Un problème nouveau (ou qui s'aggrave) est notifié une fois ; sur une MR dont on
 // est l'auteur, la notification reste affichée et revient toutes les OWN_REMINDER_MS tant que le problème
@@ -995,6 +999,9 @@ const I18N = {
     "ca.close": "Fermer le volet",
     "ca.error": p => `Activité indisponible : ${p.message}`,
     "ca.empty": "Aucun commit hors merges",
+    "ca.local": p => `GitLab ne répond pas : commits d'après le clone local, au fetch du ${p.date}.`,
+    "ca.local.comments": p => `Commentaires tels que lus le ${p.date}.`,
+    "ca.local.noComments": "Commentaires inconnus : jamais lus avant la coupure.",
     "ca.legend.commits": "Commits cumulés",
     "ca.legend.office": p => `Plus foncé : heures de bureau (${p.from} h – ${p.to} h)`,
     "ca.legend.weekend": "Grisé : week-end",
@@ -1234,6 +1241,9 @@ const I18N = {
     "ca.close": "Close the panel",
     "ca.error": p => `Activity unavailable: ${p.message}`,
     "ca.empty": "No commit besides merges",
+    "ca.local": p => `GitLab is not answering: commits from the local clone, as of the fetch of ${p.date}.`,
+    "ca.local.comments": p => `Comments as read on ${p.date}.`,
+    "ca.local.noComments": "Comments unknown: never read before the outage.",
     "ca.legend.commits": "Cumulative commits",
     "ca.legend.office": p => `Darker: office hours (${p.from}:00 – ${p.to}:00)`,
     "ca.legend.weekend": "Grey: weekend",
@@ -3488,7 +3498,10 @@ function commitsCell(mr) {
   const commits = signalsOf(mr).commits;
   if (!commits) return `<span class="muted">…</span>`;
   if (commits.error) return `<span class="muted" title="${escapeHtml(commits.error)}">?</span>`;
-  if (commits.localAt !== undefined) return `<span class="local" title="${escapeHtml(t("commits.title") + localNote(commits))}">${commits.count}</span>`;
+  if (commits.localAt !== undefined) {
+    return `<span class="local" tabindex="0" title="${escapeHtml(t("commits.title") + localNote(commits))}" ` +
+      `aria-haspopup="dialog" data-commit-activity="${mr.iid}">${commits.count}</span>`;
+  }
   return `<a href="${escapeHtml(mr.web_url)}/commits" target="_blank" rel="noopener" aria-label="${escapeHtml(t("commits.title"))}" aria-haspopup="dialog" data-commit-activity="${mr.iid}">${commits.count}</a>`;
 }
 
@@ -3526,41 +3539,108 @@ function loadCommitActivity(mr) {
   const key = `${commits?.count}|${commits?.pushDate}|${mr.user_notes_count}`;
   const cached = commitActivity.cache.get(mr.iid);
   if (cached?.key === key) return cached.promise;
-  const promise = Promise.all([
-    gitlabAll(`${projectPath()}/merge_requests/${mr.iid}/commits`),
-    gitlabAll(`${projectPath()}/merge_requests/${mr.iid}/notes?sort=asc&order_by=created_at`),
-  ]).then(([commitList, notes]) => activityOf(
+  const promise = loadGitlabActivity(mr).catch(error => loadLocalActivity(
     mr,
-    commitList,
-    notes
+    error
   ));
   promise.catch(() => commitActivity.cache.delete(mr.iid));
   commitActivity.cache.set(mr.iid, { key, promise });
   return promise;
 }
 
+async function loadGitlabActivity(mr) {
+  const [commitList, notes] = await Promise.all([
+    gitlabAll(`${projectPath()}/merge_requests/${mr.iid}/commits`),
+    gitlabAll(`${projectPath()}/merge_requests/${mr.iid}/notes?sort=asc&order_by=created_at`),
+  ]);
+  const comments = commentsOf(
+    mr,
+    notes
+  );
+  saveActivityComments(
+    mr.iid,
+    comments
+  );
+  return {
+    ...commitEvents(commitList.map(c => ({
+      date: c.authored_date,
+      sha: c.short_id,
+      title: c.title,
+      author: c.author_name,
+      merge: (c.parent_ids?.length ?? 1) > 1,
+    }))),
+    comments,
+  };
+}
+
+// GitLab injoignable : commits du clone local, au dernier fetch, et commentaires gardés à la dernière
+// ouverture du volet (null si jamais lus). Sans clone non plus, l'erreur de GitLab reste celle affichée.
+async function loadLocalActivity(
+  mr,
+  gitlabError
+) {
+  const query = new URLSearchParams(mr.merged_at
+    ? { iid: mr.iid, head: mr.sha, merge: mr.merge_commit_sha ?? "", target: mr.target_branch }
+    : { branch: mr.source_branch, target: mr.target_branch });
+  let commitList;
+  try {
+    commitList = (await api(`/git/commits?${query}`)).body;
+  } catch (ignored) {
+    throw gitlabError;
+  }
+  const saved = readActivityComments()[mr.iid];
+  const signals = signalsOf(mr);
+  return {
+    ...commitEvents(commitList.map(c => ({ ...c, sha: c.sha.slice(0, 8) }))),
+    comments: saved?.comments ?? [],
+    local: { fetchedAt: signals.commits?.localAt ?? signals.behind?.localAt ?? null, commentsAt: saved?.at ?? null },
+  };
+}
+
 // Un merge (plus d'un parent) n'est pas du travail du développeur : c'est la cible ramenée dans la
 // branche, souvent par le reviewer. Il est sorti de la courbe et montré comme un jalon.
-function activityOf(
+function commitEvents(commitList) {
+  const event = c => ({ date: new Date(c.date).getTime(), sha: c.sha, title: c.title, author: c.author });
+  const byDate = (a, b) => a.date - b.date;
+  return {
+    commits: commitList.filter(c => !c.merge).map(event).sort(byDate),
+    merges: commitList.filter(c => c.merge).map(event).sort(byDate),
+  };
+}
+
+function commentsOf(
   mr,
-  commitList,
   notes
 ) {
-  const event = c => ({ date: new Date(c.authored_date).getTime(), sha: c.short_id, title: c.title, author: c.author_name });
-  const byDate = (a, b) => a.date - b.date;
-  const isMerge = c => (c.parent_ids?.length ?? 1) > 1;
   // La note de mutation est un rapport d'outil, même quand elle est publiée sous un compte personnel.
   const pitMarker = pitTracked() ? state.config.pitMarker : "";
   const isToolReport = n => BOT_USERNAME.test(n.author.username) || Boolean(pitMarker && n.body?.startsWith(pitMarker));
-  const comments = notes
+  return notes
     .filter(n => !n.system && !isToolReport(n))
     .map(n => ({ date: new Date(n.created_at).getTime(), author: n.author.name, mine: n.author.username === mr.author.username }))
-    .sort(byDate);
-  return {
-    commits: commitList.filter(c => !isMerge(c)).map(event).sort(byDate),
-    merges: commitList.filter(isMerge).map(event).sort(byDate),
-    comments,
-  };
+    .sort((a, b) => a.date - b.date);
+}
+
+function readActivityComments() {
+  try {
+    return JSON.parse(localStorage.getItem(ACTIVITY_COMMENTS_KEY)) ?? {};
+  } catch (ignored) {
+    return {};
+  }
+}
+
+// Best effort, comme la sauvegarde des MR : stockage plein ou bloqué ⇒ rien de gardé.
+function saveActivityComments(
+  iid,
+  comments
+) {
+  const saved = { ...readActivityComments(), [iid]: { at: new Date().toISOString(), comments } };
+  const kept = Object.entries(saved)
+    .sort(([, a], [, b]) => b.at.localeCompare(a.at))
+    .slice(0, ACTIVITY_COMMENTS_SIZE);
+  try {
+    localStorage.setItem(ACTIVITY_COMMENTS_KEY, JSON.stringify(Object.fromEntries(kept)));
+  } catch (ignored) { /* stockage indisponible : le volet se passera des commentaires */ }
 }
 
 function commentBursts(comments) {
@@ -3666,6 +3746,7 @@ function renderCommitActivity(
   });
   return `${head}<span class="muted">${escapeHtml(summary)} · ${escapeHtml(commentSummary)}</span></div>` +
     `<p class="ca-note">${escapeHtml(t("ca.note"))}</p>` +
+    localActivityNote(activity.local) +
     cumulativeChart(
       activity,
       midnight.getTime(),
@@ -3676,6 +3757,13 @@ function renderCommitActivity(
       merges.length > 0,
       mergedAt !== null
     );
+}
+
+function localActivityNote(local) {
+  if (!local) return "";
+  const date = iso => (iso ? formatDate(iso) : "—");
+  const comments = local.commentsAt ? t("ca.local.comments", { date: date(local.commentsAt) }) : t("ca.local.noComments");
+  return `<p class="ca-note local">${escapeHtml(t("ca.local", { date: date(local.fetchedAt) }))} ${escapeHtml(comments)}</p>`;
 }
 
 // Nombre de commits cumulé, en escalier jusqu'à maintenant. Chaque commentaire est posé sur la courbe
