@@ -204,6 +204,12 @@
   }
   .filters label.check:hover { background: var(--surface-2); }
   .filters input[type=checkbox] { accent-color: var(--accent); width: 1em; height: 1em; }
+  .reset-filters {
+    font: inherit; font-size: 0.85rem; color: var(--muted); background: none; cursor: pointer;
+    border: 1px solid transparent; border-radius: 0.5rem; padding: 0.25em 0.6em; margin-left: auto;
+  }
+  .reset-filters:hover:not(:disabled) { color: var(--text); background: var(--surface-2); border-color: var(--border); }
+  .reset-filters:disabled { opacity: 0.4; cursor: default; }
   .active-labels { display: flex; flex-wrap: wrap; gap: 4px; }
   .active-labels .label { cursor: pointer; }
   .active-labels .label::after { content: " ×"; }
@@ -540,6 +546,7 @@
   </select>
   <label class="check" id="alerts-control"><input type="checkbox" id="alerts"> <span data-i18n="filter.alerts">Avec alertes seulement</span></label>
   <div class="active-labels" id="activeLabels"></div>
+  <button type="button" class="reset-filters" id="reset-filters" data-i18n="filter.reset">Réinitialiser les filtres</button>
 </div>
 
 
@@ -849,6 +856,7 @@ const I18N = {
     "filter.draftNo": "Hors Draft",
     "filter.draftYes": "Draft seules",
     "filter.alerts": "Avec alertes seulement",
+    "filter.reset": "Réinitialiser les filtres",
     "filter.anyTarget": "Cible : toutes",
     "filter.anyAuthor": "Auteur : tous",
     "filter.anyReviewer": "Reviewer : tous",
@@ -1086,6 +1094,7 @@ const I18N = {
     "filter.draftNo": "Non-draft",
     "filter.draftYes": "Draft only",
     "filter.alerts": "With alerts only",
+    "filter.reset": "Reset filters",
     "filter.anyTarget": "Target: all",
     "filter.anyAuthor": "Author: all",
     "filter.anyReviewer": "Reviewer: all",
@@ -2994,6 +3003,7 @@ function syncControlsFromState() {
   $("q").value = f.q;
   $("draft").value = f.draft;
   $("alerts").checked = f.alerts;
+  $("reset-filters").disabled = !filtersActive();
   $("activeLabels").innerHTML = f.labels
     .map(l => `<button type="button" class="label" data-remove-label="${escapeHtml(l)}" title="${escapeHtml(t("label.remove"))}">${escapeHtml(l)}</button>`)
     .join("");
@@ -4121,6 +4131,19 @@ function setView(view) {
   if (view === "merged") loadMerged();
 }
 
+// Le tri et la vue ne sont pas des filtres : la réinitialisation les laisse.
+function filtersActive() {
+  const f = state.filters;
+  return Boolean(f.q || f.author || f.reviewer || f.assignee || f.labels.length || f.draft || f.alerts
+    || (f.target ?? "") !== (defaultTarget() ?? ""));
+}
+
+function resetFilters() {
+  state.targetChosen = false;
+  updateFilters({ q: "", target: defaultTarget(), author: "", reviewer: "", assignee: "", labels: [], draft: "", alerts: false });
+  $("q").focus();
+}
+
 function updateFilters(change) {
   Object.assign(state.filters, change);
   writeFiltersToUrl();
@@ -4130,6 +4153,7 @@ function updateFilters(change) {
 }
 
 $("q").addEventListener("input", e => updateFilters({ q: e.target.value }));
+$("reset-filters").addEventListener("click", resetFilters);
 for (const id of ["target", "author", "reviewer", "assignee", "draft"]) {
   $(id).addEventListener("change", e => {
     if (id === "target") state.targetChosen = true;
