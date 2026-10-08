@@ -8,7 +8,10 @@ window.GitlabNotes = (() => {
   // GitLab, par la requête GraphQL relayée par le serveur ; en GET, GitLab refuse les mutations.
   async function graphql(query) {
     const response = await fetch(`graphql?query=${encodeURIComponent(query)}`);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!response.ok) {
+      const failure = await response.json().catch(() => ({}));
+      throw new Error(failure.message ?? `HTTP ${response.status}`);
+    }
     const result = await response.json();
     if (result.errors?.length) throw new Error(result.errors.map(e => e.message).join(" ; "));
     return result.data;

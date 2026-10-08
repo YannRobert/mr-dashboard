@@ -182,6 +182,10 @@ Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut
   Sonar, Trivy, revues…), avec leurs réponses. Commentaires et diff notes sont rendus comme dans
   GitLab, d'après le HTML que GitLab en donne (`notes.js`, `notes.css`), débarrassé de tout ce qui
   pourrait s'exécuter dans la page.
+  Les 30 dernières MR consultées y restent sauvegardées dans le navigateur : à la réouverture, la
+  sauvegarde s'affiche aussitôt (« commentaires du 08/10/2026 à 10:42 · mise à jour en cours… ») puis
+  laisse la place à la réponse de GitLab. GitLab lent (15 s) ou indisponible — maintenance, serveur
+  arrêté —, la sauvegarde reste affichée, bandeau orange ; Répondre et Résoudre attendent GitLab.
 - Un onglet par page et par MR : un lien vers le diff ou les commentaires d'une MR déjà ouverts — depuis
   le dashboard, le diff ou les commentaires — ramène à leur onglet et le recharge, pour ne jamais
   montrer une version périmée de la MR (`tabs.js`) ; la plage de commits et le défilement de l'onglet

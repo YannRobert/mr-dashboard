@@ -74,6 +74,12 @@
   }
   main { box-sizing: border-box; max-width: 62rem; margin: 0 auto; padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
   .message { color: var(--muted); }
+  .cached-banner {
+    box-sizing: border-box; max-width: 62rem; margin: 0.75rem auto 0; padding: 0.4rem 0.8rem;
+    color: var(--muted); font-size: 0.85rem; border: 1px dashed var(--border-strong); border-radius: 0.5rem;
+  }
+  .cached-banner[hidden] { display: none; }
+  .cached-banner.failed { color: #ea8a0c; font-weight: 600; border: 1px solid #ea8a0c; }
   .message.error { color: var(--red-fg); }
   .thread {
     background: var(--surface); border: 1px solid var(--border-strong); border-left: 3px solid var(--accent);
@@ -107,6 +113,7 @@
     <button type="button" id="close-tab" data-close-tab></button>
   </nav>
 </header>
+<p class="cached-banner" id="cached-banner" hidden></p>
 <main id="comments"><p class="message" id="loading"></p></main>
 <script src="notes.js"></script>
 <script src="tabs.js"></script>
@@ -117,6 +124,10 @@
       title: p => `Commentaires de !${p.iid}${p.title ? ` ${p.title}` : ""}`,
       loading: "Chargement des commentaires GitLab…",
       failed: p => `Commentaires GitLab indisponibles : ${p}`,
+      cachedUpdating: p => `Commentaires du ${p.date} à ${p.time} · mise à jour en cours…`,
+      cachedSlow: p => `GitLab ne répond pas : commentaires du ${p.date} à ${p.time}, toujours en attente de GitLab`,
+      cachedFailed: p => `Mise à jour impossible (${p.reason}) : commentaires du ${p.date} à ${p.time}`,
+      cachedReadOnly: "Répondre et résoudre attendent la réponse de GitLab",
       none: "Aucun commentaire général sur cette MR : seuls des diff notes, ou rien.",
       summary: p => `${p.n} commentaire${p.n > 1 ? "s" : ""} hors diff notes${p.open ? ` · ${p.open} non résolu${p.open > 1 ? "s" : ""}` : ""}`,
       resolved: "Résolu",
@@ -134,6 +145,10 @@
       title: p => `Comments on !${p.iid}${p.title ? ` ${p.title}` : ""}`,
       loading: "Loading GitLab comments…",
       failed: p => `GitLab comments unavailable: ${p}`,
+      cachedUpdating: p => `Comments as of ${p.date} ${p.time} · updating…`,
+      cachedSlow: p => `GitLab does not answer: comments as of ${p.date} ${p.time}, still waiting for GitLab`,
+      cachedFailed: p => `Update failed (${p.reason}): comments as of ${p.date} ${p.time}`,
+      cachedReadOnly: "Reply and resolve wait for GitLab's answer",
       none: "No general comment on this MR: only diff notes, or nothing.",
       summary: p => `${p.n} comment${p.n > 1 ? "s" : ""} besides diff notes${p.open ? ` · ${p.open} unresolved` : ""}`,
       resolved: "Resolved",
@@ -252,37 +267,117 @@
       const first = d.notes.nodes[0];
       return first && !first.position && d.notes.nodes.some(n => !n.system);
     });
-    const open = general.filter(d => d.resolvable && !d.resolved).length;
-    document.getElementById("summary").textContent = texts.summary({ n: general.length, open });
     return { mr, general };
   }
 
+  // Dernières données GitLab de chaque MR consultée, pour l'afficher sans attendre GitLab, ou malgré lui :
+  // les CACHED_MRS dernières, par MR (l'origine du serveur sépare déjà les projets suivis).
+  const CACHE_KEY = "mr-dashboard.comments";
+  const CACHE_VERSION = 1;
+  const CACHED_MRS = 30;
+  // Au-delà, GitLab est signalé comme lent ; sa réponse, si elle arrive, remplace quand même la sauvegarde.
+  const SLOW_MS = 15000;
+
+  function readCache() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(CACHE_KEY));
+      return saved?.version === CACHE_VERSION ? saved.mrs : {};
+    } catch (ignored) {
+      return {};
+    }
+  }
+
+  // Best effort : stockage plein ⇒ on retire les MR consultées le moins récemment jusqu'à ce que ça tienne.
+  function saveToCache(entry) {
+    const mrs = { ...readCache(), [iid]: entry };
+    const kept = Object.entries(mrs).sort(([, a], [, b]) => b.at.localeCompare(a.at)).slice(0, CACHED_MRS);
+    while (kept.length) {
+      try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ version: CACHE_VERSION, mrs: Object.fromEntries(kept) }));
+        return;
+      } catch (ignored) {
+        kept.pop();
+      }
+    }
+  }
+
+  function showBanner(text, failed) {
+    const banner = document.getElementById("cached-banner");
+    banner.textContent = text ?? "";
+    banner.title = text ? texts.cachedReadOnly : "";
+    banner.classList.toggle("failed", Boolean(failed));
+    banner.hidden = !text;
+  }
+
+  function cachedAt(entry) {
+    const [date, time] = formatDateTime(entry.at).split(" ");
+    return { date, time };
+  }
+
+  function renderSummary(general) {
+    const open = general.filter(d => d.resolvable && !d.resolved).length;
+    document.getElementById("summary").textContent = texts.summary({ n: general.length, open });
+  }
+
+  // Rend la MR et ses commentaires ; rend le conteneur, ou rien quand il n'y a aucun commentaire.
+  function render({ mr, general, gitlabWeb }) {
+    renderHeader(mr);
+    renderSummary(general);
+    if (!general.length) {
+      showMessage(texts.none);
+      return null;
+    }
+    const container = document.getElementById("comments");
+    container.innerHTML = general.map(d => threadHtml(d, gitlabWeb)).join("");
+    return container;
+  }
+
+  // Sauvegarde affichée en lecture seule : une réponse ou une résolution partirait d'un état peut-être périmé.
+  function renderCached(entry) {
+    render(entry)?.querySelectorAll(".thread-actions button").forEach(button => {
+      button.disabled = true;
+      button.title = texts.cachedReadOnly;
+    });
+    showLoadedAt(document.getElementById("loaded-at"), lang, entry.at);
+  }
+
   async function load() {
-    document.getElementById("loading").textContent = texts.loading;
-    renderHeader(null);
+    const cached = readCache()[iid];
+    if (cached) {
+      renderCached(cached);
+      showBanner(texts.cachedUpdating(cachedAt(cached)));
+    } else {
+      document.getElementById("loading").textContent = texts.loading;
+      renderHeader(null);
+    }
+    const slow = cached && setTimeout(() => showBanner(texts.cachedSlow(cachedAt(cached)), true), SLOW_MS);
     try {
       const config = await (await fetch("config")).json();
       const { mr, general } = await fetchComments(config);
-      renderHeader(mr);
-      if (!general.length) {
-        showMessage(texts.none);
-        return;
-      }
-      const container = document.getElementById("comments");
-      container.innerHTML = general.map(d => threadHtml(d, config.gitlabWeb)).join("");
+      const entry = { at: new Date().toISOString(), mr, general, gitlabWeb: config.gitlabWeb };
+      saveToCache(entry);
+      showBanner(null);
+      showLoadedAt(document.getElementById("loaded-at"), lang, entry.at);
+      const container = render(entry);
+      if (!container) return;
       // Après une réponse, une résolution : seul ce fil est réaffiché, les autres gardent leur état.
       GitlabNotes.handleThreads(container, {
         iid,
         lang,
         refresh: async id => {
-          const { general: updated } = await fetchComments(config);
+          const { mr: current, general: updated } = await fetchComments(config);
+          saveToCache({ at: new Date().toISOString(), mr: current, general: updated, gitlabWeb: config.gitlabWeb });
+          renderSummary(updated);
           const discussion = updated.find(d => GitlabNotes.discussionId(d.id) === id);
           const thread = container.querySelector(`[data-discussion="${CSS.escape(id)}"]`);
           if (discussion && thread) thread.outerHTML = threadHtml(discussion, config.gitlabWeb);
         },
       });
     } catch (error) {
-      showMessage(texts.failed(error.message), true);
+      if (cached) showBanner(texts.cachedFailed({ ...cachedAt(cached), reason: error.message }), true);
+      else showMessage(texts.failed(error.message), true);
+    } finally {
+      clearTimeout(slow);
     }
   }
 

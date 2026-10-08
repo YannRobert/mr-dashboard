@@ -8,7 +8,8 @@ window.formatDateTime = iso => {
 
 // Heure de chargement de la page dans element, pour juger si ce qu'elle montre a pu changer depuis :
 // « chargée à 14:32 · il y a 5 min », remise à jour chaque minute, signalée (classe stale) au-delà de
-// STALE_MINUTES.
+// STALE_MINUTES. at remplace l'heure d'ouverture de la page quand ce qu'elle montre date d'avant (sauvegarde)
+// ou d'après (mise à jour).
 window.showLoadedAt = (() => {
   const STALE_MINUTES = 30;
   const TEXTS = {
@@ -29,10 +30,16 @@ window.showLoadedAt = (() => {
       title: "When this page was loaded: reload it (F5) to see the latest changes of the MR.",
     },
   };
-  const loadedAt = new Date();
+  const openedAt = new Date();
 
-  return (element, lang) => {
+  return (
+      element,
+      lang,
+      at
+  ) => {
     const texts = TEXTS[lang] ?? TEXTS.en;
+    if (at) element.dataset.loadedAt = new Date(at).toISOString();
+    const loadedAt = element.dataset.loadedAt ? new Date(element.dataset.loadedAt) : openedAt;
     const dateTime = window.formatDateTime(loadedAt.toISOString());
     const sameDay = loadedAt.toDateString() === new Date().toDateString();
     const minutes = Math.floor((Date.now() - loadedAt) / 60000);
