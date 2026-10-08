@@ -23,6 +23,8 @@ MAX_DIFF_BYTES = 5_000_000
 # Jamais d'invite d'identifiants : sans terminal pour y répondre, git attendrait jusqu'au délai.
 GIT_ENV = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
 SHA = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
+# Commandes qui interrogent le dépôt distant, donc GitLab.
+REMOTE_COMMANDS = ("fetch", "ls-remote")
 
 
 class GitError(Exception):
@@ -34,10 +36,13 @@ class GitActions:
     def __init__(
             self,
             repo_root,
-            fetch_interval_s
+            fetch_interval_s,
+            on_remote_call
     ):
         self._repo_root = repo_root
         self._fetch_interval_s = fetch_interval_s
+        # Appelé à chaque commande qui interroge le dépôt distant, avec son échec ou non.
+        self._on_remote_call = on_remote_call
         self._fetch_lock = threading.Lock()
         self._state_lock = threading.Lock()
         self._fetches = 0
@@ -57,7 +62,8 @@ class GitActions:
     def detect(
             cls,
             repo_dir,
-            fetch_interval_s
+            fetch_interval_s,
+            on_remote_call
     ):
         common_dir = subprocess.run(
             ["git", "-C", str(repo_dir), "rev-parse", "--path-format=absolute", "--git-common-dir"],
@@ -67,7 +73,8 @@ class GitActions:
         ).stdout.strip()
         return cls(
             Path(common_dir).parent,
-            fetch_interval_s
+            fetch_interval_s,
+            on_remote_call
         )
 
     def start_periodic_fetch(self):
@@ -344,13 +351,22 @@ class GitActions:
             args,
             timeout=10
     ):
-        return subprocess.run(
-            ["git", "-C", str(self._repo_root), *args],
-            capture_output=True,
-            text=True,
-            env=GIT_ENV,
-            timeout=timeout
-        )
+        remote = args[0] in REMOTE_COMMANDS
+        try:
+            completed = subprocess.run(
+                ["git", "-C", str(self._repo_root), *args],
+                capture_output=True,
+                text=True,
+                env=GIT_ENV,
+                timeout=timeout
+            )
+        except (subprocess.TimeoutExpired, OSError):
+            if remote:
+                self._on_remote_call(True)
+            raise
+        if remote:
+            self._on_remote_call(completed.returncode != 0)
+        return completed
 
 
 def last_line(text):

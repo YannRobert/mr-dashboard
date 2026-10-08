@@ -30,6 +30,8 @@ Actions locales, en POST :
     /git/commits GET, mêmes paramètres : commits de la MR, du plus ancien au plus récent
     /git/branch GET ?branch=&target= : nombre de commits, date du dernier et retard sur la cible d'une
                 MR ouverte, d'après le clone local, sans réseau — repli de la page quand GitLab ne répond pas
+    /stats      GET : requêtes envoyées à GitLab (API, git fetch) et à Sonar sur 1, 5 et 15 min, par
+                catégorie, échecs compris (cf. request_stats.py)
 
 Usage — d'ordinaire via scripts/mr-dashboard/start.sh, qui lit ces options dans un profil
 (scripts/mr-dashboard/profiles/<nom>.conf) :
@@ -64,6 +66,7 @@ from urllib.parse import parse_qs, quote, unquote, urlsplit
 from ai_actions import AiActions, AiActionsError
 from git_actions import GitActions, GitError
 from orca_launcher import OrcaError, OrcaLauncher
+from request_stats import RequestStats
 
 DEFAULT_PORT = 8765
 DEFAULT_GIT_FETCH_INTERVAL_S = 300
@@ -260,7 +263,8 @@ def make_handler(
         settings,
         orca,
         git,
-        ai_actions
+        ai_actions,
+        stats
 ):
     upstream = UpstreamPool()
 
@@ -289,6 +293,8 @@ def make_handler(
                     self.send_json(500, {"message": str(error)})
             elif self.path == "/git/status":
                 self.send_json(200, git.status())
+            elif self.path == "/stats":
+                self.send_json(200, stats.windows())
             elif self.path.startswith("/git/diff?"):
                 self.git_diff(parse_qs(urlsplit(self.path).query))
             elif self.path.startswith("/git/commits?"):
@@ -453,11 +459,19 @@ def make_handler(
                     body
                 )
             except (OSError, http.client.HTTPException) as error:
+                stats.record(
+                    "gitlab-write",
+                    True
+                )
                 self.send_json(
                     502,
                     {"message": f"relay failed: {error}"}
                 )
                 return
+            stats.record(
+                "gitlab-write",
+                status >= 500
+            )
             self.send_body(
                 status,
                 content,
@@ -540,14 +554,23 @@ def make_handler(
                     {**headers, "Accept-Encoding": "gzip"}
                 )
             except (OSError, http.client.HTTPException) as error:
+                stats.record(
+                    service.lower(),
+                    True
+                )
                 self.send_json(
                     502,
                     {"message": f"relay failed: {error}"}
                 )
                 return
+            maintenance = upstream_headers.get("Content-Type", "").startswith("text/html")
+            stats.record(
+                service.lower(),
+                maintenance or status >= 500
+            )
             # Une API ne répond jamais en HTML : c'est la page de maintenance ou d'erreur d'un serveur
             # indisponible, que la page ne saurait lire.
-            if upstream_headers.get("Content-Type", "").startswith("text/html"):
+            if maintenance:
                 self.send_json(
                     503,
                     {"message": f"{service} semble en maintenance : il renvoie une page web au lieu de "
@@ -790,9 +813,11 @@ def main():
 
     sonar_token = os.environ.get("SONAR_TOKEN")
     orca = OrcaLauncher.detect(args.repo_dir)
+    stats = RequestStats()
     git = GitActions.detect(
         args.repo_dir,
-        args.git_fetch_interval
+        args.git_fetch_interval,
+        lambda failed: stats.record("git", failed)
     )
     if not sonar_token and not args.no_sonar:
         print("⚠️  SONAR_TOKEN absent : les pastilles Sonar resteront grises.")
@@ -826,7 +851,8 @@ def main():
             settings,
             orca,
             git,
-            AiActions.detect(args.repo_dir)
+            AiActions.detect(args.repo_dir),
+            stats
         )
     )
     git.start_periodic_fetch()

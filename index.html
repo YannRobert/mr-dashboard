@@ -135,6 +135,11 @@
   header .git-fetch-status { color: var(--muted); font-size: 0.72rem; line-height: 1.35; white-space: nowrap; min-width: 26ch; font-variant-numeric: tabular-nums; }
   header .git-fetch-status.running { color: var(--accent); }
   header .git-fetch-status.failed { color: var(--red-fg); font-weight: 600; }
+  header .request-stats { color: var(--muted); font-size: 0.72rem; line-height: 1.35; white-space: nowrap; font-variant-numeric: tabular-nums; cursor: help; }
+  header .request-stats > span { display: block; }
+  header .request-stats .count { color: var(--text); font-size: 0.85rem; font-weight: 600; }
+  header .request-stats.failed .count { color: var(--orange-fg); }
+  header .request-stats[hidden] { display: none; }
   header .refresh-controls {
     display: inline-flex; align-items: center; gap: 0.7rem;
     padding: 0.25rem 0.25rem 0.5rem 0.6rem; border: 1px solid var(--border); border-radius: 0.6rem; background: var(--surface-2);
@@ -523,6 +528,8 @@
       </div>
     </div>
     <span class="divider" id="git-fetch-divider" aria-hidden="true" hidden></span>
+    <span class="request-stats" id="request-stats" tabindex="0" hidden></span>
+    <span class="divider" id="request-stats-divider" aria-hidden="true" hidden></span>
     <label class="auto" id="notify-control" data-i18n-title="notify.title"><input type="checkbox" id="notify" autocomplete="off"> <span data-i18n="notify">Notifications</span></label>
     <label class="auto" id="sound-control" data-i18n-title="sound.title"><input type="checkbox" id="sound" autocomplete="off"> <span data-i18n="sound">Sons</span></label>
   </div>
@@ -977,6 +984,10 @@ const I18N = {
     "gitFetch.auto": "Fetch auto",
     "gitFetch.autoTitle": () => `Fetch le dépôt local à chaque changement repéré sur GitLab${gitFetchIntervalText(" et toutes les ", " minutes")}, même page fermée`,
     "gitFetch.running": "fetch en cours…",
+    "stats.label": "Requêtes GitLab 1 / 5 / 15 min",
+    "stats.title": p => `Requêtes envoyées par le serveur, tous onglets confondus, sur 1 / 5 / 15 min :\n` +
+      `API GitLab, lecture : ${p.read}\nAPI GitLab, écriture : ${p.write}\ngit fetch : ${p.git}\n` +
+      `dont en échec : ${p.failed}\nSonar (hors total) : ${p.sonar}`,
     "gitFetch.never": "jamais fetché",
     "gitFetch.ok": p => `fetché à ${p.time}`,
     "gitFetch.failed": p => `fetch en échec à ${p.time}`,
@@ -1217,6 +1228,10 @@ const I18N = {
     "gitFetch.title": "Run a git fetch of the local repository now",
     "gitFetch.group": "Local repository fetch",
     "gitFetch.auto": "Auto-fetch",
+    "stats.label": "GitLab requests 1 / 5 / 15 min",
+    "stats.title": p => `Requests sent by the server, all tabs together, over 1 / 5 / 15 min:\n` +
+      `GitLab API, read: ${p.read}\nGitLab API, write: ${p.write}\ngit fetch: ${p.git}\n` +
+      `of which failed: ${p.failed}\nSonar (not in the total): ${p.sonar}`,
     "gitFetch.autoTitle": () => `Fetches the local repository on every change seen on GitLab${gitFetchIntervalText(" and every ", " minutes")}, even with the page closed`,
     "gitFetch.running": "fetching…",
     "gitFetch.never": "never fetched",
@@ -3303,6 +3318,35 @@ async function loadGitFetchStatus() {
   }
 }
 
+// Requêtes du serveur à GitLab : le navigateur ne lui parle jamais en direct, le compte du serveur vaut
+// pour tous les onglets. git fetch compris, Sonar à part : ce n'est pas GitLab.
+const GITLAB_KINDS = ["gitlab", "gitlab-write", "git"];
+const REQUEST_STATS_POLL_MS = 10_000;
+
+async function loadRequestStats() {
+  const el = $("request-stats");
+  let windows;
+  try {
+    windows = (await api("/stats")).body;
+  } catch (ignored) {
+    el.hidden = $("request-stats-divider").hidden = true;
+    return;
+  }
+  const sum = (counts, kinds) => kinds.reduce((n, kind) => n + (counts[kind] ?? 0), 0);
+  const per = (field, kinds) => windows.map(w => sum(w[field], kinds)).join(" / ");
+  el.hidden = $("request-stats-divider").hidden = false;
+  el.classList.toggle("failed", sum(windows[1].failures, GITLAB_KINDS) > 0);
+  el.innerHTML = `<span>${escapeHtml(t("stats.label"))}</span>` +
+    `<span class="count">${escapeHtml(windows.map(w => sum(w.counts, GITLAB_KINDS)).join(" · "))}</span>`;
+  el.title = t("stats.title", {
+    read: per("counts", ["gitlab"]),
+    write: per("counts", ["gitlab-write"]),
+    git: per("counts", ["git"]),
+    failed: per("failures", GITLAB_KINDS),
+    sonar: per("counts", ["sonar"]),
+  });
+}
+
 function renderGitFetch() {
   const enabled = gitFetchEnabled();
   $("git-fetch-control").hidden = !enabled;
@@ -4441,6 +4485,8 @@ systemDark.addEventListener("change", () => {
 });
 setInterval(renderStatus, 30 * 1000);
 setInterval(loadGitFetchStatus, 30 * 1000);
+loadRequestStats();
+setInterval(loadRequestStats, REQUEST_STATS_POLL_MS);
 $("git-fetch").addEventListener("click", () => gitFetch());
 $("git-fetch-auto").addEventListener("change", e => setGitFetchAuto(e.target.checked));
 
