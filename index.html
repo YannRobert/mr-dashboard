@@ -2282,9 +2282,17 @@ async function loadPitNote(mr) {
 // Le retard court depuis que la cible a bougé après le dernier commit commun : c'est la date de son
 // successeur sur l'historique first-parent de la cible (le commit de merge, pour une MR mergée), et non
 // celle du plus ancien commit manquant — un commit de feature mergé plus tard garde sa date d'origine.
+//
+// Ce successeur ne change pas tant que la MR garde son dernier commit et sa cible : la cible ne fait qu'avancer,
+// le dernier commit commun reste le même. Un rebase ou un push change le commit, une MR empilée dont la parente
+// est mergée change de cible : la date est alors relue. Seul un push forcé sur la cible la laisse périmée.
 async function loadBehind(mr, count) {
   if (count == null) return { error: t("error.behindCount") };
   if (count === 0) return { count, since: null };
+  const previous = state.signals.get(mr.iid)?.behind;
+  if (previous?.since && previous.localAt === undefined && previous.sha === mr.sha && previous.target === mr.target_branch) {
+    return { ...previous, count };
+  }
   try {
     const refs = [mr.sha, mr.target_branch].map(ref => `refs%5B%5D=${encodeURIComponent(ref)}`).join("&");
     const base = (await api(`/gitlab/${projectPath()}/repository/merge_base?${refs}`)).body;
@@ -2293,7 +2301,14 @@ async function loadBehind(mr, count) {
       `&first_parent=true&since=${encodeURIComponent(base.committed_date)}`
     );
     const next = commits.find(c => c.parent_ids[0] === base.id) ?? commits.filter(c => c.id !== base.id).at(-1);
-    return { count, since: next?.committed_date ?? null, base: base.short_id, next: next?.short_id ?? null };
+    return {
+      count,
+      since: next?.committed_date ?? null,
+      base: base.short_id,
+      next: next?.short_id ?? null,
+      sha: mr.sha,
+      target: mr.target_branch,
+    };
   } catch (error) {
     return { count, error: error.message };
   }
