@@ -842,6 +842,7 @@ const state = {
   merged: { mrs: [], signals: new Map(), period: null, cursor: null, hasMore: false, total: null, error: null, loading: false, loadedAt: null, seq: 0 },
   sonarPullRequests: new Map(),
   sonarRetentionDays: DEFAULT_SONAR_RETENTION_DAYS,
+  sonarRetentionRead: false,
   filters: readFiltersFromUrl(),
   // Cible choisie dans la liste (ou venue de l'adresse) : gardée au rechargement, même égale au défaut.
   targetChosen: new URLSearchParams(location.search).has("target"),
@@ -2133,8 +2134,12 @@ async function loadSonarPullRequests(report) {
   try {
     const { body } = await api(`/sonar/project_pull_requests/list?project=${encodeURIComponent(state.config.sonarProject)}`);
     for (const pr of body.pullRequests) state.sonarPullRequests.set(pr.key, pr);
-    const retention = await api(`/sonar/settings/values?keys=${RETENTION_SETTING}&component=${encodeURIComponent(state.config.sonarProject)}`);
-    state.sonarRetentionDays = Number(retention.body.settings[0]?.value) || DEFAULT_SONAR_RETENTION_DAYS;
+    // Réglage du serveur Sonar, qui ne bouge pas d'une actualisation à l'autre : lu une fois par page.
+    if (!state.sonarRetentionRead) {
+      const retention = await api(`/sonar/settings/values?keys=${RETENTION_SETTING}&component=${encodeURIComponent(state.config.sonarProject)}`);
+      state.sonarRetentionDays = Number(retention.body.settings[0]?.value) || DEFAULT_SONAR_RETENTION_DAYS;
+      state.sonarRetentionRead = true;
+    }
   } catch (error) {
     report(t("error.sonar", { message: error.message }));
   }
@@ -2244,10 +2249,17 @@ const localNote = signal => (signal?.localAt === undefined ? ""
 
 // Pipeline de tête en cours : le dernier pipeline terminé de la MR reste sa dernière valeur connue. Un
 // pipeline annulé ou sauté ne dit rien du code : on remonte au précédent.
+//
+// Tant que le pipeline de tête reste le même, ce précédent est repris sans relire GitLab : seul un pipeline
+// plus ancien encore en cours, qui finirait après, le laisserait périmé jusqu'au prochain pipeline de tête.
 async function loadPreviousPipeline(
   mr,
   headId
 ) {
+  const previous = state.signals.get(mr.iid);
+  if (!state.bypassCache && previous?.pipeline?.id === headId && previous.previousPipeline) {
+    return previous.previousPipeline;
+  }
   try {
     const pipelines = (await api(`/gitlab/${projectPath()}/merge_requests/${mr.iid}/pipelines?per_page=20`)).body;
     const previous = pipelines.find(p => p.id !== headId && ["success", "failed"].includes(p.status));
@@ -2434,6 +2446,37 @@ function missingSonarAnalysis(job, mr) {
   return { state: "absent", reason: "notFound", info: { status: job.status }, link: job.web_url };
 }
 
+// Issues et couverture ne changent qu'avec une nouvelle analyse : tant que la date d'analyse reste celle
+// des valeurs déjà lues, elles sont reprises sans interroger Sonar. Une issue acceptée ou marquée faux
+// positif dans Sonar, sans nouvelle analyse, n'apparaît qu'au bouton « Rafraîchir ».
+async function sonarValues(
+  mr,
+  analysisDate
+) {
+  const previous = state.signals.get(mr.iid)?.sonar;
+  if (!state.bypassCache && previous?.analysisDate === analysisDate && previous.issues !== undefined) {
+    const { issues, coverage, linesToCover, uncoveredLines, uncoveredConditions } = previous;
+    return { issues, coverage, linesToCover, uncoveredLines, uncoveredConditions };
+  }
+  const project = encodeURIComponent(state.config.sonarProject);
+  const [issues, measures] = await Promise.all([
+    api(`/sonar/issues/search?componentKeys=${project}&pullRequest=${mr.iid}&resolved=false&ps=1`).then(r => r.body),
+    api(`/sonar/measures/component?component=${project}&pullRequest=${mr.iid}&metricKeys=new_coverage,new_lines_to_cover,new_uncovered_lines,new_uncovered_conditions`).then(r => r.body),
+  ]);
+  const measure = key => {
+    const m = measures.component.measures.find(x => x.metric === key);
+    const value = m?.period?.value ?? m?.value;
+    return value === undefined ? null : Number(value);
+  };
+  return {
+    issues: issues.total,
+    coverage: measure("new_coverage"),
+    linesToCover: measure("new_lines_to_cover"),
+    uncoveredLines: measure("new_uncovered_lines"),
+    uncoveredConditions: measure("new_uncovered_conditions"),
+  };
+}
+
 async function sonarSignal(job, mr) {
   if (!state.config.sonarEnabled) return { state: "disabled", reason: "disabled" };
   const base = state.config.sonarWeb;
@@ -2449,24 +2492,13 @@ async function sonarSignal(job, mr) {
   // « en cours ». Elle est forcément antérieure au job : ce n'est pas un « périmé ».
   const running = job && PENDING_JOB_STATUSES.has(job.status);
   const stale = !running && job?.started_at && new Date(pr.analysisDate) < new Date(job.started_at);
-  const project = encodeURIComponent(state.config.sonarProject);
-  const [issues, measures] = await Promise.all([
-    api(`/sonar/issues/search?componentKeys=${project}&pullRequest=${mr.iid}&resolved=false&ps=1`).then(r => r.body),
-    api(`/sonar/measures/component?component=${project}&pullRequest=${mr.iid}&metricKeys=new_coverage,new_lines_to_cover,new_uncovered_lines,new_uncovered_conditions`).then(r => r.body),
-  ]);
-  const measure = key => {
-    const m = measures.component.measures.find(x => x.metric === key);
-    const value = m?.period?.value ?? m?.value;
-    return value === undefined ? null : Number(value);
-  };
   return {
     state: stale ? "stale" : "ok",
     gate: pr.status?.qualityGateStatus,
-    issues: issues.total,
-    coverage: measure("new_coverage"),
-    linesToCover: measure("new_lines_to_cover"),
-    uncoveredLines: measure("new_uncovered_lines"),
-    uncoveredConditions: measure("new_uncovered_conditions"),
+    ...await sonarValues(
+      mr,
+      pr.analysisDate
+    ),
     analysisDate: pr.analysisDate,
     links,
     jobFailed: job?.status === "failed",
