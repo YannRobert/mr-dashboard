@@ -741,7 +741,7 @@ def main():
     parser.add_argument("--pit-marker", help="début de la note de mutation publiée sur la MR")
     parser.add_argument("--no-pit", action="store_true", help="projet sans mutation testing : colonne et indicateurs masqués")
     parser.add_argument("--pipeline-branch", required=True, help="branche dont le dernier pipeline s'affiche sous le tableau des MR")
-    parser.add_argument("--target-branch", help="branche cible filtrée à l'ouverture de la page (défaut : --pipeline-branch)")
+    parser.add_argument("--target-branch", help="branche cible filtrée à l'ouverture de la page (défaut : toutes)")
     parser.add_argument(
         "--repo-dir",
         type=Path,
@@ -795,7 +795,7 @@ def main():
             "pitJob": args.pit_job,
             "pitMarker": args.pit_marker,
             "pipelineBranch": args.pipeline_branch,
-            "targetBranch": args.target_branch or args.pipeline_branch,
+            "targetBranch": args.target_branch,
             "signalsCommand": signals_command(args),
             "orcaEnabled": orca is not None,
             "gitFetchIntervalS": args.git_fetch_interval,

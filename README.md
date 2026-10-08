@@ -52,8 +52,7 @@ ensemble — puis `start.sh <nom>`.
 - Un projet **sans mutation testing** ou **sans Sonar** le déclare : `PIT_ENABLED=false`,
   `SONAR_ENABLED=false`. Les colonnes correspondantes disparaissent, ni leurs données ni leurs
   notifications ne sont chargées, et le prompt de correction ne réclame plus ces indicateurs.
-- `TARGET_BRANCH` fixe la branche cible filtrée à l'ouverture (vide : `PIPELINE_BRANCH`) — `main`
-  pour un projet sans `develop`.
+- `TARGET_BRANCH` fixe la branche cible filtrée à l'ouverture (vide : toutes les cibles).
 - Le prompt de correction cite `scripts/mr-ci-signals.py` de ce dépôt par son chemin absolu, avec les
   options du projet suivi (`--no-pit`, `--no-sonar`, `--pit-marker` compris) : son clone n'a pas ce
   script.

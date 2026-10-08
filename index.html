@@ -1343,8 +1343,8 @@ function readFiltersFromUrl() {
   };
 }
 
-// Serveur antérieur à --target-branch : la branche du pipeline affiché en tient lieu.
-const defaultTarget = () => state.config?.targetBranch ?? state.config?.pipelineBranch ?? null;
+// "" : toutes les branches cibles, sauf si le profil en fixe une.
+const defaultTarget = () => state.config ? state.config.targetBranch ?? "" : null;
 
 function applyDefaultTarget() {
   if (state.filters.target === null && defaultTarget() !== null) state.filters.target = defaultTarget();
