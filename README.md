@@ -204,6 +204,11 @@ Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut
 - Ce sont les seules écritures du serveur dans GitLab, sur une MR du projet suivi : `/gitlab/discussion`
   ne transmet qu'un commentaire de ligne, `/gitlab/reply` une réponse à un fil, `/gitlab/resolve` son
   état résolu ou non.
+- **GitLab injoignable** : une MR dont la mise à jour échoue garde ses derniers bons signaux, marqués
+  « Signaux anciens » (date et cause au survol). Nombre de commits, date du dernier commit et retard sur
+  la cible viennent alors du clone local, en gris italique, quand GitLab n'en a rien donné ou que le
+  dernier fetch est plus récent que ses données (`git_actions.py`, `/git/branch`) ; la date est celle du
+  commit, le clone ne sachant pas quand il a été poussé.
 - Un `git fetch` ou `git pull` lancé à la main pendant un fetch automatique peut répondre
   « cannot lock ref » : le relancer.
 

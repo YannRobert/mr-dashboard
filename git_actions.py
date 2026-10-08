@@ -1,4 +1,5 @@
-"""Actions git sur le clone local du projet suivi : fetch et diff d'une MR, ouverte ou mergée.
+"""Actions git sur le clone local du projet suivi : fetch et diff d'une MR, ouverte ou mergée, et ce
+que le clone sait d'une MR ouverte quand GitLab ne répond pas.
 
 Tant que le fetch automatique est activé, il tourne aussi tout seul à intervalle régulier : les branches
 distantes restent à jour même sans page ouverte, et restent en place pendant une coupure de GitLab, même
@@ -230,6 +231,58 @@ class GitActions:
                 "title": title,
             })
         return commits
+
+    def branch_signals(
+            self,
+            branch,
+            target
+    ):
+        """Nombre de commits, date du dernier et retard sur la cible d'une MR ouverte, d'après les branches
+        origin/* du dernier fetch, sans réseau : de quoi les donner pendant une coupure de GitLab. Le retard
+        court, comme dans la page, depuis le commit de la cible qui suit le dernier commit commun."""
+        self._check_branch_names(
+            branch,
+            target
+        )
+        head, base = f"refs/remotes/origin/{branch}", f"refs/remotes/origin/{target}"
+        for ref, name in ((head, branch), (base, target)):
+            if self._git(["rev-parse", "--verify", "--quiet", ref]).returncode != 0:
+                raise GitError(f"branche absente du clone local : {name}")
+        common = self._git_output(["merge-base", head, base])
+        count = int(self._git_output(["rev-list", "--count", f"{base}..{head}"]))
+        commit_date = self._git_output(["log", "-1", "--format=%cI", head])
+        behind = int(self._git_output(["rev-list", "--count", f"{head}..{base}"]))
+        since = next_short = None
+        if behind:
+            successors = [
+                line.split("\x1f")
+                for line in self._git_output(
+                    ["log", "--first-parent", "--reverse", "--format=%P%x1f%h%x1f%cI", f"{common}..{base}"]
+                ).splitlines()
+            ]
+            successor = next((s for s in successors if s[0].split()[0] == common), successors[0] if successors else None)
+            if successor:
+                next_short, since = successor[1], successor[2]
+        return {
+            "count": count,
+            "commitDate": commit_date,
+            "behind": {"count": behind, "since": since, "base": self._git_output(["rev-parse", "--short", common]), "next": next_short},
+            "fetchedAt": self._last_fetch_at(),
+        }
+
+    def _last_fetch_at(self):
+        """Date du dernier fetch qui a abouti, même lancé hors du serveur : celle de FETCH_HEAD."""
+        try:
+            mtime = (self._repo_root / ".git" / "FETCH_HEAD").stat().st_mtime
+        except OSError:
+            return None
+        return datetime.fromtimestamp(mtime, timezone.utc).isoformat()
+
+    def _git_output(self, args):
+        completed = self._git(args)
+        if completed.returncode != 0:
+            raise GitError(last_line(completed.stderr) or f"git {args[0]} en échec")
+        return completed.stdout.strip()
 
     def _diff_range(self, *revisions):
         try:

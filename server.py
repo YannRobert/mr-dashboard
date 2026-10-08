@@ -28,6 +28,8 @@ Actions locales, en POST :
                 par diff.html ; ?iid=&head=&merge=&target= pour une MR mergée, retrouvée par ses commits ;
                 &first=&last= pour ce qu'ont apporté ensemble ses commits de first à last
     /git/commits GET, mêmes paramètres : commits de la MR, du plus ancien au plus récent
+    /git/branch GET ?branch=&target= : nombre de commits, date du dernier et retard sur la cible d'une
+                MR ouverte, d'après le clone local, sans réseau — repli de la page quand GitLab ne répond pas
 
 Usage — d'ordinaire via scripts/mr-dashboard/start.sh, qui lit ces options dans un profil
 (scripts/mr-dashboard/profiles/<nom>.conf) :
@@ -291,6 +293,8 @@ def make_handler(
                 self.git_diff(parse_qs(urlsplit(self.path).query))
             elif self.path.startswith("/git/commits?"):
                 self.git_commits(parse_qs(urlsplit(self.path).query))
+            elif self.path.startswith("/git/branch?"):
+                self.git_branch(parse_qs(urlsplit(self.path).query))
             elif self.path.startswith("/gitlab/"):
                 self.relay(
                     "GitLab",
@@ -480,6 +484,21 @@ def make_handler(
                 self.send_json(409 if isinstance(error, GitError) else 400, {"message": str(error)})
                 return
             self.send_json(200, commits)
+
+        def git_branch(self, query):
+            branch, target = (query.get(name, [""])[0] for name in ("branch", "target"))
+            if not branch or not target:
+                self.send_json(400, {"message": "requête invalide"})
+                return
+            try:
+                signals = git.branch_signals(
+                    branch,
+                    target
+                )
+            except GitError as error:
+                self.send_json(409, {"message": str(error)})
+                return
+            self.send_json(200, signals)
 
         # MR ouverte par ses branches, mergée par ses commits.
         def mr_revisions(self, query):

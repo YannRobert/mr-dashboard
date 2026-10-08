@@ -320,6 +320,7 @@
   .ok { color: var(--muted); }
   .ok.good { color: var(--green-fg); font-weight: 600; }
   .muted { color: var(--muted); }
+.local { color: var(--muted); font-style: italic; }
   .late-orange { color: var(--orange-fg); font-weight: 600; }
   /* Repère toujours affiché, pas un texte à lire : aussi petit que possible. */
   .behind-unit { color: var(--muted); font-size: 0.55rem; line-height: 1.1; }
@@ -971,6 +972,7 @@ const I18N = {
     "changesRequested": p => (p.n > 1 ? `Changements demandés ×${p.n}` : "Changements demandés"),
     "changesRequested.title": p => `Changements demandés par ${p.names}`,
     "commits.title": "Commits de la MR",
+    "local.title": p => `D'après le clone local, au fetch du ${p.date} : GitLab ne répond pas`,
     "ca.title": p => `Activité des commits de !${p.iid}`,
     "ca.summary": p => `${p.n} commit${plural(p.n)}${p.merges ? ` (+ ${p.merges} merge${plural(p.merges)})` : ""} sur ${p.span} — dernier il y a ${p.last}`,
     "ca.comments.summary": p => `${p.others} commentaire${plural(p.others)} des autres, ${p.mine} de l'auteur`,
@@ -1207,6 +1209,7 @@ const I18N = {
     "changesRequested": p => (p.n > 1 ? `Changes requested ×${p.n}` : "Changes requested"),
     "changesRequested.title": p => `Changes requested by ${p.names}`,
     "commits.title": "MR commits",
+    "local.title": p => `From the local clone, as of the fetch of ${p.date}: GitLab is not answering`,
     "ca.title": p => `Commit activity of !${p.iid}`,
     "ca.summary": p => `${p.n} commit${pluralEn(p.n)}${p.merges ? ` (+ ${p.merges} merge${pluralEn(p.merges)})` : ""} over ${p.span} — last one ${p.last} ago`,
     "ca.comments.summary": p => `${p.others} comment${pluralEn(p.others)} by others, ${p.mine} by the author`,
@@ -1509,13 +1512,14 @@ async function refresh() {
     await runLimited(mrs, MAX_PARALLEL_MRS, async mr => {
       const signals = await loadSignals(mr);
       const previous = state.signals.get(mr.iid);
-      const shown = signals.error && previous && !previous.loading && !previous.error
+      let shown = signals.error && previous && !previous.loading && !previous.error
         ? keepPrevious(
           previous,
           signals,
           state.refreshedAt
         )
         : signals;
+      if (signals.error) shown = await withLocalGit(mr, shown, shown.staleSince);
       snapshot.signals.set(mr.iid, shown);
       state.signals.set(mr.iid, shown);
       state.progress.done++;
@@ -1527,7 +1531,15 @@ async function refresh() {
     saveSnapshot(snapshot);
   } catch (error) {
     if (initial) showError(t("error.load", { message: error.message }));
-    else state.lastFailure = { at: new Date(), message: error.message };
+    else {
+      state.lastFailure = { at: new Date(), message: error.message };
+      await runLimited(state.mrs, MAX_PARALLEL_MRS, async mr => {
+        const s = state.signals.get(mr.iid);
+        if (!s || s.loading) return;
+        state.signals.set(mr.iid, await withLocalGit(mr, s, s.staleSince ?? state.refreshedAt?.toISOString()));
+        render();
+      });
+    }
   } finally {
     state.refreshing = false;
     state.progress = null;
@@ -2045,6 +2057,34 @@ function keepPrevious(
   };
 }
 
+// GitLab injoignable : nombre de commits, date du dernier et retard sur la cible repris du clone local,
+// à jour du dernier fetch, quand GitLab n'en a rien donné ou que ce fetch est plus récent que ses données.
+async function withLocalGit(
+  mr,
+  signals,
+  dataAt
+) {
+  let local;
+  try {
+    const query = new URLSearchParams({ branch: mr.source_branch, target: mr.target_branch });
+    const response = await fetch(`/git/branch?${query}`);
+    if (!response.ok) return signals;
+    local = await response.json();
+  } catch (ignored) {
+    return signals;
+  }
+  const newer = !dataAt || (local.fetchedAt && new Date(local.fetchedAt) > new Date(dataAt));
+  const pick = (current, value) => (!current || current.error || current.count == null || newer ? value : current);
+  return {
+    ...signals,
+    commits: pick(signals.commits, { count: local.count, commitDate: local.commitDate, pushDate: null, localAt: local.fetchedAt }),
+    behind: pick(signals.behind, { ...local.behind, localAt: local.fetchedAt }),
+  };
+}
+
+const localNote = signal => (signal?.localAt === undefined ? ""
+  : "\n" + t("local.title", { date: signal.localAt ? formatDate(signal.localAt) : "—" }));
+
 // Un thread = une discussion résoluble (commentaire de revue, diff note) : les compteurs de GitLab,
 // qui ignorent notes système et commentaires simples, sans charger les discussions.
 function graphqlThreads(node) {
@@ -2400,10 +2440,11 @@ function lastCommitCell(mr) {
   const pushDate = lastCommitDate(mr);
   if (!pushDate) return dateCell(null, "");
   const tooltip = t("date.lastCommit", {
-    push: formatDate(pushDate),
+    push: commits.pushDate ? formatDate(commits.pushDate) : "—",
     commit: commits.commitDate ? formatDate(commits.commitDate) : "—",
-  });
-  return `<span title="${escapeHtml(tooltip)}">${relative(pushDate)}</span>${badge}`;
+  }) + localNote(commits);
+  const local = commits.localAt !== undefined ? ' class="local"' : "";
+  return `<span${local} title="${escapeHtml(tooltip)}">${relative(pushDate)}</span>${badge}`;
 }
 
 // Une action simple est attendue (correction, rebase) et personne n'a poussé depuis STALLED_ALERT_HOURS.
@@ -3374,6 +3415,7 @@ function commitsCell(mr) {
   const commits = signalsOf(mr).commits;
   if (!commits) return `<span class="muted">…</span>`;
   if (commits.error) return `<span class="muted" title="${escapeHtml(commits.error)}">?</span>`;
+  if (commits.localAt !== undefined) return `<span class="local" title="${escapeHtml(t("commits.title") + localNote(commits))}">${commits.count}</span>`;
   return `<a href="${escapeHtml(mr.web_url)}/commits" target="_blank" rel="noopener" aria-label="${escapeHtml(t("commits.title"))}" aria-haspopup="dialog" data-commit-activity="${mr.iid}">${commits.count}</a>`;
 }
 
@@ -3761,10 +3803,11 @@ function behindCell(mr) {
   if (s.loading) return `<span class="muted">…</span>`;
   const behind = s.behind;
   if (!behind || behind.count == null) return `<span class="muted" title="${escapeHtml(behind?.error ?? s.error ?? "")}">?</span>`;
-  if (behind.count === 0) return `<span class="ok good" title="${escapeHtml(t("behind.upToDate", { target: mr.target_branch }))}">${escapeHtml(t("behind.none"))}</span>`;
+  if (behind.count === 0) return `<span class="ok good${behind.localAt !== undefined ? " local" : ""}" title="${escapeHtml(t("behind.upToDate", { target: mr.target_branch }) + localNote(behind))}">${escapeHtml(t("behind.none"))}</span>`;
   // Le nombre et son ancienneté sur une ligne, l'unité en petit dessous : la colonne ne prend que la
   // largeur de son libellé le plus court.
-  const count = `<span title="${escapeHtml(t("behind.count", { n: behind.count, target: mr.target_branch }))}">${behind.count}</span>`;
+  const local = behind.localAt !== undefined ? ' class="local"' : "";
+  const count = `<span${local} title="${escapeHtml(t("behind.count", { n: behind.count, target: mr.target_branch }) + localNote(behind))}">${behind.count}</span>`;
   const hours = behind.since ? (gitlabNow() - new Date(behind.since)) / 3600000 : 0;
   const tone = hours > BEHIND_ORANGE_HOURS ? "late-orange" : "muted";
   const since = behind.since
