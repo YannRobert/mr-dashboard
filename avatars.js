@@ -2,7 +2,7 @@
 window.Avatars = (() => {
   const COLORS_KEY = "mr-dashboard.avatar-colors";
   // Nombre de couleurs --avatar-<n> définies pour chaque thème, rangées des plus éloignées aux plus proches.
-  const COLOR_COUNT = 5;
+  const COLOR_COUNT = 8;
 
   // Une couleur dérivée du nom pourrait donner la même, ou une voisine, à deux auteurs. Chaque nouvel auteur prend
   // la couleur la moins utilisée et la garde : retenue d'un chargement à l'autre, elle ne change pas non plus quand

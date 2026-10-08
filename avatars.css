@@ -3,11 +3,13 @@
   /* Ni rouge, ni orange, ni vert, qui se confondraient avec les indicateurs de qualité, ni violet,
      qui se confondrait avec la couleur du dashboard. Même luminosité perçue (OKLCH) pour qu'aucun ne domine. */
   --avatar-0: #2a61b1; --avatar-1: #a12d79; --avatar-2: #774c33; --avatar-3: #212730; --avatar-4: #00768f;
+  --avatar-5: #7d6400; --avatar-6: #596474; --avatar-7: #3d4db7;
   --avatar-fg: #ffffff;
 }
 :root[data-theme="dark"] {
   /* Teintes claires sous initiales sombres : une couleur foncée se fondrait dans le fond. */
   --avatar-0: #8bb9fd; --avatar-1: #f1a1ce; --avatar-2: #c5a38d; --avatar-3: #ebeff5; --avatar-4: #70d5ed;
+  --avatar-5: #e5c75e; --avatar-6: #b0bccb; --avatar-7: #a7b2ff;
   --avatar-fg: #111217;
 }
 .avatar {
