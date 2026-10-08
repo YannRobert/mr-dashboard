@@ -553,6 +553,10 @@
   const LARGE_DIFF_LINES = 2000;
   // Au-delà, un fichier s'ouvre replié, même dans un petit diff : un seul lockfile ou script généré suffit à alourdir la page.
   const LARGE_FILE_LINES = 1000;
+  // Lignes colorées d'affilée, avant de rendre la main au défilement.
+  const HIGHLIGHT_SLICE = 200;
+  // Délai sans fichier entré ni sorti de l'écran avant que le panneau des fichiers ne suive.
+  const FOLLOW_DELAY_MS = 150;
   // Fichiers volumineux dépliés, par chemin : le choix survit aux rendus du diff.
   const unfoldedFiles = new Set();
   // Colore les fichiers d'un gros diff à leur approche de l'écran ; null : diff coloré d'un coup.
@@ -654,8 +658,20 @@
     container.classList.toggle("can-comment", canComment());
   }
 
-  // Coloration d'un fichier seul : celle de diff2html parcourt les fichiers de sa cible, ici ce fichier.
-  const highlightFile = (ui, wrapper) => Object.create(ui, { targetElement: { value: wrapper } }).highlightCode();
+  // Coloration d'un fichier seul, par tranches de lignes : d'un bloc, un gros fichier figerait le défilement.
+  // Celle de diff2html parcourt les fichiers de sa cible, puis leurs lignes : la cible ne lui en présente
+  // qu'un, et de ce fichier que la tranche en cours. Un diff réaffiché arrête celle de l'ancien.
+  function highlightFile(ui, wrapper) {
+    const lines = [...wrapper.querySelectorAll(".d2h-code-line-ctn")];
+    const file = { getAttribute: name => wrapper.getAttribute(name), querySelectorAll: () => lines.splice(0, HIGHLIGHT_SLICE) };
+    const slicer = Object.create(ui, { targetElement: { value: { querySelectorAll: () => [file] } } });
+    const next = () => {
+      if (!wrapper.isConnected) return;
+      slicer.highlightCode();
+      if (lines.length) setTimeout(next);
+    };
+    next();
+  }
 
   // Fichier volumineux replié derrière un bouton ; petit diff coloré d'un coup, gros diff à l'approche de l'écran.
   function highlight(ui, container) {
@@ -928,24 +944,38 @@
     document.documentElement.style.setProperty("--header-height", `${document.querySelector("header").offsetHeight}px`);
   }
 
-  // Le fichier en haut de l'écran est surligné dans la liste, que le panneau garde en vue.
+  // Le fichier en haut de l'écran est surligné dans la liste, que le panneau garde en vue. Le panneau ne suit
+  // qu'une fois le défilement posé : pendant, l'observateur ne fait que tenir la liste des fichiers visibles,
+  // sans rien mesurer ni défiler, pour ne pas imposer une mise en page à chaque fichier qui passe.
   function followCurrentFile(container, lines) {
+    const files = [...container.querySelectorAll(".d2h-file-wrapper")];
+    const order = new Map(files.map((file, i) => [file, i]));
     const visible = new Set();
+    const panel = document.getElementById("files");
     let current = null;
+    let timer = 0;
+    const update = () => {
+      // Le plus haut des fichiers visibles est le premier dans l'ordre du diff.
+      const top = [...visible].reduce((first, file) => (!first || order.get(file) < order.get(first) ? file : first), null);
+      const line = top && lines.get(top.id);
+      if (!line || line === current) return;
+      current?.classList.remove("current");
+      line.classList.add("current");
+      current = line;
+      const box = panel.getBoundingClientRect();
+      const row = line.getBoundingClientRect();
+      if (row.top < box.top) panel.scrollTop += row.top - box.top;
+      else if (row.bottom > box.bottom) panel.scrollTop += row.bottom - box.bottom;
+    };
     const observer = new IntersectionObserver(entries => {
       for (const entry of entries) {
         if (entry.isIntersecting) visible.add(entry.target);
         else visible.delete(entry.target);
       }
-      const top = [...visible].sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)[0];
-      const line = top && lines.get(top.id);
-      if (!line || line === current) return;
-      current?.classList.remove("current");
-      line.classList.add("current");
-      line.scrollIntoView({ block: "nearest" });
-      current = line;
+      clearTimeout(timer);
+      timer = setTimeout(update, FOLLOW_DELAY_MS);
     }, { rootMargin: `-${document.querySelector("header").offsetHeight}px 0px 0px 0px` });
-    for (const file of container.querySelectorAll(".d2h-file-wrapper")) observer.observe(file);
+    for (const file of files) observer.observe(file);
   }
 
   function renderCommits(listScroll) {
