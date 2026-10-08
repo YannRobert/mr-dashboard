@@ -761,6 +761,8 @@ const state = {
   sonarPullRequests: new Map(),
   sonarRetentionDays: DEFAULT_SONAR_RETENTION_DAYS,
   filters: readFiltersFromUrl(),
+  // Cible choisie dans la liste (ou venue de l'adresse) : gardée au rechargement, même égale au défaut.
+  targetChosen: new URLSearchParams(location.search).has("target"),
   lang: readLangFromUrl(),
   refreshedAt: null,
   refreshing: false,
@@ -1363,7 +1365,7 @@ function writeFiltersToUrl() {
   if (f.view !== "open") p.set("view", f.view);
   if (f.view === "merged" && f.period !== DEFAULT_MERGED_PERIOD) p.set("period", f.period);
   if (f.q) p.set("q", f.q);
-  if (f.target !== null && f.target !== defaultTarget()) p.set("target", f.target);
+  if (f.target !== null && (state.targetChosen || f.target !== defaultTarget())) p.set("target", f.target);
   if (f.author) p.set("author", f.author);
   if (f.reviewer) p.set("reviewer", f.reviewer);
   if (f.assignee) p.set("assignee", f.assignee);
@@ -1558,7 +1560,8 @@ async function ensureConfig() {
     const savedDefault = defaultTarget();
     state.config = (await api("/config")).body;
     state.configLoaded = true;
-    if (savedDefault !== null && state.filters.target === savedDefault && savedDefault !== defaultTarget()) {
+    if (!state.targetChosen && state.filters.target === savedDefault && savedDefault !== null
+      && savedDefault !== defaultTarget()) {
       state.filters.target = null;
       applyDefaultTarget();
       populateFilterOptions();
@@ -4128,7 +4131,10 @@ function updateFilters(change) {
 
 $("q").addEventListener("input", e => updateFilters({ q: e.target.value }));
 for (const id of ["target", "author", "reviewer", "assignee", "draft"]) {
-  $(id).addEventListener("change", e => updateFilters({ [id]: e.target.value }));
+  $(id).addEventListener("change", e => {
+    if (id === "target") state.targetChosen = true;
+    updateFilters({ [id]: e.target.value });
+  });
 }
 $("period").addEventListener("change", e => {
   updateFilters({ period: e.target.value });
