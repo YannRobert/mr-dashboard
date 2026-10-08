@@ -673,6 +673,7 @@ const ACTIVITY_COMMENTS_SIZE = 100;
 // est l'auteur, la notification reste affichée et revient toutes les OWN_REMINDER_MS tant que le problème
 // n'est pas traité. Un seul onglet notifie : celui qui détient NOTIFIER_LOCK.
 const NOTIFY_KEY = "mr-dashboard.notify";
+const ME_KEY = "mr-dashboard.me";
 const NOTIFIED_KEY = "mr-dashboard.notified";
 // Sons, indépendants des notifications : joués par le même onglet, d'après la même détection.
 const SOUND_KEY = "mr-dashboard.sound";
@@ -3071,13 +3072,26 @@ async function setNotify(
   notifyProblems();
 }
 
-async function loadMe() {
-  if (state.me) return;
+// Utilisateur du jeton GitLab, gardé dans le navigateur : il ne change pas d'un chargement à l'autre, et
+// notifications et sons le demandent ensemble au démarrage. « Effacer les données locales » l'oublie.
+let mePromise = null;
+
+function loadMe() {
+  if (state.me) return Promise.resolve();
   try {
-    state.me = (await api("/gitlab/user")).body.username;
-  } catch (error) {
-    showError(t("notify.me", { message: error.message }));
-  }
+    state.me = localStorage.getItem(ME_KEY);
+  } catch (ignored) { /* stockage indisponible : demandé à GitLab */ }
+  if (state.me) return Promise.resolve();
+  mePromise ??= api("/gitlab/user")
+    .then(({ body }) => {
+      state.me = body.username;
+      try {
+        localStorage.setItem(ME_KEY, state.me);
+      } catch (ignored) { /* stockage indisponible : redemandé au prochain chargement */ }
+    })
+    .catch(error => showError(t("notify.me", { message: error.message })))
+    .finally(() => { mePromise = null; });
+  return mePromise;
 }
 
 // Élection d'un onglet notifiant : le verrou est gardé tant que l'onglet vit, puis passe au suivant.
