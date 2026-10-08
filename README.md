@@ -69,7 +69,9 @@ ensemble — puis `start.sh <nom>`.
   d'un autre (à la mise à jour suivante), un tintement quand un autre l'approuve, deux notes graves sur un nouveau problème bloquant de sa MR ; cocher la case fait entendre la
   cloche. Après un rechargement, le navigateur ne laisse jouer un son qu'après un clic ou une touche dans
   la page.
-- `?lang=en` pour forcer l'anglais.
+- **Langue** : anglais à la première visite (langue du navigateur pour qui utilisait déjà le dashboard),
+  puis celle du bouton FR / EN, retenue par le navigateur ; `?lang=fr` ou `?lang=en` l'impose à la page
+  sans changer ce choix.
 - **Recherche** : les mots séparés par un espace doivent tous se trouver dans la MR (titre, branche,
   auteur, labels, numéro) ; la virgule sépare des alternatives. `!249` vise la MR 249 seule, `249`
   la cherche partout (`PROJ-2491` compris) : `!249,!250` n'affiche que ces deux MR.

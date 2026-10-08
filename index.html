@@ -723,6 +723,8 @@ const SOUND_KEY = "mr-dashboard.sound";
 const APPROVALS_SEEN_KEY = "mr-dashboard.approvalsSeen";
 const THEME_KEY = "mr-dashboard.theme";
 const TEXT_SCALE_KEY = "mr-dashboard.textScale";
+// Langue choisie au bouton FR / EN, ou fixée à la première visite.
+const LANG_KEY = "mr-dashboard.lang";
 const TEXT_SCALES = [0.7, 0.8, 0.9, 1, 1.1, 1.25, 1.5];
 const TITLE_MIN_SCALE = 0.8;
 // Préfixe commun à toutes les clés ci-dessus : le bouton balai efface tout ce qui le porte, et seulement ça.
@@ -857,7 +859,7 @@ const state = {
   filters: readFiltersFromUrl(),
   // Cible choisie dans la liste (ou venue de l'adresse) : gardée au rechargement, même égale au défaut.
   targetChosen: new URLSearchParams(location.search).has("target"),
-  lang: readLangFromUrl(),
+  lang: readLang(),
   refreshedAt: null,
   refreshing: false,
   progress: null,
@@ -879,7 +881,8 @@ const $ = id => document.getElementById(id);
 
 // ---------- Langues ----------
 
-// L'interface suit la langue du navigateur, sauf choix explicite (?lang=, bouton FR / EN). Le prompt
+// Anglais à la première visite, la langue du navigateur pour qui utilisait déjà le dashboard, puis
+// le choix du bouton FR / EN ; ?lang= l'emporte pour la page sans changer ce choix. Le prompt
 // « Correct with IA » reste en français quelle que soit la langue : il ne passe pas par t().
 const pluralEn = n => (n === 1 ? "" : "s");
 
@@ -1428,9 +1431,28 @@ function browserLang() {
   return (navigator.language || "").toLowerCase().startsWith("fr") ? "fr" : "en";
 }
 
-function readLangFromUrl() {
+function readLang() {
   const lang = new URLSearchParams(location.search).get("lang");
-  return LANGS.includes(lang) ? lang : browserLang();
+  return LANGS.includes(lang) ? lang : preferredLang();
+}
+
+function preferredLang() {
+  try {
+    const saved = localStorage.getItem(LANG_KEY);
+    if (LANGS.includes(saved)) return saved;
+    const usedBefore = Object.keys(localStorage).some(key => key.startsWith("mr-dashboard."));
+    const lang = usedBefore ? browserLang() : "en";
+    localStorage.setItem(LANG_KEY, lang);
+    return lang;
+  } catch (ignored) {
+    return "en";
+  }
+}
+
+function saveLang(lang) {
+  try {
+    localStorage.setItem(LANG_KEY, lang);
+  } catch (ignored) { /* stockage indisponible : le choix vaut pour la session */ }
 }
 
 function applyStaticTexts() {
@@ -1469,7 +1491,12 @@ function renderStatus() {
 // Les signaux gardent une raison et ses paramètres, pas un texte : changer de langue re-rend tout
 // sans recharger.
 function setLang(lang) {
-  if (lang === state.lang) return;
+  // Le bouton de la langue affichée retient lui aussi le choix, venu sinon d'un ?lang= de passage.
+  saveLang(lang);
+  if (lang === state.lang) {
+    writeFiltersToUrl();
+    return;
+  }
   state.lang = lang;
   MrAi.setLang(lang);
   writeFiltersToUrl();
@@ -1524,7 +1551,7 @@ function writeFiltersToUrl() {
     p.set("dir", f.dir);
   }
   if (f.alerts) p.set("alerts", "1");
-  if (state.lang !== browserLang()) p.set("lang", state.lang);
+  if (state.lang !== preferredLang()) p.set("lang", state.lang);
   const query = p.toString();
   history.replaceState(null, "", query ? "?" + query : location.pathname);
 }

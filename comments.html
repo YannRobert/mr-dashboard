@@ -183,8 +183,18 @@
     },
   };
   const params = new URLSearchParams(location.search);
-  const lang = params.get("lang") in TEXTS ? params.get("lang")
-    : (navigator.language || "").toLowerCase().startsWith("fr") ? "fr" : "en";
+  const lang = params.get("lang") in TEXTS ? params.get("lang") : savedLang();
+
+  // Langue du dashboard, retenue par son bouton FR / EN : l'adresse la donne d'ordinaire.
+  function savedLang() {
+    try {
+      const lang = localStorage.getItem("mr-dashboard.lang");
+      return lang in TEXTS ? lang : "en";
+    } catch (ignored) {
+      return "en";
+    }
+  }
+
   const texts = TEXTS[lang];
   const iid = params.get("iid") ?? "";
   document.documentElement.lang = lang;
