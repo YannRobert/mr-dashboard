@@ -76,6 +76,8 @@
   .subtitle { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.3rem 1.4rem; }
   .loaded-at { color: var(--muted); font-size: 0.8rem; white-space: nowrap; }
   .loaded-at.stale { color: #ea8a0c; font-weight: 600; }
+  .large-diff { color: var(--muted); font-size: 0.8rem; white-space: nowrap; }
+  .large-diff[hidden] { display: none; }
   .format { display: flex; gap: 0; }
   button {
     font: inherit; font-size: 0.9rem; color: var(--text); background: var(--surface);
@@ -189,6 +191,11 @@
   #files .file-dir { font-size: 0.7rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
   #diff-files { min-width: 0; }
   .d2h-file-wrapper { scroll-margin-top: calc(var(--header-height, 0px) + 0.5rem); }
+  /* Fichier hors écran : ni mise en page ni dessin, sa dernière hauteur connue réservée ; Ctrl+F y cherche toujours. */
+  .d2h-file-wrapper { content-visibility: auto; contain-intrinsic-size: auto 30rem; }
+  /* Fichier volumineux : son contenu attend d'être demandé. */
+  .d2h-file-wrapper.folded :is(.d2h-file-diff, .d2h-files-diff) { display: none; }
+  .unfold { display: block; width: 100%; padding: 0.6rem 1rem; font-size: 0.85rem; border: none; border-radius: 0; color: var(--muted); }
   @media (max-width: 900px) {
     main.with-files { display: block; }
     #side { position: static; width: auto; max-width: none; height: auto; max-height: 60vh; resize: none; margin-bottom: 1rem; }
@@ -285,6 +292,7 @@
   <h1 id="title"></h1>
   <div class="subtitle">
     <span class="branches" id="branches"></span>
+    <span class="large-diff" id="large-diff" hidden></span>
     <span class="loaded-at" id="loaded-at"></span>
   </div>
   <div class="controls">
@@ -402,6 +410,8 @@
       wrapLines: "Retour à la ligne",
       wrapLinesTitle: "Replie les lignes trop longues de ce fichier au lieu de les faire défiler",
       nextNote: "Diff note suivante",
+      largeDiff: p => `Gros diff (${p.lines} lignes modifiées) : code coloré à l'affichage`,
+      unfold: p => `Fichier volumineux, ${p.lines} lignes modifiées : afficher son diff`,
     },
     en: {
       title: p => `Diff of !${p.iid}`,
@@ -475,6 +485,8 @@
       wrapLines: "Wrap lines",
       wrapLinesTitle: "Wrap this file's long lines instead of scrolling them",
       nextNote: "Next diff note",
+      largeDiff: p => `Large diff (${p.lines} changed lines): code highlighted as it is displayed`,
+      unfold: p => `Large file, ${p.lines} changed lines: show its diff`,
     },
   };
   const params = new URLSearchParams(location.search);
@@ -536,6 +548,15 @@
   let clearFileFilter = null;
   // Fichiers affichés avec retour à la ligne, par chemin : le choix survit aux rendus du diff.
   const wrappedFiles = new Set();
+  // Au-delà, en lignes ajoutées ou supprimées, le diff n'est coloré qu'à l'approche de l'écran : colorer d'un coup
+  // un gros diff fige la page et multiplie les éléments qu'elle garde en mémoire.
+  const LARGE_DIFF_LINES = 2000;
+  // Au-delà, un fichier s'ouvre replié, même dans un petit diff : un seul lockfile ou script généré suffit à alourdir la page.
+  const LARGE_FILE_LINES = 1000;
+  // Fichiers volumineux dépliés, par chemin : le choix survit aux rendus du diff.
+  const unfoldedFiles = new Set();
+  // Colore les fichiers d'un gros diff à leur approche de l'écran ; null : diff coloré d'un coup.
+  let highlightObserver = null;
   // Hauteur des fils placés dans le diff : la ligne vide d'en face la suit (fil replié, réponse ouverte…).
   let notesObserver = null;
 
@@ -596,6 +617,8 @@
     }
     if (diffText === null) return;
     selection = null;
+    highlightObserver?.disconnect();
+    highlightObserver = null;
     const main = document.getElementById("diff");
     const listScroll = document.getElementById("commit-list")?.scrollTop ?? null;
     main.innerHTML = `<aside id="side"><section id="commits" hidden></section><div id="split" role="separator" aria-orientation="horizontal" title="${escapeHtml(texts.splitTitle)}"></div><div id="files"></div></aside><div id="diff-files"></div>`;
@@ -624,11 +647,67 @@
       }
     );
     ui.draw();
-    ui.highlightCode();
+    highlight(ui, container);
     addWrapToggles(container);
     showFileList(container);
     if (readNotesEnabled()) placeNotes(container);
     container.classList.toggle("can-comment", canComment());
+  }
+
+  // Coloration d'un fichier seul : celle de diff2html parcourt les fichiers de sa cible, ici ce fichier.
+  const highlightFile = (ui, wrapper) => Object.create(ui, { targetElement: { value: wrapper } }).highlightCode();
+
+  // Fichier volumineux replié derrière un bouton ; petit diff coloré d'un coup, gros diff à l'approche de l'écran.
+  function highlight(ui, container) {
+    const wrappers = [...container.querySelectorAll(".d2h-file-wrapper")];
+    const changed = new Map(wrappers.map(wrapper => [
+      wrapper,
+      wrapper.querySelectorAll(":is(.d2h-ins, .d2h-del) .d2h-code-line-ctn").length,
+    ]));
+    const total = [...changed.values()].reduce((sum, lines) => sum + lines, 0);
+    const large = total > LARGE_DIFF_LINES;
+    const badge = document.getElementById("large-diff");
+    badge.hidden = !large;
+    badge.textContent = large ? texts.largeDiff({ lines: total }) : "";
+    if (large) {
+      highlightObserver = new IntersectionObserver(entries => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting || entry.target.classList.contains("folded")) continue;
+          highlightObserver.unobserve(entry.target);
+          highlightFile(ui, entry.target);
+        }
+      }, { rootMargin: "100% 0px" });
+    }
+    for (const wrapper of wrappers) {
+      const lines = changed.get(wrapper);
+      if (lines > LARGE_FILE_LINES) fold(ui, wrapper, lines);
+      else if (!large) highlightFile(ui, wrapper);
+      if (large) highlightObserver.observe(wrapper);
+    }
+  }
+
+  function fold(ui, wrapper, lines) {
+    const path = wrapperPaths(wrapper).join(" → ");
+    if (unfoldedFiles.has(path)) {
+      if (!highlightObserver) highlightFile(ui, wrapper);
+      return;
+    }
+    wrapper.classList.add("folded");
+    const button = Object.assign(document.createElement("button"), { type: "button", className: "unfold" });
+    button.textContent = texts.unfold({ lines });
+    button.addEventListener("click", () => {
+      unfoldedFiles.add(path);
+      button.remove();
+      wrapper.classList.remove("folded");
+      if (!highlightObserver) {
+        highlightFile(ui, wrapper);
+        return;
+      }
+      // Déjà à l'écran, il ne serait signalé qu'en en sortant : observé de nouveau, il est coloré aussitôt.
+      highlightObserver.unobserve(wrapper);
+      highlightObserver.observe(wrapper);
+    });
+    wrapper.querySelector(".d2h-file-header").after(button);
   }
 
   // Case « retour à la ligne » devant « Viewed », de même apparence, dans l'en-tête de chaque fichier.
@@ -1068,6 +1147,7 @@
     currentNote = Math.min(Math.max(currentNote + step, 0), notes.length - 1);
     notes.forEach((note, i) => note.classList.toggle("current", i === currentNote));
     notes[currentNote].open = true;
+    notes[currentNote].closest(".d2h-file-wrapper.folded")?.querySelector(".unfold").click();
     notes[currentNote].scrollIntoView({ block: "start" });
     renderNotesNav();
   }
