@@ -279,7 +279,7 @@
   .stat.loading { border-style: dashed; }
 
   /* Pas d'overflow ici : il ferait du conteneur l'ancêtre de défilement des en-têtes collants, qui
-     défileraient alors avec la page. Un tableau plus large que la fenêtre fait défiler la page. */
+     défileraient alors avec la page. Sous 1366 px, où le tableau ne tient plus, voir la media query de fin. */
   .table-wrap { padding: 0 1.2rem 1.2rem; }
   .merged-more { margin: -0.6rem 1.2rem 1.2rem; text-align: center; font-size: 0.9rem; }
   .merged-more[hidden] { display: none; }
@@ -306,8 +306,9 @@
   table.mrs thead th {
     position: sticky; z-index: 1; background: var(--surface);
     font-size: 0.8rem; font-weight: 600; color: var(--muted); white-space: nowrap;
-    text-transform: uppercase; letter-spacing: 0.04em;
   }
+  /* Capitales pour les groupes seuls : les titres de colonnes, en minuscules, restent étroits et lisibles. */
+  table.mrs thead tr.groups th { text-transform: uppercase; }
   /* Deux lignes d'en-tête collantes : la seconde se colle sous la première, de hauteur fixe. */
   table.mrs thead tr.groups th { top: 0; height: 2rem; padding-top: 0.35rem; padding-bottom: 0.1rem; border-bottom: 0; }
   /* Libellés centrés, sur deux lignes à coupure fixe (\n dans la traduction) pour les plus longs :
@@ -523,6 +524,16 @@
   .bp-icon.red { color: var(--red-dot); }
   .bp-icon.blue { color: var(--link); }
   .bp-icon.grey { color: var(--grey-dot); }
+  /* Le texte ne descend pas sous 13 px (cf. html) : sous 1730 px, les cellules se resserrent pour que le
+     tableau tienne jusqu'en 1366. */
+  @media (max-width: 1729px) {
+    table.mrs th, table.mrs td { padding-left: 0.3rem; padding-right: 0.3rem; }
+  }
+  /* En deçà, le tableau défile dans son cadre plutôt que d'entraîner toute la page de côté ; ses en-têtes
+     cessent alors de coller en haut de la fenêtre. */
+  @media (max-width: 1365px) {
+    .table-wrap { overflow-x: auto; }
+  }
   @media (max-width: 720px) {
     header h1 .tagline { display: none; }
     header .divider { display: none; }
@@ -946,7 +957,7 @@ const I18N = {
     "error.behindCount": "nombre de commits de retard non fourni par GitLab",
     "group.review": "Revue",
     "group.quality": "Qualité",
-    "group.target": "Retard sur la cible",
+    "group.target": "Retard",
     "group.time": "Durées",
     "col.title": "MR",
     "col.author": "Auteur",
@@ -959,7 +970,7 @@ const I18N = {
     "col.coverage": "Couverture",
     "col.pit": "Mutants\nrestants",
     "col.behind": "Commits",
-    "col.last_commit": "Dernier commit",
+    "col.last_commit": "Dernier\ncommit",
     "col.activity": "Activité",
     "col.created": "Créée",
     "help.threads": "Threads non résolus / threads résolubles au total",
@@ -1210,7 +1221,7 @@ const I18N = {
     "error.behindCount": "number of commits behind not provided by GitLab",
     "group.review": "Review",
     "group.quality": "Quality",
-    "group.target": "Behind target",
+    "group.target": "Behind",
     "group.time": "Times",
     "col.title": "MR",
     "col.author": "Author",
@@ -1223,7 +1234,7 @@ const I18N = {
     "col.coverage": "Coverage",
     "col.pit": "Remaining\nmutants",
     "col.behind": "Commits",
-    "col.last_commit": "Last commit",
+    "col.last_commit": "Last\ncommit",
     "col.activity": "Activity",
     "col.created": "Created",
     "help.threads": "Unresolved threads / resolvable threads in total",
