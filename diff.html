@@ -184,6 +184,10 @@
   .file-filter button { font-size: 0.72rem; padding: 0.1em 0.5em; border-radius: 0.4rem; white-space: nowrap; }
   .file-filter button[aria-pressed="true"] { color: var(--red-fg); background: var(--red-bg); }
   #files .d2h-file-list-line { padding: 0.25rem 0.75rem; border-bottom: 1px solid var(--border); }
+  /* Toute la case mène au fichier, pas seulement son nom : le lien s'étend sur la ligne par un calque. */
+  #files .d2h-file-list-line { position: relative; }
+  #files a.d2h-file-name::after { content: ""; position: absolute; inset: 0; }
+  #files .d2h-file-list-line:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); }
   #files .d2h-file-list-line.current { background: color-mix(in srgb, var(--accent) 14%, transparent); }
   #files .d2h-file-name-wrapper { font-size: 0.78rem; min-width: 0; }
   #files .d2h-file-name { display: flex; flex-direction: column; min-width: 0; text-decoration: none; }
