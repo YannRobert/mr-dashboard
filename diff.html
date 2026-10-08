@@ -354,8 +354,8 @@
   const REVIEW_PROGRESS_KEY = "mr-dashboard.diffReviewProgress";
   // Diffs dont la progression de relecture est retenue, les plus récemment lus.
   const REVIEWS_KEPT = 50;
-  // Intervalle minimal entre deux mesures de la progression pendant le défilement.
-  const REVIEW_MEASURE_MS = 250;
+  // Délai sans défilement avant de mesurer la progression de la relecture.
+  const REVIEW_SETTLE_MS = 300;
   const TEXT_SCALES = [0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3];
   const DEFAULT_TEXT_SCALE = 1.25;
   const TEXTS = {
@@ -980,7 +980,8 @@
   // étaient réparties : suivre chaque ligne coûterait trop sur un gros diff. Un fichier coché « Viewed » est
   // relu en entier ; un fichier replié ne l'est qu'une fois déplié et lu ; un fichier caché par le filtre
   // reste dans le total, pour ne pas donner l'illusion d'avoir tout relu. Seuls les fichiers à l'écran sont
-  // mesurés, au plus toutes les REVIEW_MEASURE_MS pendant le défilement.
+  // mesurés, une fois le défilement posé : mesurer pendant imposerait une mise en page au défilement rapide,
+  // et ce qui n'a fait que défiler sous les yeux n'a pas été relu.
   function trackReview(changed) {
     const total = [...changed.values()].reduce((sum, lines) => sum + lines, 0);
     const label = document.getElementById("review-progress");
@@ -1011,7 +1012,6 @@
       return true;
     };
     const measure = () => {
-      timer = 0;
       let moved = false;
       for (const wrapper of visible) {
         if (wrapper.classList.contains("folded")) continue;
@@ -1023,7 +1023,8 @@
       writeReview(key, depths);
     };
     const schedule = () => {
-      if (!timer) timer = setTimeout(measure, REVIEW_MEASURE_MS);
+      clearTimeout(timer);
+      timer = setTimeout(measure, REVIEW_SETTLE_MS);
     };
     const observer = new IntersectionObserver(entries => {
       for (const entry of entries) {

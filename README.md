@@ -192,7 +192,8 @@ Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut
   (`LARGE_FILE_LINES`) s'ouvre replié derrière un bouton qui l'affiche. La coloration se fait par tranches,
   sans figer le défilement, et la liste des fichiers suit le fichier lu une fois le défilement posé.
 - **Progression de la relecture**, dans l'en-tête (« Relu 42 % · reste 4630 lignes ») et en barre sous
-  celui-ci : part des lignes modifiées passées à l'écran, ou de fichiers cochés « Viewed ». Retenue par le
+  celui-ci : part des lignes modifiées vues à l'écran une fois le défilement posé — ce qui n'a fait que
+  défiler ne compte pas —, ou de fichiers cochés « Viewed ». Retenue par le
   navigateur pour le dernier commit de la MR et la plage de commits affichée : un push la remet à zéro.
 - **💬 Diff notes**, dans l'en-tête du diff, affiche les diff notes GitLab de la MR sous les lignes
   commentées, résolues repliées. Une note posée sur un code qui a changé depuis, ou hors de la plage de
