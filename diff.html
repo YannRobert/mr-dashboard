@@ -78,6 +78,11 @@
   .loaded-at.stale { color: #ea8a0c; font-weight: 600; }
   .large-diff { color: var(--muted); font-size: 0.8rem; white-space: nowrap; }
   .large-diff[hidden] { display: none; }
+  .review-progress { color: var(--muted); font-size: 0.8rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .review-progress[hidden], .review-bar[hidden] { display: none; }
+  /* Part relue du diff, au bas de l'en-tête collé : visible où qu'on soit. */
+  .review-bar { position: absolute; left: 0; right: 0; bottom: -1px; height: 3px; background: var(--border); }
+  .review-bar > span { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.3s; }
   .format { display: flex; gap: 0; }
   button {
     font: inherit; font-size: 0.9rem; color: var(--text); background: var(--surface);
@@ -298,10 +303,12 @@
 </head>
 <body>
 <header>
+  <div class="review-bar" id="review-bar" hidden><span></span></div>
   <h1 id="title"></h1>
   <div class="subtitle">
     <span class="branches" id="branches"></span>
     <span class="large-diff" id="large-diff" hidden></span>
+    <span class="review-progress" id="review-progress" hidden></span>
     <span class="loaded-at" id="loaded-at"></span>
   </div>
   <div class="controls">
@@ -344,6 +351,11 @@
   const COMMITS_SHARE_KEY = "mr-dashboard.diffCommitsShare";
   const NOTES_KEY = "mr-dashboard.diffNotes";
   const FILE_FILTERS_KEY = "mr-dashboard.diffFileFilters";
+  const REVIEW_PROGRESS_KEY = "mr-dashboard.diffReviewProgress";
+  // Diffs dont la progression de relecture est retenue, les plus récemment lus.
+  const REVIEWS_KEPT = 50;
+  // Intervalle minimal entre deux mesures de la progression pendant le défilement.
+  const REVIEW_MEASURE_MS = 250;
   const TEXT_SCALES = [0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3];
   const DEFAULT_TEXT_SCALE = 1.25;
   const TEXTS = {
@@ -421,6 +433,8 @@
       nextNote: "Diff note suivante",
       largeDiff: p => `Gros diff (${p.lines} lignes modifiées) : code coloré à l'affichage`,
       unfold: p => `Fichier volumineux, ${p.lines} lignes modifiées : afficher son diff`,
+      reviewProgress: p => p.left ? `Relu ${p.percent} % · reste ${p.left} ligne${p.left > 1 ? "s" : ""}` : "Relu 100 %",
+      reviewProgressTitle: "Lignes modifiées passées à l'écran, ou de fichiers cochés « Viewed », retenues pour ce dernier commit et cette plage de commits",
     },
     en: {
       title: p => `Diff of !${p.iid}`,
@@ -496,6 +510,8 @@
       nextNote: "Next diff note",
       largeDiff: p => `Large diff (${p.lines} changed lines): code highlighted as it is displayed`,
       unfold: p => `Large file, ${p.lines} changed lines: show its diff`,
+      reviewProgress: p => p.left ? `Reviewed ${p.percent}% · ${p.left} line${p.left > 1 ? "s" : ""} left` : "Reviewed 100%",
+      reviewProgressTitle: "Changed lines that went past the screen, or of files ticked \"Viewed\", remembered for this last commit and this commit range",
     },
   };
   const params = new URLSearchParams(location.search);
@@ -570,6 +586,8 @@
   const unfoldedFiles = new Set();
   // Colore les fichiers d'un gros diff à leur approche de l'écran ; null : diff coloré d'un coup.
   let highlightObserver = null;
+  // Arrête le suivi de la relecture du diff affiché, au rendu suivant.
+  let reviewTracking = null;
   // Hauteur des fils placés dans le diff : la ligne vide d'en face la suit (fil replié, réponse ouverte…).
   let notesObserver = null;
 
@@ -607,7 +625,6 @@
       const next = TEXT_SCALES.indexOf(scale) + Number(button.dataset.textStep);
       button.disabled = next < 0 || next >= TEXT_SCALES.length;
     }
-    document.documentElement.style.setProperty("--header-height", `${document.querySelector("header").offsetHeight}px`);
   }
 
   function changeTextScale(step) {
@@ -632,6 +649,9 @@
     selection = null;
     highlightObserver?.disconnect();
     highlightObserver = null;
+    reviewTracking?.abort();
+    reviewTracking = null;
+    for (const id of ["large-diff", "review-progress", "review-bar"]) document.getElementById(id).hidden = true;
     const main = document.getElementById("diff");
     const listScroll = document.getElementById("commit-list")?.scrollTop ?? null;
     main.innerHTML = `<aside id="side"><section id="commits" hidden></section><div id="split" role="separator" aria-orientation="horizontal" title="${escapeHtml(texts.splitTitle)}"></div><div id="files"></div></aside><div id="diff-files"></div>`;
@@ -660,7 +680,9 @@
       }
     );
     ui.draw();
-    highlight(ui, container);
+    const changed = changedLines(container);
+    highlight(ui, container, changed);
+    trackReview(changed);
     addWrapToggles(container);
     showFileList(container);
     if (readNotesEnabled()) placeNotes(container);
@@ -683,12 +705,14 @@
   }
 
   // Fichier volumineux replié derrière un bouton ; petit diff coloré d'un coup, gros diff à l'approche de l'écran.
-  function highlight(ui, container) {
-    const wrappers = [...container.querySelectorAll(".d2h-file-wrapper")];
-    const changed = new Map(wrappers.map(wrapper => [
-      wrapper,
-      wrapper.querySelectorAll(":is(.d2h-ins, .d2h-del) .d2h-code-line-ctn").length,
-    ]));
+  // Lignes ajoutées ou supprimées de chaque fichier, sans le contexte.
+  const changedLines = container => new Map([...container.querySelectorAll(".d2h-file-wrapper")].map(wrapper => [
+    wrapper,
+    wrapper.querySelectorAll(":is(.d2h-ins, .d2h-del) .d2h-code-line-ctn").length,
+  ]));
+
+  function highlight(ui, container, changed) {
+    const wrappers = [...changed.keys()];
     const total = [...changed.values()].reduce((sum, lines) => sum + lines, 0);
     const large = total > LARGE_DIFF_LINES;
     const badge = document.getElementById("large-diff");
@@ -943,14 +967,123 @@
     showPartialDiff(matchers.length && shown < lines.size ? { shown, total: lines.size, filter: fileFilter.text.trim(), exclude: fileFilter.exclude } : null);
   }
 
-  // Bandeau de l'en-tête : le diff affiché n'est pas toute la MR. L'en-tête change de hauteur, que suivent
-  // les en-têtes de fichier collés dessous.
+  // Bandeau de l'en-tête : le diff affiché n'est pas toute la MR.
   function showPartialDiff(partial) {
     const banner = document.getElementById("partial-diff");
     if (banner.hidden === !partial && !partial) return;
     banner.hidden = !partial;
     if (partial) document.getElementById("partial-diff-text").textContent = texts.partialDiff(partial);
-    document.documentElement.style.setProperty("--header-height", `${document.querySelector("header").offsetHeight}px`);
+  }
+
+  // Progression de la relecture : la part des lignes modifiées passée à l'écran. Chaque fichier retient la plus
+  // grande profondeur atteinte par le bas de l'écran, appliquée à ses lignes modifiées, comme si elles y
+  // étaient réparties : suivre chaque ligne coûterait trop sur un gros diff. Un fichier coché « Viewed » est
+  // relu en entier ; un fichier replié ne l'est qu'une fois déplié et lu ; un fichier caché par le filtre
+  // reste dans le total, pour ne pas donner l'illusion d'avoir tout relu. Seuls les fichiers à l'écran sont
+  // mesurés, au plus toutes les REVIEW_MEASURE_MS pendant le défilement.
+  function trackReview(changed) {
+    const total = [...changed.values()].reduce((sum, lines) => sum + lines, 0);
+    const label = document.getElementById("review-progress");
+    const bar = document.getElementById("review-bar");
+    label.hidden = bar.hidden = !total;
+    if (!total) return;
+    reviewTracking = new AbortController();
+    const { signal } = reviewTracking;
+    const key = reviewKey();
+    const paths = new Map([...changed.keys()].map(wrapper => [wrapper, wrapperPaths(wrapper).join(" → ")]));
+    const depths = new Map(Object.entries(readReview(key)));
+    const visible = new Set();
+    let timer = 0;
+    const show = () => {
+      let seen = 0;
+      for (const [wrapper, lines] of changed) seen += lines * (depths.get(paths.get(wrapper)) ?? 0);
+      const left = Math.round(total - seen);
+      // Arrondi par défaut : 100 % seulement quand tout est relu.
+      const percent = left ? Math.min(Math.floor((seen / total) * 100), 99) : 100;
+      label.textContent = texts.reviewProgress({ percent, left });
+      label.title = texts.reviewProgressTitle;
+      bar.firstElementChild.style.width = `${(seen / total) * 100}%`;
+    };
+    const reach = (wrapper, depth) => {
+      const path = paths.get(wrapper);
+      if (depth <= (depths.get(path) ?? 0)) return false;
+      depths.set(path, depth);
+      return true;
+    };
+    const measure = () => {
+      timer = 0;
+      let moved = false;
+      for (const wrapper of visible) {
+        if (wrapper.classList.contains("folded")) continue;
+        const box = wrapper.getBoundingClientRect();
+        moved = reach(wrapper, Math.min(Math.max((innerHeight - box.top) / box.height, 0), 1)) || moved;
+      }
+      if (!moved) return;
+      show();
+      writeReview(key, depths);
+    };
+    const schedule = () => {
+      if (!timer) timer = setTimeout(measure, REVIEW_MEASURE_MS);
+    };
+    const observer = new IntersectionObserver(entries => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) visible.add(entry.target);
+        else visible.delete(entry.target);
+      }
+      schedule();
+    });
+    signal.addEventListener("abort", () => {
+      observer.disconnect();
+      clearTimeout(timer);
+    });
+    addEventListener("scroll", schedule, { passive: true, signal });
+    addEventListener("resize", schedule, { passive: true, signal });
+    for (const [wrapper, lines] of changed) {
+      if (!lines) continue;
+      observer.observe(wrapper);
+      // Le contenu d'un fichier déplié change de hauteur sans défilement.
+      wrapper.querySelector(".unfold")?.addEventListener("click", schedule, { signal });
+      wrapper.querySelector('.d2h-file-collapse-input[name="viewed"]')?.addEventListener("change", event => {
+        if (!event.target.checked || !reach(wrapper, 1)) return;
+        show();
+        writeReview(key, depths);
+      }, { signal });
+    }
+    show();
+  }
+
+  // Progression propre au dernier commit de la MR, qu'un push remet à zéro faute de savoir ce qu'il a changé, et
+  // à la plage de commits affichée : relire un commit n'est pas relire le diff complet. null : commits inconnus,
+  // la progression ne survit pas à la page.
+  function reviewKey() {
+    const head = mr.head || commits?.at(-1)?.sha;
+    if (!head) return null;
+    const shown = range ? `${commits[range[0]].sha}..${commits[range[1]].sha}` : "all";
+    return `${mr.iid}:${head}:${shown}`;
+  }
+
+  function readReviews() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(REVIEW_PROGRESS_KEY));
+      return saved && typeof saved === "object" ? saved : {};
+    } catch (ignored) {
+      return {};
+    }
+  }
+
+  function readReview(key) {
+    const files = key && readReviews()[key]?.files;
+    return files && typeof files === "object" ? files : {};
+  }
+
+  function writeReview(key, depths) {
+    if (!key) return;
+    const reviews = readReviews();
+    reviews[key] = { at: Date.now(), files: Object.fromEntries(depths) };
+    const kept = Object.entries(reviews).sort(([, a], [, b]) => (b.at ?? 0) - (a.at ?? 0)).slice(0, REVIEWS_KEPT);
+    try {
+      localStorage.setItem(REVIEW_PROGRESS_KEY, JSON.stringify(Object.fromEntries(kept)));
+    } catch (ignored) { /* stockage indisponible : la progression ne survit pas à la page */ }
   }
 
   // Le fichier en haut de l'écran est surligné dans la liste, que le panneau garde en vue. Le panneau ne suit
@@ -1649,6 +1782,12 @@
     document.getElementById("loading").textContent = texts.loading;
     applyTextScale(readTextScale());
   }
+
+  // Hauteur de l'en-tête, que suivent les en-têtes de fichier collés dessous : elle change avec la taille du
+  // texte, le bandeau de diff partiel, la progression de la relecture, la largeur de la fenêtre.
+  new ResizeObserver(([entry]) => {
+    document.documentElement.style.setProperty("--header-height", `${entry.target.offsetHeight}px`);
+  }).observe(document.querySelector("header"));
 
   // Bouton AI : les actions du catalogue, comme dans le dashboard ; la correction, seulement d'après le
   // prompt que le dashboard calcule et enregistre (cf. MrAi.readFixContext). Pas sur une MR mergée.

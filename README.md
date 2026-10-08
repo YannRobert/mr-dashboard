@@ -187,6 +187,13 @@ Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut
   [diff2html](https://github.com/rtfpessoa/diff2html) (MIT), copié dans `vendor/diff2html/` pour
   marcher sans réseau ; pour le mettre à jour, y remplacer `diff2html-ui-slim.min.js` et
   `diff2html.min.css` par ceux de `https://cdn.jsdelivr.net/npm/diff2html@<version>/bundles/`.
+- **Gros diff** : au-delà de 2000 lignes modifiées (`LARGE_DIFF_LINES`), chaque fichier n'est coloré qu'à
+  l'approche de l'écran, l'en-tête le signale ; tout fichier de plus de 1000 lignes modifiées
+  (`LARGE_FILE_LINES`) s'ouvre replié derrière un bouton qui l'affiche. La coloration se fait par tranches,
+  sans figer le défilement, et la liste des fichiers suit le fichier lu une fois le défilement posé.
+- **Progression de la relecture**, dans l'en-tête (« Relu 42 % · reste 4630 lignes ») et en barre sous
+  celui-ci : part des lignes modifiées passées à l'écran, ou de fichiers cochés « Viewed ». Retenue par le
+  navigateur pour le dernier commit de la MR et la plage de commits affichée : un push la remet à zéro.
 - **💬 Diff notes**, dans l'en-tête du diff, affiche les diff notes GitLab de la MR sous les lignes
   commentées, résolues repliées. Une note posée sur un code qui a changé depuis, ou hors de la plage de
   commits affichée, va dans « diff notes hors du diff affiché », en tête du diff. **‹ ›** passent d'une
