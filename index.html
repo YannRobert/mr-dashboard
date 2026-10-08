@@ -1554,8 +1554,16 @@ async function refresh() {
 // autre profil.
 async function ensureConfig() {
   if (!state.configLoaded) {
+    // Cible par défaut de la sauvegarde, prise avant la config du serveur : remplacée par la sienne.
+    const savedDefault = defaultTarget();
     state.config = (await api("/config")).body;
     state.configLoaded = true;
+    if (savedDefault !== null && state.filters.target === savedDefault && savedDefault !== defaultTarget()) {
+      state.filters.target = null;
+      applyDefaultTarget();
+      populateFilterOptions();
+      render();
+    }
     renderGitFetch();
     loadGitFetchStatus();
     MrAi.loadCatalog().then(render);
