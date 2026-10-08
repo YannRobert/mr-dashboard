@@ -51,12 +51,12 @@
 }
 .thread-reply .thread-actions { border-top: none; }
 
-/* Réponses d'un fil (diff.html, comments.html) : chacune une carte en retrait, avec son fond, son liseré et
+/* Réponses d'un fil (diff.html, comments.html) : chacune une carte en retrait, avec son fond, son cadre et
    un espace avant elle. Séparées d'un simple trait, plusieurs réponses se lisaient comme un seul message. */
 .note + .note {
   margin: 0.55rem 0.6rem 0.55rem 1.6rem; padding: 0.45rem 0.7rem;
-  border: 1px solid var(--border-strong); border-left: 3px solid var(--accent); border-radius: 0.4rem;
-  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+  border: 1px solid var(--border); border-radius: 0.4rem;
+  background: var(--bg);
 }
 .note + .note .note-meta { margin-bottom: 0.3rem; font-size: 0.8rem; }
 .note + .note .note-meta strong { font-size: 0.9rem; }

@@ -97,7 +97,9 @@
   .notes-nav button:disabled { opacity: 0.4; cursor: default; }
   .notes-nav output { min-width: 4.5em; text-align: center; font-size: 0.85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
   .note-thread { scroll-margin-top: calc(var(--header-height, 0px) + 3rem); }
-  .note-thread.current { outline: 2px solid var(--accent); outline-offset: 1px; }
+  /* Discussion courante de la navigation : son propre cadre passe à l'indigo, sauf si elle est non résolue,
+     dont le cadre rouge prime ; jamais un second liseré autour du premier. */
+  .note-thread.current:not(.unresolved) { border-color: var(--accent); }
   .format button[aria-pressed="true"], .toggle[aria-pressed="true"] {
     color: var(--accent-fg); border-color: transparent; font-weight: 600;
     background: var(--accent);
@@ -173,7 +175,7 @@
   .partial-diff {
     display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem 0.8rem; padding: 0.35rem 0.75rem;
     font-size: 0.85rem; font-weight: 600; color: var(--orange-fg); background: var(--orange-bg);
-    border: 1px solid var(--orange-line); border-left-width: 4px; border-radius: 0.5rem;
+    border: 1px solid var(--orange-line); border-radius: 0.5rem;
   }
   .partial-diff[hidden] { display: none; }
   .partial-diff button { font-size: 0.8rem; border-radius: 0.4rem; padding: 0.15em 0.6em; }
@@ -195,13 +197,16 @@
   tr.note-row > td { padding: 0; background: var(--bg); }
   .note-thread {
     position: sticky; left: 0; box-sizing: border-box; max-width: min(46rem, calc(var(--note-column, 100%) - 1rem)); margin: 0.35rem 0.5rem;
-    border: 1px solid var(--border-strong); border-left: 3px solid var(--accent); border-radius: 0.5rem;
+    border: 1px solid var(--border-strong); border-radius: 0.5rem; overflow: hidden;
     background: var(--surface); font: 0.8rem/1.4 "Inter", system-ui, sans-serif; white-space: normal; text-align: left;
   }
-  .note-thread.resolved { border-left-color: var(--muted); }
-  /* Non résolue : tout le cadre en rouge, visible où qu'on en soit dans une longue discussion. */
-  .note-thread.unresolved { border: 2px solid var(--red-line); border-left-width: 4px; }
-  .note-thread.unresolved .badge { color: var(--red-fg); background: var(--red-bg); }
+  /* État porté par le badge et, pour le seul état à traiter, par la couleur : une discussion ordinaire ou
+     résolue reste neutre. */
+  .note-thread.resolved > summary { color: var(--muted); }
+  /* Non résolue : tout le cadre en rouge, visible où qu'on en soit dans une longue discussion, et l'en-tête teinté. */
+  .note-thread.unresolved { border: 2px solid var(--red-line); }
+  .note-thread.unresolved > summary { background: var(--red-bg); }
+  .note-thread.unresolved .badge { color: var(--red-fg); background: var(--surface); }
   /* Commenter : un clic sur un numéro de ligne, Maj+clic pour une plage. */
   #diff-files.can-comment td.d2h-code-side-linenumber, #diff-files.can-comment td.d2h-code-linenumber { cursor: pointer; }
   #diff-files.can-comment td.d2h-code-side-linenumber:hover, #diff-files.can-comment td.d2h-code-linenumber:hover { color: var(--accent); }
@@ -209,7 +214,7 @@
   .note-editor {
     position: sticky; left: 0; box-sizing: border-box; max-width: min(46rem, calc(var(--note-column, 100%) - 1rem)); margin: 0.35rem 0.5rem;
     display: flex; flex-direction: column; gap: 0.4rem; padding: 0.4rem 0.6rem;
-    border: 1px solid var(--border-strong); border-left: 3px solid var(--accent); border-radius: 0.5rem;
+    border: 1px solid var(--accent); border-radius: 0.5rem;
     background: var(--surface); font: 0.8rem/1.4 "Inter", system-ui, sans-serif; white-space: normal; text-align: left;
   }
   .note-editor textarea {

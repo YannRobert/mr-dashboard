@@ -81,13 +81,13 @@
   .cached-banner[hidden] { display: none; }
   .cached-banner.failed {
     display: flex; flex-wrap: wrap; align-items: center; gap: 0.2rem 1rem;
-    color: var(--text); border: 1px solid #ea8a0c; border-left-width: 4px; background: var(--surface);
+    color: var(--text); border: 1px solid #ea8a0c; background: var(--surface);
   }
   .cached-banner.failed strong { color: #ea8a0c; }
   .cached-banner .detail, .unavailable .detail { flex-basis: 100%; order: 1; color: var(--muted); font-size: 0.8rem; }
   .unavailable {
     margin-top: 1.5rem; padding: 1.2rem 1.4rem; background: var(--surface);
-    border: 1px solid var(--border-strong); border-left: 4px solid var(--red-line); border-radius: 0.5rem;
+    border: 1px solid var(--red-line); border-radius: 0.5rem;
   }
   .unavailable h2 { margin: 0 0 0.4rem; font-size: 1.05rem; color: var(--red-fg); }
   .unavailable p { margin: 0 0 0.6rem; }
@@ -96,14 +96,17 @@
     border: 1px solid var(--border-strong); border-radius: 0.5rem; background: var(--bg);
   }
   .cached-banner .retry { margin-left: auto; }
+  /* État porté par le badge et, pour le seul état à traiter, par la couleur : un fil ordinaire ou résolu
+     reste neutre. */
   .thread {
-    background: var(--surface); border: 1px solid var(--border-strong); border-left: 3px solid var(--accent);
+    background: var(--surface); border: 1px solid var(--border-strong);
     border-radius: 0.5rem; overflow: hidden;
   }
-  .thread.resolved { border-left-color: var(--muted); }
-  /* Non résolu : tout le cadre en rouge, visible où qu'on en soit dans un long commentaire. */
-  .thread.unresolved { border: 2px solid var(--red-line); border-left-width: 4px; }
-  .thread.unresolved .badge { color: var(--red-fg); background: var(--red-bg); }
+  .thread.resolved > summary { color: var(--muted); }
+  /* Non résolu : tout le cadre en rouge, visible où qu'on en soit dans un long commentaire, et l'en-tête teinté. */
+  .thread.unresolved { border: 2px solid var(--red-line); }
+  .thread.unresolved > summary { background: var(--red-bg); }
+  .thread.unresolved .badge { color: var(--red-fg); background: var(--surface); }
   .thread > summary {
     display: flex; flex-wrap: wrap; gap: 0.2rem 0.6rem; align-items: baseline; padding: 0.45rem 0.8rem;
     cursor: pointer; font-size: 0.85rem; color: var(--muted); border-bottom: 1px solid var(--border);
