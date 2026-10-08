@@ -35,6 +35,7 @@
     --accent: #4f46e5;
     --accent-fg: #ffffff;
     --red-bg: #fdecec; --red-fg: #b42318; --red-line: #d92d20;
+    --green-fg: #1a7f37;
     --orange-bg: #fff4e0; --orange-fg: #93510a; --orange-line: #f79009;
     color-scheme: light;
   }
@@ -50,6 +51,7 @@
     --accent: #818cf8;
     --accent-fg: #0f1020;
     --red-bg: #3d1a1a; --red-fg: #ffb4ab; --red-line: #f97066;
+    --green-fg: #56d364;
     --orange-bg: #3d2a10; --orange-fg: #ffc77a; --orange-line: #fdb022;
   }
   /* Taille du texte : celle du dashboard (même base, même réglage A− / A+), multipliée par celle de la page, réglée
@@ -78,6 +80,10 @@
   .loaded-at.stale { color: #ea8a0c; font-weight: 600; }
   .large-diff { color: var(--muted); font-size: 0.8rem; white-space: nowrap; }
   .large-diff[hidden] { display: none; }
+  .diff-size { display: flex; gap: 0.5rem; font-size: 0.85rem; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .diff-size[hidden] { display: none; }
+  .diff-size .added { color: var(--green-fg); }
+  .diff-size .deleted { color: var(--red-fg); }
   .review-progress { color: var(--muted); font-size: 0.8rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .review-progress[hidden], .review-bar[hidden] { display: none; }
   /* Part relue du diff, au bas de l'en-tête collé : visible où qu'on soit. */
@@ -307,6 +313,7 @@
   <h1 id="title"></h1>
   <div class="subtitle">
     <span class="branches" id="branches"></span>
+    <span class="diff-size" id="diff-size" hidden><span class="added"></span><span class="deleted"></span></span>
     <span class="large-diff" id="large-diff" hidden></span>
     <span class="review-progress" id="review-progress" hidden></span>
     <span class="loaded-at" id="loaded-at"></span>
@@ -434,6 +441,7 @@
       largeDiff: p => `Gros diff (${p.lines} lignes modifiées) : code coloré à l'affichage`,
       unfold: p => `Fichier volumineux, ${p.lines} lignes modifiées : afficher son diff`,
       reviewProgress: p => p.left ? `Relu ${p.percent} % · reste ${p.left} ligne${p.left > 1 ? "s" : ""}` : "Relu 100 %",
+      diffSize: "Lignes ajoutées et supprimées du diff affiché",
       reviewProgressTitle: "Lignes modifiées passées à l'écran, ou de fichiers cochés « Viewed », retenues pour ce dernier commit et cette plage de commits",
     },
     en: {
@@ -511,6 +519,7 @@
       largeDiff: p => `Large diff (${p.lines} changed lines): code highlighted as it is displayed`,
       unfold: p => `Large file, ${p.lines} changed lines: show its diff`,
       reviewProgress: p => p.left ? `Reviewed ${p.percent}% · ${p.left} line${p.left > 1 ? "s" : ""} left` : "Reviewed 100%",
+      diffSize: "Lines added and deleted in the diff shown",
       reviewProgressTitle: "Changed lines that went past the screen, or of files ticked \"Viewed\", remembered for this last commit and this commit range",
     },
   };
@@ -651,7 +660,7 @@
     highlightObserver = null;
     reviewTracking?.abort();
     reviewTracking = null;
-    for (const id of ["large-diff", "review-progress", "review-bar"]) document.getElementById(id).hidden = true;
+    for (const id of ["diff-size", "large-diff", "review-progress", "review-bar"]) document.getElementById(id).hidden = true;
     const main = document.getElementById("diff");
     const listScroll = document.getElementById("commit-list")?.scrollTop ?? null;
     main.innerHTML = `<aside id="side"><section id="commits" hidden></section><div id="split" role="separator" aria-orientation="horizontal" title="${escapeHtml(texts.splitTitle)}"></div><div id="files"></div></aside><div id="diff-files"></div>`;
@@ -685,6 +694,7 @@
     trackReview(changed);
     addWrapToggles(container);
     showFileList(container);
+    showDiffSize();
     if (readNotesEnabled()) placeNotes(container);
     container.classList.toggle("can-comment", canComment());
   }
@@ -757,6 +767,18 @@
       highlightObserver.observe(wrapper);
     });
     wrapper.querySelector(".d2h-file-header").after(button);
+  }
+
+  // Lignes ajoutées et supprimées, rappelées dans l'en-tête : la somme des compteurs de la liste des fichiers.
+  function showDiffSize() {
+    const sum = selector => [...document.querySelectorAll(`#files ${selector}`)]
+      .reduce((total, count) => total + (Number(count.textContent.replace(/\D/g, "")) || 0), 0);
+    const size = document.getElementById("diff-size");
+    const [added, deleted] = size.children;
+    added.textContent = `+${sum(".d2h-lines-added").toLocaleString(lang)}`;
+    deleted.textContent = `−${sum(".d2h-lines-deleted").toLocaleString(lang)}`;
+    size.title = texts.diffSize;
+    size.hidden = false;
   }
 
   // Case « retour à la ligne » devant « Viewed », de même apparence, dans l'en-tête de chaque fichier.

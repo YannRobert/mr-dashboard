@@ -187,6 +187,7 @@ Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut
   [diff2html](https://github.com/rtfpessoa/diff2html) (MIT), copié dans `vendor/diff2html/` pour
   marcher sans réseau ; pour le mettre à jour, y remplacer `diff2html-ui-slim.min.js` et
   `diff2html.min.css` par ceux de `https://cdn.jsdelivr.net/npm/diff2html@<version>/bundles/`.
+- **Taille du diff** : l'en-tête rappelle le total des lignes ajoutées (+, en vert) et supprimées (−, en rouge) du diff affiché, somme des compteurs de la liste des fichiers.
 - **Gros diff** : au-delà de 2000 lignes modifiées (`LARGE_DIFF_LINES`), chaque fichier n'est coloré qu'à
   l'approche de l'écran, l'en-tête le signale ; tout fichier de plus de 1000 lignes modifiées
   (`LARGE_FILE_LINES`) s'ouvre replié derrière un bouton qui l'affiche. La coloration se fait par tranches,
