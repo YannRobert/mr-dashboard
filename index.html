@@ -884,6 +884,8 @@ const I18N = {
     "date.lastCommit": p => `Dernier push : ${p.push}\nDate du commit : ${p.commit}`,
     "commit.active": `Active : dernier commit il y a moins de ${ACTIVE_COMMIT_HOURS} h`,
     "commit.idle": `Endormie : aucun commit depuis plus de ${IDLE_COMMIT_HOURS} h`,
+    "signals.stale": "Signaux anciens",
+    "signals.stale.title": p => `Signaux du ${p.date} : leur mise à jour a échoué (${p.message})`,
     "stalled": "🚨 À traiter",
     "stalled.title": `Alerte (pipeline, Sonar, PIT ou conflit) sans nouveau commit depuis plus de ${STALLED_ALERT_HOURS} h`,
     "date.activity": p => `Dernière activité : ${p.date}`,
@@ -1118,6 +1120,8 @@ const I18N = {
     "date.lastCommit": p => `Last push: ${p.push}\nCommit date: ${p.commit}`,
     "commit.active": `Active: last commit less than ${ACTIVE_COMMIT_HOURS} h ago`,
     "commit.idle": `Idle: no commit for more than ${IDLE_COMMIT_HOURS} h`,
+    "signals.stale": "Stale signals",
+    "signals.stale.title": p => `Signals from ${p.date}: their update failed (${p.message})`,
     "stalled": "🚨 Needs action",
     "stalled.title": `Alert (pipeline, Sonar, PIT or conflict) with no new commit for more than ${STALLED_ALERT_HOURS} h`,
     "date.activity": p => `Last activity: ${p.date}`,
@@ -1504,11 +1508,16 @@ async function refresh() {
     renderStatus();
     await runLimited(mrs, MAX_PARALLEL_MRS, async mr => {
       const signals = await loadSignals(mr);
-      snapshot.signals.set(mr.iid, signals);
-      // Une MR dont la mise à jour échoue garde à l'écran ses signaux précédents, tant qu'ils sont bons.
       const previous = state.signals.get(mr.iid);
-      const kept = signals.error && previous && !previous.loading && !previous.error;
-      state.signals.set(mr.iid, kept ? previous : signals);
+      const shown = signals.error && previous && !previous.loading && !previous.error
+        ? keepPrevious(
+          previous,
+          signals,
+          state.refreshedAt
+        )
+        : signals;
+      snapshot.signals.set(mr.iid, shown);
+      state.signals.set(mr.iid, shown);
       state.progress.done++;
       render();
       renderStatus();
@@ -2017,6 +2026,25 @@ async function loadSignals(mr) {
   return signals;
 }
 
+// Une MR dont la mise à jour échoue garde, à l'écran comme dans la sauvegarde, ses derniers bons signaux,
+// datés, plus ceux que la mise à jour a malgré tout rapportés (GraphQL peut répondre quand l'API REST
+// échoue).
+function keepPrevious(
+  previous,
+  failed,
+  previousAt
+) {
+  const fresh = ["commits", "threads", "approvals"]
+    .filter(key => failed[key] && !failed[key].error)
+    .map(key => [key, failed[key]]);
+  return {
+    ...previous,
+    ...Object.fromEntries(fresh),
+    staleSince: previous.staleSince ?? previousAt?.toISOString() ?? null,
+    staleError: failed.error,
+  };
+}
+
 // Un thread = une discussion résoluble (commentaire de revue, diff note) : les compteurs de GitLab,
 // qui ignorent notes système et commentaires simples, sans charger les discussions.
 function graphqlThreads(node) {
@@ -2383,6 +2411,13 @@ function isStalled(mr) {
   if (mr.state === "merged") return false;
   const hours = commitAgeHours(mr);
   return hours != null && hours > STALLED_ALERT_HOURS && alertScore(mr) > 0;
+}
+
+function staleSignalsPill(mr) {
+  const s = signalsOf(mr);
+  if (!s.staleError) return "";
+  const date = s.staleSince ? formatDate(s.staleSince) : "—";
+  return pill("grey", t("signals.stale"), t("signals.stale.title", { date, message: s.staleError }));
 }
 
 function stalledPill(mr) {
@@ -3034,7 +3069,7 @@ function mrCell(mr) {
     .map(l => `<button type="button" class="label" data-add-label="${escapeHtml(l)}" title="${escapeHtml(t("label.add"))}">${escapeHtml(l)}</button>`)
     .join("");
   const conflicts = mr.has_conflicts && mr.state !== "merged" ? " " + pill("red", t("conflicts"), t("conflicts.title"), mr.web_url) : "";
-  return `<div class="title"><a href="${escapeHtml(mr.web_url)}" target="_blank" rel="noopener" title="${escapeHtml(mr.title.replace(/^Draft:\s*/i, ""))}">${escapeHtml(mr.title.replace(/^Draft:\s*/i, ""))}</a>${mr.draft ? '<span class="draft">Draft</span>' : ""}${conflicts}${stalledPill(mr)}${changesRequestedPill(mr)}${approvalPill(mr)}</div>
+  return `<div class="title"><a href="${escapeHtml(mr.web_url)}" target="_blank" rel="noopener" title="${escapeHtml(mr.title.replace(/^Draft:\s*/i, ""))}">${escapeHtml(mr.title.replace(/^Draft:\s*/i, ""))}</a>${mr.draft ? '<span class="draft">Draft</span>' : ""}${conflicts}${stalledPill(mr)}${staleSignalsPill(mr)}${changesRequestedPill(mr)}${approvalPill(mr)}</div>
     <div class="sub" title="${escapeHtml(`${mr.source_branch} → ${mr.target_branch}`)}"><span class="iid">!${mr.iid}</span>${diffStat(mr)} · <code>${escapeHtml(mr.source_branch)}</code> → <code>${escapeHtml(mr.target_branch)}</code></div>
     ${labels ? `<div class="labels">${labels}</div>` : ""}`;
 }
