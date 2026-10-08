@@ -80,11 +80,11 @@
   a:hover { text-decoration: underline; }
   :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
-  /* Deux lignes : identité et préférences d'affichage, puis commandes d'actualisation ; chacune revient à la
-     ligne pour son compte, sans mélanger les deux ensembles. */
+  /* Une bande : identité, commandes d'actualisation, préférences d'affichage. Les commandes prennent la
+     place restante et reviennent à la ligne dans leur colonne, collées aux préférences. */
   header {
-    display: flex; flex-direction: column; gap: 0.4rem;
-    padding: 0.6rem 1.2rem 0.5rem;
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 0.6rem 1.5rem;
+    padding: 0.6rem 1.2rem;
     background: var(--surface); border-bottom: 1px solid var(--border);
     position: relative;
   }
@@ -97,9 +97,11 @@
     display: grid; place-items: center; font-weight: 800; font-size: 0.9rem;
     color: var(--accent-fg); background: var(--accent);
   }
+  header .identity { display: flex; align-items: center; gap: 0.6rem; }
   header .header-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1.1rem; }
-  /* Commandes d'actualisation alignées à droite, sous les préférences d'affichage. */
   header .header-row.commands { justify-content: flex-end; }
+  /* Préférences séparées des commandes par un filet : elles servent rarement. */
+  header .header-row.prefs { gap: 0.5rem 0.7rem; padding-left: 1.5rem; border-left: 1px solid var(--border); }
   /* Commandes de l'en-tête à la taille du texte du tableau : elles ne doivent pas l'emporter sur les données. */
   header button { font-size: 0.75rem; }
   /* Le slogan sous le nom, à hauteur de la pastille « MR » : moins de place en largeur. */
@@ -113,7 +115,6 @@
     border: 1px solid var(--border); border-radius: 999px; padding: 0.1em 0.6em;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
-  header .spacer { flex: 1; }
   /* Trois zones distinctes, séparées par un filet : état des données, commandes d'actualisation, langue. */
   header .divider { width: 1px; align-self: stretch; background: var(--border); }
   header .status { display: flex; align-items: center; gap: 0.6rem; }
@@ -267,6 +268,7 @@
     display: inline-flex; align-items: baseline; gap: 0.4em;
     font-size: 0.8rem; color: var(--muted);
     background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 0.15em 0.7em;
+    white-space: nowrap;
   }
   .stat b { color: var(--text); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
   .stat.alert b { color: var(--orange-fg); }
@@ -312,6 +314,9 @@
   /* Pendant de la place réservée à la flèche de tri, à droite : le libellé reste au centre exact. */
   table.mrs thead tr.columns th button::before { content: ""; font-size: 0.8em; min-width: 0.8em; }
   table.mrs thead tr.columns th .col-label { text-align: center; }
+  /* Titre de la colonne MR aligné à gauche, comme les titres qu'elle contient. */
+  table.mrs thead tr.columns th:first-child { text-align: left; }
+  table.mrs thead tr.columns th:first-child button { justify-content: flex-start; }
   table.mrs thead tr.groups th:first-child { border-top-left-radius: 0.8rem; }
   table.mrs thead tr.groups th:last-child { border-top-right-radius: 0.8rem; }
   table.mrs thead tr.groups th span {
@@ -525,6 +530,12 @@
   @media (max-width: 1365px) {
     .table-wrap { overflow-x: auto; }
   }
+  /* Fenêtre étroite : identité et préférences en haut, commandes dessous, de gauche à droite. */
+  @media (max-width: 1100px) {
+    header { grid-template-columns: minmax(0, 1fr) auto; }
+    header .header-row.commands { grid-column: 1 / -1; grid-row: 2; justify-content: flex-start; }
+    header .header-row.prefs { padding-left: 0; border-left: 0; justify-content: flex-end; }
+  }
   @media (max-width: 720px) {
     header h1 .tagline { display: none; }
     header .divider { display: none; }
@@ -537,25 +548,9 @@
 </head>
 <body>
 <header>
-  <div class="header-row">
+  <div class="identity">
     <span class="brand" aria-hidden="true" title="MisteR = MR">MR</span>
     <h1><span class="name"><b class="initial">M</b>iste<b class="initial">R</b> Dashboard</span> <span class="tagline" data-i18n="tagline">Le dashboard très rapide des Merge Requests</span></h1>
-    <span class="spacer"></span>
-    <div class="lang-switch" role="group" aria-label="Langue" data-i18n-aria-label="lang.group">
-      <button type="button" data-lang="fr" lang="fr" title="Français">FR</button>
-      <button type="button" data-lang="en" lang="en" title="English">EN</button>
-    </div>
-    <div class="lang-switch theme-switch" role="group" aria-label="Thème" data-i18n-aria-label="theme.group">
-      <button type="button" data-theme-choice="light" aria-label="Clair" data-i18n-aria-label="theme.light" data-i18n-title="theme.light"><span aria-hidden="true">☀</span></button>
-      <button type="button" data-theme-choice="dark" aria-label="Sombre" data-i18n-aria-label="theme.dark" data-i18n-title="theme.dark"><span aria-hidden="true">☾</span></button>
-    </div>
-    <div class="lang-switch text-size" role="group" aria-label="Taille du texte" data-i18n-aria-label="textSize.group" data-i18n-title="textSize.title">
-      <button type="button" data-text-step="-1" aria-label="Texte plus petit" data-i18n-aria-label="textSize.smaller">A−</button>
-      <output id="text-scale"></output>
-      <button type="button" data-text-step="1" aria-label="Texte plus grand" data-i18n-aria-label="textSize.larger">A+</button>
-    </div>
-    <span class="divider" aria-hidden="true"></span>
-    <button type="button" id="clear-storage" class="icon-button" aria-label="Effacer les données locales" data-i18n-aria-label="clearStorage" data-i18n-title="clearStorage.title"><span aria-hidden="true">🧹</span></button>
   </div>
   <div class="header-row commands">
     <div class="status" role="status" aria-live="polite">
@@ -584,6 +579,23 @@
     <span class="divider" id="request-stats-divider" aria-hidden="true" hidden></span>
     <label class="auto" id="notify-control" data-i18n-title="notify.title"><input type="checkbox" id="notify" autocomplete="off"> <span data-i18n="notify">Notifications</span></label>
     <label class="auto" id="sound-control" data-i18n-title="sound.title"><input type="checkbox" id="sound" autocomplete="off"> <span data-i18n="sound">Sons</span></label>
+  </div>
+  <div class="header-row prefs">
+    <div class="lang-switch" role="group" aria-label="Langue" data-i18n-aria-label="lang.group">
+      <button type="button" data-lang="fr" lang="fr" title="Français">FR</button>
+      <button type="button" data-lang="en" lang="en" title="English">EN</button>
+    </div>
+    <div class="lang-switch theme-switch" role="group" aria-label="Thème" data-i18n-aria-label="theme.group">
+      <button type="button" data-theme-choice="light" aria-label="Clair" data-i18n-aria-label="theme.light" data-i18n-title="theme.light"><span aria-hidden="true">☀</span></button>
+      <button type="button" data-theme-choice="dark" aria-label="Sombre" data-i18n-aria-label="theme.dark" data-i18n-title="theme.dark"><span aria-hidden="true">☾</span></button>
+    </div>
+    <div class="lang-switch text-size" role="group" aria-label="Taille du texte" data-i18n-aria-label="textSize.group" data-i18n-title="textSize.title">
+      <button type="button" data-text-step="-1" aria-label="Texte plus petit" data-i18n-aria-label="textSize.smaller">A−</button>
+      <output id="text-scale"></output>
+      <button type="button" data-text-step="1" aria-label="Texte plus grand" data-i18n-aria-label="textSize.larger">A+</button>
+    </div>
+    <span class="divider" aria-hidden="true"></span>
+    <button type="button" id="clear-storage" class="icon-button" aria-label="Effacer les données locales" data-i18n-aria-label="clearStorage" data-i18n-title="clearStorage.title"><span aria-hidden="true">🧹</span></button>
   </div>
 </header>
 
