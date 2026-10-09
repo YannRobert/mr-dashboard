@@ -741,8 +741,13 @@ const ACTIVITY_COMMENTS_SIZE = 100;
 const NOTIFY_KEY = "mr-dashboard.notify";
 const ME_KEY = "mr-dashboard.me";
 const NOTIFIED_KEY = "mr-dashboard.notified";
-// Sons, indépendants des notifications : joués par le même onglet, d'après la même détection.
+// Sons, indépendants des notifications : décidés par le même onglet, d'après la même détection.
 const SOUND_KEY = "mr-dashboard.sound";
+// Onglet du dernier clic ou de la dernière touche : le navigateur ne laisse jouer un son qu'à un onglet
+// où l'on a cliqué, l'onglet notifiant, souvent en arrière-plan, lui passe donc le son par SOUND_CHANNEL.
+const SOUND_TAB_KEY = "mr-dashboard.soundTab";
+const SOUND_CHANNEL = "mr-dashboard.sound";
+const TAB_ID = crypto.randomUUID?.() ?? String(Math.random());
 // Approbateurs déjà vus, par MR : un nom qui s'y ajoute est une approbation à annoncer.
 const APPROVALS_SEEN_KEY = "mr-dashboard.approvalsSeen";
 const THEME_KEY = "mr-dashboard.theme";
@@ -2940,7 +2945,7 @@ function notifyProblems() {
   }
   const approvalSound = notifyApprovals(notifying);
   const sound = approvalSound === "bell" ? "bell" : ownFreshBlocking ? "alert" : approvalSound;
-  if (sound && state.sound) playSound(sound);
+  if (sound && state.sound) ringSound(sound);
 }
 
 // Approbateurs apparus depuis le passage précédent : notification de succès, hors soi-même, et le son à
@@ -3027,7 +3032,42 @@ function audioContext() {
 }
 
 function unlockAudio() {
+  rememberSoundTab();
   if (state.sound && audioContext().state === "suspended") audio.resume();
+}
+
+const soundChannel = window.BroadcastChannel ? new BroadcastChannel(SOUND_CHANNEL) : null;
+soundChannel?.addEventListener("message", ({ data }) => {
+  if (data.tab === TAB_ID) playSound(data.name);
+});
+
+function soundTab() {
+  try {
+    return localStorage.getItem(SOUND_TAB_KEY);
+  } catch (ignored) {
+    return null;
+  }
+}
+
+function rememberSoundTab() {
+  try {
+    if (localStorage.getItem(SOUND_TAB_KEY) !== TAB_ID) localStorage.setItem(SOUND_TAB_KEY, TAB_ID);
+  } catch (ignored) { /* stockage indisponible : chaque onglet joue ses sons */ }
+}
+
+// Fermé, l'onglet du dernier clic ne joue plus rien : l'onglet notifiant reprend alors les sons.
+function forgetSoundTab() {
+  try {
+    if (localStorage.getItem(SOUND_TAB_KEY) === TAB_ID) localStorage.removeItem(SOUND_TAB_KEY);
+  } catch (ignored) { /* stockage indisponible : rien à oublier */ }
+}
+
+// Joué par l'onglet du dernier clic ou de la dernière touche, seul autorisé à coup sûr par le navigateur ;
+// par celui-ci faute d'un tel onglet.
+function ringSound(name) {
+  const tab = soundTab();
+  if (soundChannel && tab && tab !== TAB_ID) soundChannel.postMessage({ name, tab });
+  else playSound(name);
 }
 
 // Note amortie : attaque brève puis décroissance exponentielle, à partir de at secondes.
@@ -4918,6 +4958,7 @@ if (window.AudioContext) {
     true
   ));
   ["pointerdown", "keydown"].forEach(type => window.addEventListener(type, unlockAudio, true));
+  window.addEventListener("pagehide", forgetSoundTab);
   if (readSound()) setSound(true);
   // Écoute des sons, case « Sons » cochée ou non : le clic suffit au navigateur pour les jouer.
   const toggleSoundTest = open => {

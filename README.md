@@ -69,7 +69,8 @@ ensemble — puis `start.sh <nom>`.
   d'un autre (à la mise à jour suivante), un tintement quand un autre l'approuve, deux notes graves sur un nouveau problème bloquant de sa MR ; cocher la case fait entendre la
   cloche. 🔊, à côté, joue chacun des trois sons à la demande, case cochée ou non : de quoi les
   essayer et vérifier qu'ils sortent sur le bon appareil, sans attendre un événement. Après un rechargement, le navigateur ne laisse jouer un son qu'après un clic ou une touche dans
-  la page.
+  la page. Avec plusieurs onglets du dashboard ouverts, le son sort de celui où l'on a
+  cliqué ou tapé en dernier, même si un autre onglet a détecté l'événement.
 - **Langue** : anglais à la première visite (langue du navigateur pour qui utilisait déjà le dashboard),
   puis celle du bouton FR / EN, retenue par le navigateur ; `?lang=fr` ou `?lang=en` l'impose à la page
   sans changer ce choix.
