@@ -153,6 +153,17 @@
     background: var(--surface); color: var(--text); box-shadow: 0 8px 24px rgb(0 0 0 / 35%);
   }
   .load-panel[hidden] { display: none; }
+  header .sound-test { position: relative; display: inline-flex; }
+  header .sound-test[hidden] { display: none; }
+  .sound-panel { min-width: 18rem; display: grid; gap: 0.4rem; }
+  .sound-panel button {
+    display: grid; grid-template-columns: 1.6em 1fr; column-gap: 0.4rem; align-items: center; text-align: left;
+    padding: 0.4rem 0.55rem; border: 1px solid var(--border); border-radius: 0.5rem;
+    background: var(--surface-2); color: var(--text); font: inherit; cursor: pointer;
+  }
+  .sound-panel button:hover { border-color: var(--accent); }
+  .sound-panel button > span:first-child { grid-row: span 2; font-size: 1.1rem; text-align: center; }
+  .sound-panel small { color: var(--muted); font-size: var(--fs-small); }
   .load-panel h4 { margin: 0 0 0.5rem; font-size: 0.85rem; }
   .load-panel table { width: 100%; border-collapse: collapse; font-size: var(--fs-small); }
   .load-panel th, .load-panel td { padding: 0.2rem 0.4rem; text-align: right; }
@@ -580,6 +591,14 @@
     <span class="divider" id="request-stats-divider" aria-hidden="true" hidden></span>
     <label class="auto" id="notify-control" data-i18n-title="notify.title"><input type="checkbox" id="notify" autocomplete="off"> <span data-i18n="notify">Notifications</span></label>
     <label class="auto" id="sound-control" data-i18n-title="sound.title"><input type="checkbox" id="sound" autocomplete="off"> <span data-i18n="sound">Sons</span></label>
+    <div class="sound-test" id="sound-test">
+      <button type="button" id="sound-test-button" class="icon-button" aria-expanded="false" aria-controls="sound-panel" aria-label="Écouter les sons" data-i18n-aria-label="soundTest" data-i18n-title="soundTest"><span aria-hidden="true">🔊</span></button>
+      <div class="load-panel sound-panel" id="sound-panel" hidden>
+        <button type="button" data-sound="bell"><span aria-hidden="true">🔔</span><b data-i18n="soundTest.bell">Cloche</b><small data-i18n="soundTest.bellWhen"></small></button>
+        <button type="button" data-sound="ding"><span aria-hidden="true">🎵</span><b data-i18n="soundTest.ding">Ding</b><small data-i18n="soundTest.dingWhen"></small></button>
+        <button type="button" data-sound="alert"><span aria-hidden="true">⚠</span><b data-i18n="soundTest.alert">Alerte</b><small data-i18n="soundTest.alertWhen"></small></button>
+      </div>
+    </div>
   </div>
   <div class="header-row prefs">
     <div class="lang-switch" role="group" aria-label="Langue" data-i18n-aria-label="lang.group">
@@ -916,6 +935,13 @@ const I18N = {
     "autoRefresh.title": () => `Recharge les données toutes les ${AUTO_REFRESH_MS / 60000} minutes`,
     "notify": "Notifications",
     "sound": "Sons",
+    "soundTest": "Écouter les sons, pour vérifier qu'ils te conviennent et sortent sur le bon appareil",
+    "soundTest.bell": "Cloche de bar",
+    "soundTest.bellWhen": "Ta MR est approuvée, ou tu approuves celle d'un autre",
+    "soundTest.ding": "Ding",
+    "soundTest.dingWhen": "Un autre approuve la MR d'un autre",
+    "soundTest.alert": "Alerte",
+    "soundTest.alertWhen": "Nouveau problème bloquant sur ta MR",
     "sound.title": "Joue un son : cloche de bar quand ta MR est approuvée ou que tu approuves celle d'un autre, un tintement quand un autre l'approuve, alerte grave sur un nouveau problème bloquant de ta MR. Cocher la case fait entendre la cloche.",
     "approved.own": p => `✅ Ta MR !${p.iid} est approuvée par ${p.names}`,
     "approved.other": p => `✅ MR !${p.iid} de ${p.author} approuvée par ${p.names}`,
@@ -1180,6 +1206,13 @@ const I18N = {
     "autoRefresh.title": () => `Reloads the data every ${AUTO_REFRESH_MS / 60000} minutes`,
     "notify": "Notifications",
     "sound": "Sounds",
+    "soundTest": "Listen to the sounds, to check you like them and they play on the right device",
+    "soundTest.bell": "Bar bell",
+    "soundTest.bellWhen": "Your MR is approved, or you approve someone else's",
+    "soundTest.ding": "Ding",
+    "soundTest.dingWhen": "Someone else approves someone else's MR",
+    "soundTest.alert": "Alert",
+    "soundTest.alertWhen": "New blocking problem on your MR",
     "sound.title": "Plays a sound: a bar bell when your MR is approved or you approve someone else's, a chime when someone else approves it, a low alert on a new blocking problem of your MR. Ticking the box rings the bell.",
     "approved.own": p => `✅ Your MR !${p.iid} is approved by ${p.names}`,
     "approved.other": p => `✅ MR !${p.iid} by ${p.author} approved by ${p.names}`,
@@ -4874,8 +4907,25 @@ if (window.AudioContext) {
   ));
   ["pointerdown", "keydown"].forEach(type => window.addEventListener(type, unlockAudio, true));
   if (readSound()) setSound(true);
+  // Écoute des sons, case « Sons » cochée ou non : le clic suffit au navigateur pour les jouer.
+  const toggleSoundTest = open => {
+    $("sound-panel").hidden = !open;
+    $("sound-test-button").setAttribute("aria-expanded", String(open));
+  };
+  $("sound-test-button").addEventListener("click", () => toggleSoundTest($("sound-panel").hidden));
+  $("sound-panel").addEventListener("click", e => {
+    const name = e.target.closest("[data-sound]")?.dataset.sound;
+    if (name) playSound(name);
+  });
+  document.addEventListener("click", e => {
+    if (!$("sound-panel").hidden && !e.target.closest("#sound-test")) toggleSoundTest(false);
+  });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape") toggleSoundTest(false);
+  });
 } else {
   $("sound-control").remove();
+  $("sound-test").remove();
 }
 electNotifier();
 setInterval(notifyProblems, REMINDER_CHECK_MS);
