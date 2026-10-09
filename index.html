@@ -597,6 +597,7 @@
         <button type="button" data-sound="bell"><span aria-hidden="true">🔔</span><b data-i18n="soundTest.bell">Cloche</b><small data-i18n="soundTest.bellWhen"></small></button>
         <button type="button" data-sound="ding"><span aria-hidden="true">🎵</span><b data-i18n="soundTest.ding">Ding</b><small data-i18n="soundTest.dingWhen"></small></button>
         <button type="button" data-sound="alert"><span aria-hidden="true">⚠</span><b data-i18n="soundTest.alert">Alerte</b><small data-i18n="soundTest.alertWhen"></small></button>
+        <p id="sound-test-status" hidden></p>
       </div>
     </div>
   </div>
@@ -942,6 +943,9 @@ const I18N = {
     "soundTest.dingWhen": "Un autre approuve la MR d'un autre",
     "soundTest.alert": "Alerte",
     "soundTest.alertWhen": "Nouveau problème bloquant sur ta MR",
+    "soundTest.played": "Son envoyé au système. Rien entendu ? Onglet coupé (clic droit sur l'onglet), son du site (icône à gauche de l'adresse), puis sortie et volume du navigateur dans le mélangeur de volume du système.",
+    "soundTest.blocked": p => `Son bloqué par le navigateur (état audio : ${p.state}).`,
+    "soundTest.error": p => `Son impossible : ${p.message}`,
     "sound.title": "Joue un son : cloche de bar quand ta MR est approuvée ou que tu approuves celle d'un autre, un tintement quand un autre l'approuve, alerte grave sur un nouveau problème bloquant de ta MR. Cocher la case fait entendre la cloche.",
     "approved.own": p => `✅ Ta MR !${p.iid} est approuvée par ${p.names}`,
     "approved.other": p => `✅ MR !${p.iid} de ${p.author} approuvée par ${p.names}`,
@@ -1213,6 +1217,9 @@ const I18N = {
     "soundTest.dingWhen": "Someone else approves someone else's MR",
     "soundTest.alert": "Alert",
     "soundTest.alertWhen": "New blocking problem on your MR",
+    "soundTest.played": "Sound sent to the system. Heard nothing? Muted tab (right-click the tab), site sound (icon left of the address), then the browser's output and level in the system volume mixer.",
+    "soundTest.blocked": p => `Sound blocked by the browser (audio state: ${p.state}).`,
+    "soundTest.error": p => `Sound unavailable: ${p.message}`,
     "sound.title": "Plays a sound: a bar bell when your MR is approved or you approve someone else's, a chime when someone else approves it, a low alert on a new blocking problem of your MR. Ticking the box rings the bell.",
     "approved.own": p => `✅ Your MR !${p.iid} is approved by ${p.names}`,
     "approved.other": p => `✅ MR !${p.iid} by ${p.author} approved by ${p.names}`,
@@ -3087,15 +3094,20 @@ const SOUNDS = {
   },
 };
 
-function playSound(name) {
+// Rend l'état du contexte audio une fois le son lancé (« running » : il est parti vers la sortie du
+// système), ou l'erreur : l'écoute des sons le montre, les autres appels l'ignorent.
+async function playSound(name) {
   try {
     const ctx = audioContext();
-    if (ctx.state === "suspended") ctx.resume();
     const output = ctx.createGain();
     output.gain.value = 0.6;
     output.connect(ctx.destination);
     SOUNDS[name](ctx, output);
-  } catch (ignored) { /* Web Audio indisponible : pas de son */ }
+    if (ctx.state === "suspended") await ctx.resume();
+    return { state: ctx.state };
+  } catch (error) {
+    return { error };
+  }
 }
 
 function readSound() {
@@ -4913,9 +4925,14 @@ if (window.AudioContext) {
     $("sound-test-button").setAttribute("aria-expanded", String(open));
   };
   $("sound-test-button").addEventListener("click", () => toggleSoundTest($("sound-panel").hidden));
-  $("sound-panel").addEventListener("click", e => {
+  $("sound-panel").addEventListener("click", async e => {
     const name = e.target.closest("[data-sound]")?.dataset.sound;
-    if (name) playSound(name);
+    if (!name) return;
+    const { state: audioState, error } = await playSound(name);
+    const status = $("sound-test-status");
+    status.textContent = error ? t("soundTest.error", { message: error.message })
+      : audioState === "running" ? t("soundTest.played") : t("soundTest.blocked", { state: audioState });
+    status.hidden = false;
   });
   document.addEventListener("click", e => {
     if (!$("sound-panel").hidden && !e.target.closest("#sound-test")) toggleSoundTest(false);
