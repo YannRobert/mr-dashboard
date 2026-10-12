@@ -3332,7 +3332,7 @@ function thud(
 
 const SOUNDS = {
   // Cloche de bar, plusieurs coups : sa MR est approuvée.
-  bell: (ctx, output) => [0, 0.28, 0.56, 0.84].forEach(at => strike(
+  bell: (ctx, output) => [0, 0.28, 0.56, 0.84, 1.12, 1.4].forEach(at => strike(
     ctx,
     output,
     1046,
@@ -3367,13 +3367,77 @@ const SOUNDS = {
   )),
 };
 
+// Sonie visée pour chaque son, en LUFS : la sonie momentanée de l'UIT-R BS.1770 (pondération K, fenêtre de
+// 400 ms), la plus forte du son. Chacun est rendu une fois hors ligne, mesuré, puis joué au gain qui l'y
+// ramène : les sons, si différents qu'ils soient, sortent tous à peu près aussi fort.
+const SOUND_LOUDNESS_TARGET = -27;
+const SOUND_MEASURE_RATE = 48000;
+const SOUND_MEASURE_SECONDS = 4;
+// Gain des sons quand la mesure est impossible (pas d'OfflineAudioContext).
+const SOUND_FALLBACK_GAIN = 0.6;
+// Filtres de la pondération K, coefficients de la norme à 48 kHz : plateau qui relève les aigus, puis
+// passe-haut qui écarte l'infragrave.
+const K_WEIGHTING = [
+  { b: [1.53512485958697, -2.69169618940638, 1.19839281085285], a: [-1.69065929318241, 0.73248077421585] },
+  { b: [1, -2, 1], a: [-1.99004745483398, 0.99007225036621] },
+];
+const soundGains = new Map();
+
+function soundGain(name) {
+  if (!soundGains.has(name)) {
+    soundGains.set(name, measureSound(name)
+      .then(loudness => 10 ** ((SOUND_LOUDNESS_TARGET - loudness) / 20))
+      .catch(() => SOUND_FALLBACK_GAIN));
+  }
+  return soundGains.get(name);
+}
+
+async function measureSound(name) {
+  const ctx = new OfflineAudioContext(1, SOUND_MEASURE_RATE * SOUND_MEASURE_SECONDS, SOUND_MEASURE_RATE);
+  SOUNDS[name](ctx, ctx.destination);
+  const rendered = await ctx.startRendering();
+  return momentaryLoudness(kWeighted(rendered.getChannelData(0)));
+}
+
+function kWeighted(samples) {
+  let x = samples;
+  for (const { b, a } of K_WEIGHTING) {
+    const y = new Float64Array(x.length);
+    let x1 = 0;
+    let x2 = 0;
+    let y1 = 0;
+    let y2 = 0;
+    for (let i = 0; i < x.length; i++) {
+      y[i] = b[0] * x[i] + b[1] * x1 + b[2] * x2 - a[0] * y1 - a[1] * y2;
+      x2 = x1;
+      x1 = x[i];
+      y2 = y1;
+      y1 = y[i];
+    }
+    x = y;
+  }
+  return x;
+}
+
+function momentaryLoudness(samples) {
+  const window = Math.round(SOUND_MEASURE_RATE * 0.4);
+  let sum = 0;
+  let loudest = 0;
+  for (let i = 0; i < samples.length; i++) {
+    sum += samples[i] ** 2;
+    if (i >= window) sum -= samples[i - window] ** 2;
+    loudest = Math.max(loudest, sum);
+  }
+  return -0.691 + 10 * Math.log10(loudest / window);
+}
+
 // Rend l'état du contexte audio une fois le son lancé (« running » : il est parti vers la sortie du
 // système), ou l'erreur : l'écoute des sons le montre, les autres appels l'ignorent.
 async function playSound(name) {
   try {
     const ctx = audioContext();
     const output = ctx.createGain();
-    output.gain.value = 0.6;
+    output.gain.value = await soundGain(name);
     output.connect(ctx.destination);
     SOUNDS[name](ctx, output);
     if (ctx.state === "suspended") await ctx.resume();
