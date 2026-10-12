@@ -75,6 +75,10 @@
   header h1 { margin: 0; font-size: 1.05rem; overflow-wrap: anywhere; }
   .branches { color: var(--muted); font-size: 0.9rem; overflow-wrap: anywhere; }
   .branches code { font-size: 0.85rem; }
+  /* Auteur de la MR, pastille comprise : qui l'a ouverte, même dans un onglet ouvert depuis longtemps. */
+  .mr-author { display: inline-flex; align-items: center; gap: 0.4em; font-size: 0.9rem; white-space: nowrap; }
+  .mr-author[hidden] { display: none; }
+  .mr-author .avatar { font-size: 0.7rem; }
   .subtitle { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.3rem 1.4rem; }
   .loaded-at { color: var(--muted); font-size: 0.8rem; white-space: nowrap; }
   .loaded-at.stale { color: #ea8a0c; font-weight: 600; }
@@ -316,6 +320,7 @@
   <div class="review-bar" id="review-bar" hidden><span></span></div>
   <h1 id="title"></h1>
   <div class="subtitle">
+    <span class="mr-author" id="mr-author" hidden></span>
     <span class="branches" id="branches"></span>
     <span class="diff-size" id="diff-size" hidden><span class="added"></span><span class="deleted"></span></span>
     <span class="large-diff" id="large-diff" hidden></span>
@@ -374,6 +379,7 @@
       title: p => `Diff de !${p.iid}`,
       branches: p => `<code>${p.branch}</code> comparée à <code>${p.target}</code>, depuis leur point de divergence`,
       mergedBranches: p => `<code>${p.branch}</code> telle que mergée dans <code>${p.target}</code>`,
+      author: "Auteur de la MR",
       sideBySide: "Côte à côte",
       lineByLine: "Ligne à ligne",
       textSize: "Taille du texte du diff, par rapport à celle du dashboard ; sans toucher au zoom du navigateur ni donc au dashboard",
@@ -452,6 +458,7 @@
       title: p => `Diff of !${p.iid}`,
       branches: p => `<code>${p.branch}</code> compared with <code>${p.target}</code>, from where they diverge`,
       mergedBranches: p => `<code>${p.branch}</code> as merged into <code>${p.target}</code>`,
+      author: "Author of the MR",
       sideBySide: "Side by side",
       lineByLine: "Line by line",
       textSize: "Diff text size, relative to the dashboard's; leaves the browser zoom, hence the dashboard, untouched",
@@ -547,6 +554,7 @@
     branch: params.get("branch") ?? "",
     target: params.get("target") ?? "",
     url: params.get("url") ?? "",
+    author: params.get("author") ?? "",
     // MR mergée : son dernier commit et son merge commit, la branche source ayant pu disparaître.
     head: params.get("head") ?? "",
     merge: params.get("merge") ?? "",
@@ -1794,6 +1802,29 @@
   }
   const gitlabProject = () => config().then(c => encodeURIComponent(c.gitlabProject));
 
+  function renderAuthor() {
+    const element = document.getElementById("mr-author");
+    element.title = texts.author;
+    element.innerHTML = `<span class="avatar" style="--avatar-color:${Avatars.color(mr.author)}" aria-hidden="true">${escapeHtml(Avatars.initials(mr.author))}</span>`
+      + escapeHtml(mr.author);
+    element.hidden = false;
+  }
+
+  // Un onglet ouvert avant que l'adresse ne porte l'auteur le demande à GitLab ; sans GitLab, l'en-tête s'en passe.
+  async function loadAuthor() {
+    if (!mr.author && mr.iid) {
+      try {
+        const { gitlabProject: path } = await config();
+        mr.author = (await GitlabNotes.graphql(`{ project(fullPath: ${JSON.stringify(path)}) {
+          mergeRequest(iid: ${JSON.stringify(String(mr.iid))}) { author { name } }
+        } }`)).project?.mergeRequest?.author?.name ?? "";
+      } catch (ignored) {
+        return;
+      }
+    }
+    if (mr.author) renderAuthor();
+  }
+
   async function loadPushes() {
     try {
       const project = await gitlabProject();
@@ -2128,6 +2159,7 @@
     if (button) goToNote(Number(button.dataset.noteStep));
   });
   renderHeader();
+  loadAuthor();
   renderNotesToggle();
   initAi();
   load();

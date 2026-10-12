@@ -231,6 +231,7 @@ Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut
   le dashboard, le diff ou les commentaires — ramène à leur onglet et le recharge, pour ne jamais
   montrer une version périmée de la MR (`tabs.js`) ; la plage de commits et le défilement de l'onglet
   repartent de zéro. Le clic du milieu et Ctrl+clic ouvrent toujours un nouvel onglet.
+- L'en-tête du diff et des commentaires rappelle l'auteur de la MR, avec sa pastille du tableau.
 - L'en-tête du diff et des commentaires indique quand la page a été chargée (« chargée à 14:32 · il
   y a 5 min », la date en plus si c'était un autre jour), mis à jour chaque minute et en orange
   au-delà de 30 min : F5 pour voir les derniers changements de la MR.

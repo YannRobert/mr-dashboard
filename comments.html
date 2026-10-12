@@ -17,6 +17,7 @@
   }
 </script>
 <link rel="stylesheet" href="notes.css">
+<link rel="stylesheet" href="avatars.css">
 <style>
   :root {
     --bg: #dcdfe6;
@@ -60,6 +61,10 @@
   }
   header h1 { flex: 1 1 30rem; margin: 0; font-size: 1.05rem; overflow-wrap: anywhere; }
   .summary { color: var(--muted); font-size: 0.85rem; }
+  /* Auteur de la MR, pastille comprise : qui l'a ouverte, même dans un onglet ouvert depuis longtemps. */
+  .mr-author { display: inline-flex; align-items: center; gap: 0.4em; font-size: 0.85rem; white-space: nowrap; }
+  .mr-author[hidden] { display: none; }
+  .mr-author .avatar { font-size: 0.7rem; }
   .loaded-at { color: var(--muted); font-size: 0.8rem; white-space: nowrap; }
   .loaded-at.stale { color: #ea8a0c; font-weight: 600; }
   .links { display: flex; gap: 0.5rem; }
@@ -126,6 +131,7 @@
 <body>
 <header>
   <h1 id="title"></h1>
+  <span class="mr-author" id="mr-author" hidden></span>
   <span class="summary" id="summary"></span>
   <span class="loaded-at" id="loaded-at"></span>
   <nav class="links">
@@ -139,6 +145,7 @@
 <script src="notes.js"></script>
 <script src="tabs.js"></script>
 <script src="dates.js"></script>
+<script src="avatars.js"></script>
 <script>
   const TEXTS = {
     fr: {
@@ -159,6 +166,7 @@
       diff: "Diff",
       diffTitle: "git diff de cette MR",
       gitlab: "Ouvrir dans GitLab",
+      author: "Auteur de la MR",
       close: "✕ Fermer",
       closeTitle: "Fermer cet onglet",
       closeRefused: "Le navigateur refuse de fermer un onglet qu'il n'a pas ouvert depuis le dashboard : Ctrl+W",
@@ -182,6 +190,7 @@
       diff: "Diff",
       diffTitle: "git diff of this MR",
       gitlab: "Open in GitLab",
+      author: "Author of the MR",
       close: "✕ Close",
       closeTitle: "Close this tab",
       closeRefused: "The browser does not let the page close a tab it did not open from the dashboard: Ctrl+W",
@@ -232,6 +241,15 @@
     document.getElementById("title").textContent = title;
     document.title = `${title} — MisteR Dashboard`;
     if (!mr) return;
+    // Absent d'une sauvegarde antérieure à son ajout : affiché au chargement suivant.
+    const authorName = mr.author?.name;
+    if (authorName) {
+      const author = document.getElementById("mr-author");
+      author.title = texts.author;
+      author.innerHTML = `<span class="avatar" style="--avatar-color:${Avatars.color(authorName)}" aria-hidden="true">${escapeHtml(Avatars.initials(authorName))}</span>`
+        + escapeHtml(authorName);
+      author.hidden = false;
+    }
     const gitlab = document.getElementById("gitlab-link");
     gitlab.textContent = texts.gitlab;
     gitlab.href = mr.webUrl;
@@ -244,6 +262,7 @@
       branch: mr.sourceBranch,
       target: mr.targetBranch,
       url: mr.webUrl,
+      author: authorName ?? "",
       lang,
     });
     if (mr.state === "merged") {
@@ -285,7 +304,7 @@
     const discussions = await GitlabNotes.allNodes(async after => {
       const data = await GitlabNotes.graphql(`{ project(fullPath: ${JSON.stringify(config.gitlabProject)}) {
         mergeRequest(iid: ${JSON.stringify(iid)}) {
-          title webUrl state sourceBranch targetBranch diffHeadSha mergeCommitSha
+          title webUrl state sourceBranch targetBranch diffHeadSha mergeCommitSha author { name }
           discussions(first: 50${after ? `, after: ${JSON.stringify(after)}` : ""}) {
             pageInfo { hasNextPage endCursor }
             nodes { id resolvable resolved notes(first: 100) { nodes {

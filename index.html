@@ -3613,6 +3613,7 @@ function openGitDiff(mr) {
     branch: mr.source_branch,
     target: mr.target_branch,
     url: mr.web_url,
+    author: mr.author?.name ?? "",
     lang: state.lang,
   });
   if (mr.state === "merged") {
