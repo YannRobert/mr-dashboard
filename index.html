@@ -986,7 +986,7 @@ const I18N = {
     "soundTest.played": "Son envoyé au système. Rien entendu ? Onglet coupé (clic droit sur l'onglet), son du site (icône à gauche de l'adresse), puis sortie et volume du navigateur dans le mélangeur de volume du système.",
     "soundTest.blocked": p => `Son bloqué par le navigateur (état audio : ${p.state}).`,
     "soundTest.error": p => `Son impossible : ${p.message}`,
-    "sound.title": "Joue un son : cloche de bar quand ta MR est approuvée ou que tu approuves celle d'un autre, un tintement quand un autre l'approuve, alerte grave sur un nouveau problème bloquant de ta MR, sirène quand le pipeline de la branche suivie passe en échec, arpège joyeux quand une MR est mergée. Cocher la case fait entendre la cloche.",
+    "sound.title": "Joue un son : cloche de bar quand ta MR est approuvée ou que tu approuves celle d'un autre, un tintement quand un autre l'approuve, un son grave sur un nouveau problème bloquant de ta MR, sirène quand le pipeline de la branche suivie passe en échec, arpège joyeux quand une MR est mergée. Cocher la case fait entendre la cloche.",
     "branchBroken": p => `🔴 ${p.branch} cassé : pipeline #${p.id} en échec`,
     "approved.own": p => `✅ Ta MR !${p.iid} est approuvée par ${p.names}`,
     "approved.other": p => `✅ MR !${p.iid} de ${p.author} approuvée par ${p.names}`,
@@ -1267,7 +1267,7 @@ const I18N = {
     "soundTest.played": "Sound sent to the system. Heard nothing? Muted tab (right-click the tab), site sound (icon left of the address), then the browser's output and level in the system volume mixer.",
     "soundTest.blocked": p => `Sound blocked by the browser (audio state: ${p.state}).`,
     "soundTest.error": p => `Sound unavailable: ${p.message}`,
-    "sound.title": "Plays a sound: a bar bell when your MR is approved or you approve someone else's, a chime when someone else approves it, a low alert on a new blocking problem of your MR, a siren when the followed branch's pipeline fails, a cheerful arpeggio when an MR is merged. Ticking the box rings the bell.",
+    "sound.title": "Plays a sound: a bar bell when your MR is approved or you approve someone else's, a chime when someone else approves it, a low tone on a new blocking problem of your MR, a siren when the followed branch's pipeline fails, a cheerful arpeggio when an MR is merged. Ticking the box rings the bell.",
     "branchBroken": p => `🔴 ${p.branch} broken: pipeline #${p.id} failed`,
     "approved.own": p => `✅ Your MR !${p.iid} is approved by ${p.names}`,
     "approved.other": p => `✅ MR !${p.iid} by ${p.author} approved by ${p.names}`,
@@ -3297,6 +3297,32 @@ function siren(
   oscillator.stop(end + 0.05);
 }
 
+// Note bourdonnante : dent de scie filtrée en passe-bas, tenue puis coupée net, dont la hauteur glisse de
+// from à to Hz. Le timbre des sons d'erreur des jeux vidéo.
+function buzz(
+  ctx,
+  output,
+  { from, to, at, duration }
+) {
+  const oscillator = ctx.createOscillator();
+  const filter = ctx.createBiquadFilter();
+  const envelope = ctx.createGain();
+  const start = ctx.currentTime + at;
+  const end = start + duration;
+  oscillator.type = "sawtooth";
+  oscillator.frequency.setValueAtTime(from, start);
+  oscillator.frequency.linearRampToValueAtTime(to, end);
+  filter.type = "lowpass";
+  filter.frequency.value = 1400;
+  envelope.gain.setValueAtTime(0.0001, start);
+  envelope.gain.exponentialRampToValueAtTime(0.3, start + 0.01);
+  envelope.gain.setValueAtTime(0.3, end - 0.06);
+  envelope.gain.exponentialRampToValueAtTime(0.0001, end);
+  oscillator.connect(filter).connect(envelope).connect(output);
+  oscillator.start(start);
+  oscillator.stop(end + 0.05);
+}
+
 const SOUNDS = {
   // Cloche de bar, plusieurs coups : sa MR est approuvée.
   bell: (ctx, output) => [0, 0.28, 0.56, 0.84].forEach(at => strike(
@@ -3311,17 +3337,18 @@ const SOUNDS = {
     output,
     { frequency: 1318, at: 0, duration: 0.6, gain: 0.2 }
   ),
-  // Deux notes graves descendantes : nouveau problème bloquant sur sa MR.
+  // « Pom-pom » d'erreur de jeu vidéo : deux notes bourdonnantes descendantes, la seconde qui s'affaisse
+  // encore. Nouveau problème bloquant sur sa MR.
   alert: (ctx, output) => {
-    tone(
+    buzz(
       ctx,
       output,
-      { frequency: 392, at: 0, duration: 0.3, gain: 0.35, type: "triangle" }
+      { from: 330, to: 311, at: 0, duration: 0.16 }
     );
-    tone(
+    buzz(
       ctx,
       output,
-      { frequency: 294, at: 0.25, duration: 0.45, gain: 0.35, type: "triangle" }
+      { from: 233, to: 196, at: 0.2, duration: 0.42 }
     );
   },
   // Sirène : le pipeline de la branche suivie passe en échec.

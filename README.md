@@ -67,8 +67,8 @@ ensemble — puis `start.sh <nom>`.
 - Une nouvelle approbation d'une MR est notifiée aussi, sauf celle qu'on a donnée soi-même, de même que
   le passage en échec du pipeline de la branche suivie (notification fermée à son retour au vert).
   **Sons**, à côté, indépendant des notifications : cloche de bar quand sa MR est approuvée ou qu'on
-  approuve celle d'un autre (à la mise à jour suivante), un tintement quand un autre l'approuve, deux notes
-  graves sur un nouveau problème bloquant de sa MR, sirène quand le pipeline de la branche suivie passe en
+  approuve celle d'un autre (à la mise à jour suivante), un tintement quand un autre l'approuve, un son grave
+  sur un nouveau problème bloquant de sa MR, sirène quand le pipeline de la branche suivie passe en
   échec, arpège majeur joyeux, sans notification, quand une MR est mergée, la sienne ou celle d'un autre. Un seul
   son par mise à jour, le plus important ; cocher la case fait entendre la
   cloche. 🔊, à côté, joue chacun des sons à la demande, case cochée ou non : de quoi les
