@@ -2,9 +2,11 @@
 
 Claude Code garde en cache la liste des modèles du compte connecté, avec les niveaux d'effort que chacun
 accepte, et la retélécharge lui-même quand elle a plus d'une heure : la relire à chaque demande suffit
-pour que le dialogue suive les sorties de modèles, sans code ni configuration à changer. Ce cache n'est
-pas documenté : absent, illisible ou d'un autre format, la liste se réduit aux alias, avec tous les
-niveaux.
+pour que le dialogue suive les sorties de modèles, sans code ni configuration à changer. La liste la
+plus récente dit ce que désigne chaque alias ; les versions précises s'y ajoutent de toutes les listes
+du cache, une liste récente se réduisant parfois aux dernières versions, quand les plus anciennes
+restent très utilisées. Ce cache n'est pas documenté : absent, illisible ou d'un autre format, la liste
+se réduit aux alias, avec tous les niveaux.
 """
 import json
 import os
@@ -18,6 +20,8 @@ EFFORTS = ("low", "medium", "high", "xhigh", "max")
 # Seuls noms admis, alias compris : la commande lancée dans Orca passe par un shell.
 SAFE_ID = re.compile(r"^claude-[a-z0-9-]+$")
 FAMILY = re.compile(r"^claude-([a-z]+)-")
+# Suffixe de date d'un nom de version (claude-haiku-4-5-20251001), qui ne la distingue pas d'une autre.
+DATE_SUFFIX = re.compile(r"-\d{8}$")
 RECOMMENDED_BADGE = "Recommended"
 
 
@@ -27,17 +31,19 @@ def cache_dir():
 
 def choices(directory=None):
     """[{"id", "label", "alias", "version", "efforts", "recommended"}] : les alias d'abord, puis les
-    versions, principales d'abord. version : celle que désigne un alias, si le cache la donne. efforts
-    vide : le modèle n'en accepte aucun."""
-    versions = _versions(directory or cache_dir())
+    versions précises qu'aucun alias ne désigne, par famille et de la plus récente à la plus ancienne.
+    version : celle que désigne un alias, si le cache la donne. efforts vide : le modèle n'en accepte
+    aucun."""
+    lists = _lists(directory or cache_dir())
+    current = lists[0] if lists else []
     latest = {}
-    for version in versions:
+    for version in sorted(current, key=lambda version: not version["main"]):
         latest.setdefault(version["family"], version)
     aliases = []
     for alias in ALIASES:
         version = latest.get(alias)
-        # Une famille absente du cache n'est pas proposée au compte.
-        if versions and version is None:
+        # Une famille absente de la liste la plus récente n'est plus proposée au compte.
+        if current and version is None:
             continue
         aliases.append({
             "id": alias,
@@ -47,10 +53,13 @@ def choices(directory=None):
             "efforts": version["efforts"] if version else list(EFFORTS),
             "recommended": version["recommended"] if version else None,
         })
-    return aliases + [
-        {key: value for key, value in version.items() if key not in ("family", "main")}
-        for version in versions
-    ]
+    designated = {version["id"] for version in latest.values()}
+    versions = {}
+    for version in (version for versions_list in lists for version in versions_list):
+        if version["id"] not in designated and version["family"] in ALIASES:
+            versions.setdefault(version["id"], version)
+    ordered = sorted(versions.values(), key=lambda version: (ALIASES.index(version["family"]), _number(version)))
+    return aliases + [{key: value for key, value in version.items() if key not in ("family", "main")} for version in ordered]
 
 
 def find(model_id):
@@ -58,17 +67,29 @@ def find(model_id):
     return next((choice for choice in choices() if choice["id"] == model_id), None)
 
 
-def _versions(directory):
+# Clé de tri d'une version, la plus récente d'abord : claude-opus-4-8 avant claude-opus-4-6, et
+# claude-fable-5-1 avant claude-fable-5, lu 5.0.
+def _number(version):
+    digits = [-int(digit) for digit in DATE_SUFFIX.sub("", version["id"]).split("-")[2:] if digit.isdigit()]
+    return digits + [0] * (2 - len(digits))
+
+
+def _lists(directory):
+    """Les versions de chaque liste du cache, la plus récente d'abord ; une liste illisible est ignorée."""
     try:
         files = sorted(directory.glob("*-cc.json"), key=lambda path: path.stat().st_mtime, reverse=True)
-        if not files:
-            return []
-        models = json.loads(files[0].read_text(encoding="utf-8"))["catalog"]["config"]["models"]
-        versions = [_version(model) for model in models]
-    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+    except OSError:
         return []
-    # Tri stable : l'ordre du cache, les modèles principaux avant les plus anciens.
-    return sorted([version for version in versions if version], key=lambda version: not version["main"])
+    lists = []
+    for path in files:
+        try:
+            models = json.loads(path.read_text(encoding="utf-8"))["catalog"]["config"]["models"]
+            versions = [version for version in (_version(model) for model in models) if version]
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            continue
+        if versions:
+            lists.append(versions)
+    return lists
 
 
 def _version(model):

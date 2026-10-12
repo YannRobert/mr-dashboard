@@ -134,10 +134,12 @@ gardé, par MR et par action, jusqu'au rechargement de la page ; **Prompt d'orig
 **Modèle**, à côté de **Ouvrir dans Orca**, choisit celui de la session lancée (`claude --model`) :
 celui de l'action dans le catalogue, présélectionné, ou celui de la configuration de Claude Code (*par défaut*). Il est gardé
 comme le prompt. Un prompt copié prend le modèle de la session où on le colle (`/model` pour en changer).
-La liste propose les alias, qui prennent toujours la dernière version (*Opus (5.5)*), puis chaque version
-précise que Claude Code propose au compte connecté (*Opus 4.8*…). Le dashboard la lit dans le cache que
-Claude Code tient lui-même à jour (`~/.claude/cache/model-catalog/`, relu à chaque ouverture du dialogue) :
-un nouveau modèle y apparaît sans rien changer ici. Faute de ce cache, non documenté par Anthropic, seuls
+La liste propose les alias, qui prennent toujours la dernière version (*Opus (5.5)*), puis les versions
+précises plus anciennes (*Opus 4.8*…), de la plus récente à la plus ancienne ; celle qu'un alias désigne
+n'y est pas répétée. Le dashboard les lit dans le cache que Claude Code tient lui-même à jour
+(`~/.claude/cache/model-catalog/`, relu à chaque ouverture du dialogue) : un nouveau modèle y apparaît
+sans rien changer ici. La liste la plus récente du cache dit ce que désigne chaque alias, et les
+versions précises viennent de toutes ses listes, la plus récente pouvant se réduire aux dernières. Faute de ce cache, non documenté par Anthropic, seuls
 les alias sont proposés.
 **Effort**, à côté, choisit de même son niveau d'effort (`claude --effort`, de *Bas* à *Maximal*) :
 bas pour une tâche simple, comme orchestrer une revue, qui coûte moins ; élevé pour une tâche difficile.
