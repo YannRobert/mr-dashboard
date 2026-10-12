@@ -421,7 +421,7 @@
   /* Activité des commits, au survol du nombre de commits : courbe cumulée et commentaires. Volet ancré
      dans le coin bas droit de la fenêtre, pour ne jamais recouvrir la ligne de la MR survolée. */
   .commit-activity {
-    position: fixed; z-index: 50; right: 1rem; bottom: 1rem; width: min(44rem, calc(100vw - 2rem)); max-height: 60vh; overflow: auto;
+    position: fixed; z-index: 50; right: 1rem; bottom: calc(var(--dock-height, 0px) + 1rem); width: min(44rem, calc(100vw - 2rem)); max-height: 60vh; overflow: auto;
     padding: 0.8rem 1rem 1rem; background: var(--surface); color: var(--text);
     border: 1px solid var(--border-strong); border-radius: 0.8rem;
     box-shadow: 0 0.4rem 1.6rem rgb(0 0 0 / 0.25);
@@ -478,10 +478,30 @@
   /* Sans ligne, la colonne MR garderait la largeur de son seul titre. */
   table.mrs:has(td.empty) thead tr.columns th:first-child { width: 30%; }
 
-  /* Dernier pipeline de la branche suivie : stages reliés comme dans GitLab, jobs listés sous chacun. */
-  .branch-pipeline { padding: 0 1.2rem 1.2rem; }
+  /* Dernier pipeline de la branche suivie, en barre ancrée au bas de la fenêtre : visible quel que soit
+     le nombre de MR. Repliée, une ligne ; dépliée, stages reliés comme dans GitLab, jobs listés sous chacun. */
+  body { padding-bottom: var(--dock-height, 0px); }
+  .branch-pipeline {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+    background: var(--surface); border-top: 1px solid var(--border-strong);
+    box-shadow: 0 -0.3rem 1.2rem rgb(0 0 0 / 0.12);
+  }
   .branch-pipeline[hidden] { display: none; }
-  .bp-title { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 1.2rem; margin: 0 0 0.4rem; }
+  /* Pipeline en échec : la barre entière en rouge, pour qu'une branche cassée se voie sans la chercher. */
+  .branch-pipeline.failed { border-top: 2px solid var(--red-dot); }
+  .branch-pipeline.failed .bp-bar { background: var(--red-bg); }
+  .bp-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 1.2rem; padding: 0.45rem 1.2rem; cursor: pointer; }
+  .bp-toggle {
+    font: inherit; font-size: 0.9rem; line-height: 1; color: var(--muted); background: none; cursor: pointer;
+    border: 1px solid var(--border-strong); border-radius: 0.4rem; padding: 0.2em 0.45em;
+  }
+  .bp-toggle::before { content: "▴"; }
+  .bp-toggle[aria-expanded="true"]::before { content: "▾"; }
+  .bp-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.8rem; }
+  .bp-summary .bp-commit { font-weight: 600; color: var(--text); }
+  .bp-summary .muted, .bp-summary code { color: var(--muted); }
+  .bp-body { max-height: 60vh; overflow: auto; padding: 0.2rem 1.2rem 0.9rem; }
+  .bp-body[hidden] { display: none; }
   .branch-pipeline h2 { font-size: 0.95rem; margin: 0; color: var(--muted); font-weight: 600; }
   .branch-pipeline h2 code { color: var(--text); }
   .bp-card {
@@ -501,11 +521,12 @@
   .bp-head .bp-commit { font-weight: 600; color: var(--text); }
   .bp-head .muted, .bp-head code { color: var(--muted); }
   .bp-history { display: inline-flex; align-items: stretch; gap: 0.35rem; position: relative; }
-  /* Survol : le même SVG agrandi en surimpression (vectoriel, donc net), sans rien ajouter au DOM. */
+  /* Survol : le même SVG agrandi en surimpression (vectoriel, donc net), sans rien ajouter au DOM, vers le haut :
+     la barre est au bas de la fenêtre. */
   .bp-history-bars {
     color: var(--accent); stroke: currentColor; stroke-width: 1; overflow: visible;
     background: var(--surface); border-radius: 2px;
-    transform-origin: left top; transition: transform .15s ease, box-shadow .15s ease;
+    transform-origin: left bottom; transition: transform .15s ease, box-shadow .15s ease;
   }
   .bp-history:hover .bp-history-bars {
     position: relative; z-index: 5; transform: scale(4);
@@ -554,7 +575,7 @@
     header, .summary-bar { padding-left: 16px; padding-right: 16px; }
     .filters { margin-left: 16px; margin-right: 16px; }
     .table-wrap { padding: 0 16px 24px; }
-    .branch-pipeline { padding: 0 16px 24px; }
+    .bp-bar, .bp-body { padding-left: 16px; padding-right: 16px; }
   }
 </style>
 </head>
@@ -713,6 +734,7 @@ const STALLED_ALERT_HOURS = 8;
 // Actualisation automatique, tant que la case est cochée.
 const AUTO_REFRESH_MS = 5 * 60 * 1000;
 const AUTO_REFRESH_KEY = "mr-dashboard.autoRefresh";
+const BRANCH_PIPELINE_EXPANDED_KEY = "mr-dashboard.branchPipelineExpanded";
 const FRESHNESS_SEGMENTS = 5;
 
 // Dernière mise à jour affichée, rejouée au chargement suivant avant de se rafraîchir en tâche de fond.
@@ -878,6 +900,7 @@ const state = {
   branchPipeline: undefined,
   // Dépliage choisi à la main, par pipeline et par statut : un changement de statut rend la main au défaut.
   branchPipelineOpen: new Map(),
+  branchPipelineExpanded: readBranchPipelineExpanded(),
   signals: new Map(),
   // Vue des MR mergées : chargée à la demande, jamais sauvegardée ni actualisée automatiquement.
   // seq écarte le résultat d'un chargement dépassé par un autre (période changée entre-temps).
@@ -1041,6 +1064,8 @@ const I18N = {
     "pipeline.none": "Aucun",
     "branchPipeline.title": p => `Dernier pipeline de ${p.branch}`,
     "branchPipeline.all": "Tous les pipelines",
+    "branchPipeline.expand": "Afficher le détail du pipeline",
+    "branchPipeline.collapse": "Replier le détail du pipeline",
     "branchPipeline.allTitle": p => `Pipelines de ${p.branch} dans GitLab`,
     "branchPipeline.none": "Aucun pipeline sur cette branche.",
     "branchPipeline.running": p => `en cours depuis ${p.duration}`,
@@ -1315,6 +1340,8 @@ const I18N = {
     "pipeline.none": "None",
     "branchPipeline.title": p => `Latest ${p.branch} pipeline`,
     "branchPipeline.all": "All pipelines",
+    "branchPipeline.expand": "Show the pipeline details",
+    "branchPipeline.collapse": "Collapse the pipeline details",
     "branchPipeline.allTitle": p => `${p.branch} pipelines in GitLab`,
     "branchPipeline.none": "No pipeline on this branch.",
     "branchPipeline.running": p => `running for ${p.duration}`,
@@ -2029,6 +2056,20 @@ function readAutoRefresh() {
 function saveAutoRefresh(enabled) {
   try {
     localStorage.setItem(AUTO_REFRESH_KEY, String(enabled));
+  } catch (ignored) { /* stockage indisponible : la préférence vaut pour la session */ }
+}
+
+function readBranchPipelineExpanded() {
+  try {
+    return localStorage.getItem(BRANCH_PIPELINE_EXPANDED_KEY) === "true";
+  } catch (ignored) {
+    return false;
+  }
+}
+
+function saveBranchPipelineExpanded(expanded) {
+  try {
+    localStorage.setItem(BRANCH_PIPELINE_EXPANDED_KEY, String(expanded));
   } catch (ignored) { /* stockage indisponible : la préférence vaut pour la session */ }
 }
 
@@ -4588,30 +4629,42 @@ function isActive(pipeline) {
   return ACTIVE_PIPELINE_GROUPS.has(pipeline.detailedStatus.group);
 }
 
+// Repliée : la ligne de tête du dernier pipeline. Dépliée : lien vers tous les pipelines, durées des builds
+// et historique dans la barre, cartes du dernier pipeline et du précédent en dessous.
 function renderBranchPipeline() {
   const section = $("branch-pipeline");
   const branch = state.config?.pipelineBranch;
   const p = state.branchPipeline;
   section.hidden = mergedView() || !branch || p === undefined;
   if (section.hidden) return;
+  const expanded = state.branchPipelineExpanded;
+  section.classList.toggle("failed", p?.detailedStatus?.group === "failed");
+  const toggle = `<button type="button" class="bp-toggle" aria-controls="bp-body" aria-expanded="${expanded}" `
+    + `title="${escapeHtml(t(expanded ? "branchPipeline.collapse" : "branchPipeline.expand"))}"></button>`;
   const heading = `<h2 id="branch-pipeline-title">${t("branchPipeline.title", { branch: `<code>${escapeHtml(branch)}</code>` })}</h2>`;
   const pipelinesUrl = `${state.config.gitlabWeb}/${state.config.gitlabProject}/-/pipelines?${new URLSearchParams({ ref: branch, scope: "all" })}`;
   const allLink = `<a class="bp-all" href="${escapeHtml(pipelinesUrl)}" target="_blank" rel="noopener" title="${escapeHtml(t("branchPipeline.allTitle", { branch }))}">${escapeHtml(t("branchPipeline.all"))} ↗</a>`;
-  const title = `<div class="bp-title">${heading}${allLink}${p?.error ? "" : buildDurationsLine(p?.buildDurations)}${buildHistoryChart()}</div>`;
-  if (!p) {
-    section.innerHTML = `${title}<div class="bp-card muted">${escapeHtml(t("branchPipeline.none"))}</div>`;
-    return;
-  }
-  if (p.error) {
-    section.innerHTML = `${title}<div class="bp-card">${pill("grey", t("unavailable"), p.error)}</div>`;
-    return;
-  }
-  const current = pipelineCard(p, "");
-  const previous = p.previous ? pipelineCard(p.previous, `<span class="bp-label">${escapeHtml(t("branchPipeline.previous"))}</span>`) : "";
-  section.innerHTML = `${title}${current}${previous}`;
+  let summary;
+  if (!p) summary = `<span class="muted">${escapeHtml(t("branchPipeline.none"))}</span>`;
+  else if (p.error) summary = pill("grey", t("unavailable"), p.error);
+  else summary = expanded
+    ? `${allLink}${buildDurationsLine(p.buildDurations)}${buildHistoryChart()}`
+    : pipelineHead(p, "");
+  const bar = `<div class="bp-bar">${toggle}${heading}<div class="bp-summary">${summary}</div></div>`;
+  const cards = p && !p.error
+    ? pipelineCard(p, "") + (p.previous ? pipelineCard(p.previous, `<span class="bp-label">${escapeHtml(t("branchPipeline.previous"))}</span>`) : "")
+    : "";
+  section.innerHTML = `${bar}<div class="bp-body" id="bp-body"${expanded && cards ? "" : " hidden"}>${cards}</div>`;
 }
 
-function pipelineCard(
+function toggleBranchPipeline() {
+  state.branchPipelineExpanded = !state.branchPipelineExpanded;
+  saveBranchPipelineExpanded(state.branchPipelineExpanded);
+  renderBranchPipeline();
+}
+
+// Ligne de tête d'un pipeline : celle de sa carte, et celle de la barre repliée.
+function pipelineHead(
   p,
   label
 ) {
@@ -4622,7 +4675,7 @@ function pipelineCard(
   let duration = null;
   if (p.duration) duration = compactDuration(p.duration * 1000);
   else if (p.startedAt) duration = t("branchPipeline.running", { duration: compactDuration(gitlabNow() - new Date(p.startedAt)) });
-  const head = [
+  return [
     label,
     pill(PIPELINE_TONE[status.group] ?? "grey", status.text, t("pipeline.title", { id, label: status.label }), web(p.path)),
     link(p.path, `#${escapeHtml(id)}`),
@@ -4632,6 +4685,14 @@ function pipelineCard(
     duration ? `<span class="muted" title="${escapeHtml(t("branchPipeline.durationTitle"))}">⏱ ${escapeHtml(duration)}</span>` : "",
     `<span class="muted" title="${escapeHtml(formatDate(p.createdAt))}">${escapeHtml(t("branchPipeline.ago", { age: compactDuration(gitlabNow() - new Date(p.createdAt)) }))}</span>`,
   ].filter(Boolean).join("");
+}
+
+function pipelineCard(
+  p,
+  label
+) {
+  const web = path => state.config.gitlabWeb + path;
+  const head = pipelineHead(p, label);
   const stages = p.stages.nodes.map(stage => {
     const jobs = stage.jobs.nodes.map(job => {
       const jobDuration = job.duration ? ` — ${compactDuration(job.duration * 1000)}` : "";
@@ -4803,6 +4864,14 @@ $("period").addEventListener("change", e => {
   loadMerged();
 });
 $("alerts").addEventListener("change", e => updateFilters({ alerts: e.target.checked }));
+// Toute la barre déplie ou replie, sauf ses liens, qui gardent leur rôle.
+$("branch-pipeline").addEventListener("click", e => {
+  if (e.target.closest(".bp-bar") && !e.target.closest("a")) toggleBranchPipeline();
+});
+// Hauteur de la barre réservée au bas de la page : la dernière MR ne passe jamais dessous.
+new ResizeObserver(([entry]) => {
+  document.documentElement.style.setProperty("--dock-height", `${entry.target.offsetHeight}px`);
+}).observe($("branch-pipeline"));
 // « toggle » ne remonte pas : écouté en capture. Revenir au défaut efface le choix manuel.
 $("branch-pipeline").addEventListener("toggle", e => {
   const key = e.target.dataset?.pipelineKey;

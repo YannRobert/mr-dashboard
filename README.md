@@ -88,6 +88,10 @@ ensemble — puis `start.sh <nom>`.
   large ; en deçà, il défile dans son cadre, sans les en-têtes collants.
   **A− / A+**, dans l'en-tête, l'ajustent de 70 à 150 % (retenu dans le navigateur, repris par la page
   de diff) ; préférer ce réglage au zoom du navigateur, qui vaut pour tous les onglets du dashboard.
+- Le dernier pipeline de la branche suivie (`develop` d'ordinaire) tient dans une barre ancrée au bas de
+  la fenêtre, visible quel que soit le nombre de MR, rouge quand il a échoué. Un clic la déplie : jobs
+  par stage, pipeline précédent, durées des builds et historique ; dépliée ou repliée, elle le reste au
+  rechargement.
 - **Ouvertes | Mergées**, dans l'en-tête : la vue des MR mergées (`?view=merged`) relit l'histoire des
   MR fermées sur une période de merge (7, 30 — par défaut —, 90 jours ou toutes), pour comprendre
   après coup pourquoi certaines ont duré. Ni pipeline, ni qualité, ni retard : durée totale,
