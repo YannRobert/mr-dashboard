@@ -3313,10 +3313,10 @@ function buzz(
   oscillator.frequency.setValueAtTime(from, start);
   oscillator.frequency.linearRampToValueAtTime(to, end);
   filter.type = "lowpass";
-  filter.frequency.value = 1400;
+  filter.frequency.value = 1000;
   envelope.gain.setValueAtTime(0.0001, start);
-  envelope.gain.exponentialRampToValueAtTime(0.3, start + 0.01);
-  envelope.gain.setValueAtTime(0.3, end - 0.06);
+  envelope.gain.exponentialRampToValueAtTime(0.4, start + 0.01);
+  envelope.gain.setValueAtTime(0.4, end - 0.06);
   envelope.gain.exponentialRampToValueAtTime(0.0001, end);
   oscillator.connect(filter).connect(envelope).connect(output);
   oscillator.start(start);
@@ -3343,12 +3343,12 @@ const SOUNDS = {
     buzz(
       ctx,
       output,
-      { from: 330, to: 311, at: 0, duration: 0.16 }
+      { from: 147, to: 139, at: 0, duration: 0.18 }
     );
     buzz(
       ctx,
       output,
-      { from: 233, to: 196, at: 0.2, duration: 0.42 }
+      { from: 110, to: 82, at: 0.22, duration: 0.5 }
     );
   },
   // Sirène : le pipeline de la branche suivie passe en échec.
