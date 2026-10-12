@@ -163,7 +163,8 @@
   }
   .sound-panel button:hover { border-color: var(--accent); }
   .sound-panel button > span:first-child { grid-row: span 2; font-size: 1.1rem; text-align: center; }
-  .sound-panel small { color: var(--muted); font-size: var(--fs-small); }
+  .sound-panel h4 { margin: 0.3rem 0 0; color: var(--muted); font-size: var(--fs-small); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.sound-panel small { color: var(--muted); font-size: var(--fs-small); }
   .load-panel h4 { margin: 0 0 0.5rem; font-size: 0.85rem; }
   .load-panel table { width: 100%; border-collapse: collapse; font-size: var(--fs-small); }
   .load-panel th, .load-panel td { padding: 0.2rem 0.4rem; text-align: right; }
@@ -615,11 +616,13 @@
     <div class="sound-test" id="sound-test">
       <button type="button" id="sound-test-button" class="icon-button" aria-expanded="false" aria-controls="sound-panel" aria-label="Écouter les sons" data-i18n-aria-label="soundTest" data-i18n-title="soundTest"><span aria-hidden="true">🔊</span></button>
       <div class="load-panel sound-panel" id="sound-panel" hidden>
+        <h4 data-i18n="soundTest.positive">Bonnes nouvelles</h4>
+        <button type="button" data-sound="merged"><span aria-hidden="true">🔀</span><b data-i18n="soundTest.merged">Arpège</b><small data-i18n="soundTest.mergedWhen"></small></button>
         <button type="button" data-sound="bell"><span aria-hidden="true">🔔</span><b data-i18n="soundTest.bell">Cloche</b><small data-i18n="soundTest.bellWhen"></small></button>
         <button type="button" data-sound="ding"><span aria-hidden="true">🎵</span><b data-i18n="soundTest.ding">Ding</b><small data-i18n="soundTest.dingWhen"></small></button>
-        <button type="button" data-sound="alert"><span aria-hidden="true">⚠</span><b data-i18n="soundTest.alert">Alerte</b><small data-i18n="soundTest.alertWhen"></small></button>
+        <h4 data-i18n="soundTest.negative">Mauvaises nouvelles</h4>
         <button type="button" data-sound="broken"><span aria-hidden="true">🔴</span><b data-i18n="soundTest.broken">Sirène</b><small data-i18n="soundTest.brokenWhen"></small></button>
-        <button type="button" data-sound="merged"><span aria-hidden="true">🔀</span><b data-i18n="soundTest.merged">Arpège</b><small data-i18n="soundTest.mergedWhen"></small></button>
+        <button type="button" data-sound="alert"><span aria-hidden="true">⚠</span><b data-i18n="soundTest.alert">Alerte</b><small data-i18n="soundTest.alertWhen"></small></button>
         <p id="sound-test-status" hidden></p>
       </div>
     </div>
@@ -973,6 +976,8 @@ const I18N = {
     "notify": "Notifications",
     "sound": "Sons",
     "soundTest": "Écouter les sons, pour vérifier qu'ils te conviennent et sortent sur le bon appareil",
+    "soundTest.positive": "Bonnes nouvelles",
+    "soundTest.negative": "Mauvaises nouvelles",
     "soundTest.bell": "Cloche de bar",
     "soundTest.bellWhen": "Ta MR est approuvée, ou tu approuves celle d'un autre",
     "soundTest.ding": "Ding",
@@ -1254,6 +1259,8 @@ const I18N = {
     "notify": "Notifications",
     "sound": "Sounds",
     "soundTest": "Listen to the sounds, to check you like them and they play on the right device",
+    "soundTest.positive": "Good news",
+    "soundTest.negative": "Bad news",
     "soundTest.bell": "Bar bell",
     "soundTest.bellWhen": "Your MR is approved, or you approve someone else's",
     "soundTest.ding": "Ding",
@@ -3297,9 +3304,10 @@ function siren(
   oscillator.stop(end + 0.05);
 }
 
-// Note bourdonnante : dent de scie filtrée en passe-bas, tenue puis coupée net, dont la hauteur glisse de
-// from à to Hz. Le timbre des sons d'erreur des jeux vidéo.
-function buzz(
+// Coup sourd et sec : attaque franche puis décroissance immédiate, sans tenue, la hauteur chutant de from
+// à to Hz comme une grosse caisse. La dent de scie filtrée garde des harmoniques audibles sur de petits
+// haut-parleurs, qui rendent mal la fondamentale.
+function thud(
   ctx,
   output,
   { from, to, at, duration }
@@ -3311,12 +3319,11 @@ function buzz(
   const end = start + duration;
   oscillator.type = "sawtooth";
   oscillator.frequency.setValueAtTime(from, start);
-  oscillator.frequency.linearRampToValueAtTime(to, end);
+  oscillator.frequency.exponentialRampToValueAtTime(to, end);
   filter.type = "lowpass";
-  filter.frequency.value = 1000;
+  filter.frequency.value = 700;
   envelope.gain.setValueAtTime(0.0001, start);
-  envelope.gain.exponentialRampToValueAtTime(0.4, start + 0.01);
-  envelope.gain.setValueAtTime(0.4, end - 0.06);
+  envelope.gain.exponentialRampToValueAtTime(0.55, start + 0.004);
   envelope.gain.exponentialRampToValueAtTime(0.0001, end);
   oscillator.connect(filter).connect(envelope).connect(output);
   oscillator.start(start);
@@ -3337,18 +3344,17 @@ const SOUNDS = {
     output,
     { frequency: 1318, at: 0, duration: 0.6, gain: 0.2 }
   ),
-  // « Pom-pom » d'erreur de jeu vidéo : deux notes bourdonnantes descendantes, la seconde qui s'affaisse
-  // encore. Nouveau problème bloquant sur sa MR.
+  // « Boum-boum » sec et grave, deux coups descendants : nouveau problème bloquant sur sa MR.
   alert: (ctx, output) => {
-    buzz(
+    thud(
       ctx,
       output,
-      { from: 147, to: 139, at: 0, duration: 0.18 }
+      { from: 150, to: 110, at: 0, duration: 0.16 }
     );
-    buzz(
+    thud(
       ctx,
       output,
-      { from: 110, to: 82, at: 0.22, duration: 0.5 }
+      { from: 110, to: 65, at: 0.19, duration: 0.3 }
     );
   },
   // Sirène : le pipeline de la branche suivie passe en échec.

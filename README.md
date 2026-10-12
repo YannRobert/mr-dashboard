@@ -71,7 +71,7 @@ ensemble — puis `start.sh <nom>`.
   sur un nouveau problème bloquant de sa MR, sirène quand le pipeline de la branche suivie passe en
   échec, arpège majeur joyeux, sans notification, quand une MR est mergée, la sienne ou celle d'un autre. Un seul
   son par mise à jour, le plus important ; cocher la case fait entendre la
-  cloche. 🔊, à côté, joue chacun des sons à la demande, case cochée ou non : de quoi les
+  cloche. 🔊, à côté, joue chacun des sons à la demande, bonnes nouvelles puis mauvaises, case cochée ou non : de quoi les
   essayer et vérifier qu'ils sortent sur le bon appareil, sans attendre un événement. Après un rechargement, le navigateur ne laisse jouer un son qu'après un clic ou une touche dans
   la page. Avec plusieurs onglets du dashboard ouverts, le son sort de celui où l'on a
   cliqué ou tapé en dernier, même si un autre onglet a détecté l'événement.
