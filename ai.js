@@ -112,11 +112,32 @@ window.MrAi = (() => {
       if (button) select(actionsFor(current.toFix).find(action => action.id === button.dataset.aiAction));
     });
     part("ai-close").addEventListener("click", () => dialog.close());
+    // Échap et un clic hors du dialogue le ferment aussi. Le clic doit commencer hors du dialogue : une
+    // sélection du prompt relâchée au-dehors ne ferme rien.
+    dialog.addEventListener("keydown", event => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      dialog.close();
+    });
+    let pressedOutside = false;
+    dialog.addEventListener("pointerdown", event => pressedOutside = outside(event));
+    dialog.addEventListener("click", event => {
+      if (pressedOutside && outside(event)) dialog.close();
+      pressedOutside = false;
+    });
     part("ai-copy").addEventListener("click", copy);
     part("ai-orca").addEventListener("click", openInOrca);
   }
 
   const part = id => dialog.querySelector(`#${id}`);
+
+  // Un clic sur le fond d'un dialogue modal lui est adressé, comme un clic sur ses marges intérieures :
+  // seule sa position les distingue.
+  function outside(event) {
+    if (event.target !== dialog) return false;
+    const box = dialog.getBoundingClientRect();
+    return event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom;
+  }
 
   function applyTexts() {
     part("ai-actions").setAttribute("aria-label", t("dialog.actions"));

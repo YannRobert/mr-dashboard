@@ -117,7 +117,8 @@ c'est le navigateur ou Windows qui bloque, pas le dashboard :
 
 Le bouton **AI** d'une MR ouverte propose les actions du catalogue du projet suivi : le dialogue
 affiche le prompt de l'action choisie, à copier dans Claude Code ou à lancer dans un onglet Orca (quand
-le serveur tourne dans WSL et qu'Orca est installé). Le bouton porte un liseré rouge quand la MR a
+le serveur tourne dans WSL et qu'Orca est installé). **Fermer**, Échap ou un clic hors du dialogue le
+ferment. Le bouton porte un liseré rouge quand la MR a
 quelque chose à corriger : branche en retard ou en conflit, indicateur qualité imparfait, thread non
 résolu.
 
