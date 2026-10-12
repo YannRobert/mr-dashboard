@@ -185,7 +185,8 @@ window.MrAi = (() => {
   const buttonTitle = toFix => t(toFix ? "ai.title.toFix" : "ai.title");
 
   // mr : { iid, title, source_branch, target_branch, web_url }. Variables inconnues laissées telles
-  // quelles : le prompt affiché montre la faute de frappe.
+  // quelles : le prompt affiché montre la faute de frappe. Il finit par une ligne vide : un clic sous le
+  // texte y place le curseur, prêt pour ce qu'on veut ajouter.
   function prompt(action) {
     const { mr, fixContext } = current;
     const values = {
@@ -196,7 +197,8 @@ window.MrAi = (() => {
       web_url: mr.web_url,
       fix_context: fixContext,
     };
-    return action.prompt.replace(/\{(\w+)\}/g, (variable, name) => values[name] != null ? String(values[name]) : variable);
+    const text = action.prompt.replace(/\{(\w+)\}/g, (variable, name) => values[name] != null ? String(values[name]) : variable);
+    return `${text.trimEnd()}\n\n`;
   }
 
   // context : { toFix, fixContext }, ou une fonction qui le donne une fois le catalogue relu.
@@ -231,9 +233,10 @@ window.MrAi = (() => {
     part("ai-reset").hidden = !drafts.has(draftKey());
     part("ai-copied").textContent = "";
     for (const id of ["ai-orca", "ai-copy"]) part(id).disabled = !action;
-    // Curseur en tête, rien de sélectionné : la première touche frappée ne remplace pas tout le prompt.
+    // Curseur sur la ligne vide de la fin, rien de sélectionné, le début du prompt à l'écran : ce qu'on
+    // tape s'ajoute à la suite, sans rien remplacer.
     text.focus();
-    text.setSelectionRange(0, 0);
+    text.setSelectionRange(text.value.length, text.value.length);
     text.scrollTop = 0;
   }
 

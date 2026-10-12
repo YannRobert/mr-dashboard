@@ -118,7 +118,8 @@ c'est le navigateur ou Windows qui bloque, pas le dashboard :
 Le bouton **AI** d'une MR ouverte propose les actions du catalogue du projet suivi : le dialogue
 affiche le prompt de l'action choisie, à copier dans Claude Code ou à lancer dans un onglet Orca (quand
 le serveur tourne dans WSL et qu'Orca est installé). Le prompt se modifie dans le dialogue avant d'être
-copié ou lancé, pour ajouter du contexte ou retirer une mention : c'est le texte modifié qui part. Il est
+copié ou lancé, pour ajouter du contexte ou retirer une mention : c'est le texte modifié qui part. Le
+curseur attend sur la ligne vide qui le termine, où ce qu'on tape s'ajoute à la suite. Le prompt modifié est
 gardé, par MR et par action, jusqu'au rechargement de la page ; **Prompt d'origine** le rétablit.
 **Fermer**, Échap ou un clic hors du dialogue le ferment. Le bouton porte un liseré rouge quand la MR a
 quelque chose à corriger : branche en retard ou en conflit, indicateur qualité imparfait, thread non
