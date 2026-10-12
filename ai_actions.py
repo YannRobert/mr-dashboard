@@ -9,6 +9,7 @@ demande : un prompt modifié s'essaie sans redémarrer le serveur ni commiter. C
     tab = "… !{iid}"    titre de l'onglet Orca, {iid} remplacé par le numéro de la MR (défaut : label)
     prompt = "…"        prompt, dont la page remplace les variables (cf. README)
     when = "to-fix"     facultatif : action proposée seulement quand la MR a quelque chose à corriger
+    model = "sonnet"    facultatif : modèle présélectionné pour la session Orca, parmi MODELS
 
 Sans fichier, le catalogue se réduit à la correction, avec le prompt calculé par la page.
 """
@@ -18,9 +19,12 @@ from pathlib import Path
 
 CATALOG_PATH = Path(".mr-dashboard") / "ai-actions.toml"
 DEFAULT_ACTIONS = [
-    {"id": "fix", "label": None, "tab": "Fix MR !{iid}", "prompt": "{fix_context}", "when": "to-fix"},
+    {"id": "fix", "label": None, "tab": "Fix MR !{iid}", "prompt": "{fix_context}", "when": "to-fix", "model": None},
 ]
 WHEN_VALUES = {"to-fix"}
+# Alias de `claude --model`, qui désignent toujours la dernière version de chaque modèle. Seules valeurs
+# admises, dans le catalogue comme dans une demande de lancement : la commande passe par un shell.
+MODELS = ("fable", "opus", "sonnet", "haiku")
 MAX_TAB_CHARS = 80
 
 
@@ -45,18 +49,18 @@ class AiActions:
         return cls(Path(common_dir).parent)
 
     def catalog(self):
-        """{"source", "actions"} : source vaut None pour le catalogue par défaut, faute de fichier."""
+        """{"source", "actions", "models"} : source vaut None pour le catalogue par défaut, faute de fichier."""
         try:
             content = self._path.read_bytes()
         except FileNotFoundError:
-            return {"source": None, "actions": DEFAULT_ACTIONS}
+            return {"source": None, "actions": DEFAULT_ACTIONS, "models": MODELS}
         except OSError as error:
             raise AiActionsError(f"{CATALOG_PATH} illisible : {error}") from error
         try:
             document = tomllib.loads(content.decode("utf-8"))
         except (UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
             raise AiActionsError(f"{CATALOG_PATH} invalide : {error}") from error
-        return {"source": str(CATALOG_PATH), "actions": self._actions(document)}
+        return {"source": str(CATALOG_PATH), "actions": self._actions(document), "models": MODELS}
 
     def tab_title(
             self,
@@ -93,13 +97,23 @@ class AiActions:
         for key in ("id", "label", "prompt"):
             if not isinstance(entry.get(key), str) or not entry[key].strip():
                 raise AiActionsError(f"{where} : {key} manquant")
-        unknown = set(entry) - {"id", "label", "tab", "prompt", "when"}
+        unknown = set(entry) - {"id", "label", "tab", "prompt", "when", "model"}
         if unknown:
             raise AiActionsError(f"{where} : clé inconnue : {', '.join(sorted(unknown))}")
         when = entry.get("when")
         if when is not None and when not in WHEN_VALUES:
             raise AiActionsError(f"{where} : when vaut {', '.join(sorted(WHEN_VALUES))} ou est absent")
+        model = entry.get("model")
+        if model is not None and model not in MODELS:
+            raise AiActionsError(f"{where} : model vaut {', '.join(MODELS)} ou est absent")
         tab = entry.get("tab", entry["label"])
         if not isinstance(tab, str) or "\n" in tab or len(tab) > MAX_TAB_CHARS:
             raise AiActionsError(f"{where} : tab doit tenir sur une ligne de {MAX_TAB_CHARS} caractères au plus")
-        return {"id": entry["id"], "label": entry["label"], "tab": tab, "prompt": entry["prompt"], "when": when}
+        return {
+            "id": entry["id"],
+            "label": entry["label"],
+            "tab": tab,
+            "prompt": entry["prompt"],
+            "when": when,
+            "model": model,
+        }

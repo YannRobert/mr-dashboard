@@ -12,6 +12,7 @@ import base64
 import json
 import os
 import secrets
+import shlex
 import shutil
 import subprocess
 import time
@@ -96,15 +97,17 @@ class OrcaLauncher:
             self,
             iid,
             title,
-            prompt
+            prompt,
+            model=None
     ):
-        """Ouvre le terminal et renvoie {worktree, confirmed}."""
+        """Ouvre le terminal et renvoie {worktree, confirmed}. Sans model, claude prend celui de sa configuration."""
         if not prompt.strip() or len(prompt) > PROMPT_MAX_CHARS:
             raise OrcaError("prompt vide ou trop long")
         prompt_file = self._write_prompt(
             iid,
             prompt
         )
+        model_option = f"--model {shlex.quote(model)} " if model else ""
         self._raise_orca()
         # Le fichier n'est jamais supprimé ici sur erreur : le terminal a pu être créé quand même, et
         # son shell le lirait alors trop tard. Sans le fichier, claude ne démarre pas du tout plutôt
@@ -114,7 +117,7 @@ class OrcaLauncher:
                 "terminal", "create",
                 "--worktree", "path:" + self._windows_path(self._repo_root),
                 "--title", title,
-                "--command", f"[ -f '{prompt_file}' ] && claude \"$(cat '{prompt_file}'; rm -f '{prompt_file}')\"",
+                "--command", f"[ -f '{prompt_file}' ] && claude {model_option}\"$(cat '{prompt_file}'; rm -f '{prompt_file}')\"",
                 "--focus",
                 "--json",
             ])

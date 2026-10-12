@@ -20,6 +20,9 @@ window.MrAi = (() => {
       "dialog.copied": "Copié",
       "dialog.orca": "Ouvrir dans Orca",
       "dialog.orca.title": "Lance Claude Code avec ce prompt dans un nouvel onglet Orca, sur le worktree principal",
+      "dialog.model": "Modèle",
+      "dialog.model.title": "Modèle de la session lancée dans Orca. Un prompt copié prend celui de la session où on le colle : /model pour en changer.",
+      "dialog.model.default": "par défaut",
       "dialog.orca.opening": "Ouverture dans Orca…",
       "dialog.orca.opened": "Session lancée dans Orca",
       "dialog.orca.unconfirmed": "Orca n'a pas confirmé à temps : bascule sur Orca, l'onglet s'y ouvre dès que sa fenêtre est au premier plan",
@@ -42,6 +45,9 @@ window.MrAi = (() => {
       "dialog.copied": "Copied",
       "dialog.orca": "Open in Orca",
       "dialog.orca.title": "Start Claude Code with this prompt in a new Orca tab, on the main worktree",
+      "dialog.model": "Model",
+      "dialog.model.title": "Model of the session started in Orca. A copied prompt runs on the model of the session it is pasted into: /model to change it.",
+      "dialog.model.default": "default",
       "dialog.orca.opening": "Opening in Orca…",
       "dialog.orca.opened": "Session started in Orca",
       "dialog.orca.unconfirmed": "Orca did not confirm in time: switch to Orca, the tab opens as soon as its window is in front",
@@ -61,9 +67,10 @@ window.MrAi = (() => {
   let dialog = null;
   // MR du dialogue ouvert, et ce que ses actions demandent : { mr, toFix, fixContext }.
   let current = null;
-  // Prompts retouchés, par MR et par action, jusqu'au rechargement de la page : un dialogue fermé par
-  // mégarde, ou une autre action essayée, ne perd pas ce qu'on y a ajouté.
+  // Prompts retouchés et modèles choisis, par MR et par action, jusqu'au rechargement de la page : un
+  // dialogue fermé par mégarde, ou une autre action essayée, ne perd pas ce qu'on y a changé.
   const drafts = new Map();
+  const models = new Map();
 
   function t(
     key,
@@ -110,6 +117,7 @@ window.MrAi = (() => {
         <button type="button" id="ai-close" class="dismiss"></button>
         <span class="muted" id="ai-copied" aria-live="polite"></span>
         <button type="button" id="ai-reset" hidden></button>
+        <label class="ai-model" id="ai-model-label" hidden><span id="ai-model-name"></span> <select id="ai-model"></select></label>
         <button type="button" id="ai-orca" class="with-icon" hidden>${ORCA_LOGO}<span id="ai-orca-label"></span></button>
         <button type="button" id="ai-copy" class="primary"></button>
       </div>`;
@@ -134,6 +142,7 @@ window.MrAi = (() => {
       pressedOutside = false;
     });
     part("ai-text").addEventListener("input", keepDraft);
+    part("ai-model").addEventListener("change", keepModel);
     part("ai-reset").addEventListener("click", resetDraft);
     part("ai-copy").addEventListener("click", copy);
     part("ai-orca").addEventListener("click", openInOrca);
@@ -155,6 +164,13 @@ window.MrAi = (() => {
     part("ai-text").setAttribute("aria-label", t("dialog.aria"));
     part("ai-close").textContent = t("dialog.close");
     part("ai-orca").title = t("dialog.orca.title");
+    part("ai-model-label").title = t("dialog.model.title");
+    part("ai-model-name").textContent = t("dialog.model");
+    const choice = part("ai-model").value;
+    part("ai-model").innerHTML = ["", ...(catalog?.models ?? [])].map(model =>
+      `<option value="${escapeHtml(model)}">${escapeHtml(model ? model[0].toUpperCase() + model.slice(1) : t("dialog.model.default"))}</option>`
+    ).join("");
+    part("ai-model").value = choice;
     part("ai-orca-label").textContent = t("dialog.orca");
     part("ai-reset").textContent = t("dialog.reset");
     part("ai-reset").title = t("dialog.reset.title");
@@ -218,6 +234,8 @@ window.MrAi = (() => {
     ).join("");
     part("ai-actions").hidden = !actions.length;
     part("ai-orca").hidden = !orcaEnabled();
+    part("ai-model-label").hidden = !orcaEnabled();
+    applyTexts();
     if (!dialog.open) dialog.showModal();
     select(actions[0]);
   }
@@ -231,8 +249,9 @@ window.MrAi = (() => {
     text.value = action ? drafts.get(draftKey()) ?? prompt(action) : "";
     text.readOnly = !action;
     part("ai-reset").hidden = !drafts.has(draftKey());
+    part("ai-model").value = models.get(draftKey()) ?? action?.model ?? "";
     part("ai-copied").textContent = "";
-    for (const id of ["ai-orca", "ai-copy"]) part(id).disabled = !action;
+    for (const id of ["ai-orca", "ai-copy", "ai-model"]) part(id).disabled = !action;
     // Curseur sur la ligne vide de la fin, rien de sélectionné, le début du prompt à l'écran : ce qu'on
     // tape s'ajoute à la suite, sans rien remplacer.
     text.focus();
@@ -249,6 +268,14 @@ window.MrAi = (() => {
     else drafts.set(draftKey(), text);
     part("ai-reset").hidden = !drafts.has(draftKey());
     part("ai-copied").textContent = "";
+  }
+
+  // Modèle choisi pour l'action, gardé comme son prompt ; celui du catalogue n'a pas besoin de l'être.
+  function keepModel() {
+    const action = actionsFor(current.toFix).find(candidate => candidate.id === dialog.dataset.action);
+    const model = part("ai-model").value;
+    if (!action || model === (action.model ?? "")) models.delete(draftKey());
+    else models.set(draftKey(), model);
   }
 
   function resetDraft() {
@@ -290,6 +317,7 @@ window.MrAi = (() => {
             iid: Number(dialog.dataset.iid),
             action: dialog.dataset.action,
             prompt: promptToSend(),
+            model: part("ai-model").value || null,
           }),
         }
       );

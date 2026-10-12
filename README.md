@@ -121,6 +121,9 @@ le serveur tourne dans WSL et qu'Orca est installé). Le prompt se modifie dans 
 copié ou lancé, pour ajouter du contexte ou retirer une mention : c'est le texte modifié qui part. Le
 curseur attend sur la ligne vide qui le termine, où ce qu'on tape s'ajoute à la suite. Le prompt modifié est
 gardé, par MR et par action, jusqu'au rechargement de la page ; **Prompt d'origine** le rétablit.
+**Modèle**, à côté de **Ouvrir dans Orca**, choisit celui de la session lancée (`claude --model`) :
+celui de l'action dans le catalogue, présélectionné, ou celui de la configuration de Claude Code (*par défaut*). Il est gardé
+comme le prompt. Un prompt copié prend le modèle de la session où on le colle (`/model` pour en changer).
 **Fermer**, Échap ou un clic hors du dialogue le ferment. Le bouton porte un liseré rouge quand la MR a
 quelque chose à corriger : branche en retard ou en conflit, indicateur qualité imparfait, thread non
 résolu.
@@ -140,6 +143,7 @@ id = "…"           # unique dans le fichier
 label = "…"        # libellé du choix dans le dialogue
 tab = "… !{iid}"   # titre de l'onglet Orca (défaut : label)
 when = "to-fix"    # facultatif : seulement quand la MR a quelque chose à corriger
+model = "sonnet"   # facultatif : modèle présélectionné pour Orca (fable, opus, sonnet ou haiku)
 prompt = """
 …
 """
