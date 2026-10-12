@@ -134,6 +134,9 @@ gardé, par MR et par action, jusqu'au rechargement de la page ; **Prompt d'orig
 **Modèle**, à côté de **Ouvrir dans Orca**, choisit celui de la session lancée (`claude --model`) :
 celui de l'action dans le catalogue, présélectionné, ou celui de la configuration de Claude Code (*par défaut*). Il est gardé
 comme le prompt. Un prompt copié prend le modèle de la session où on le colle (`/model` pour en changer).
+**Effort**, à côté, choisit de même son niveau d'effort (`claude --effort`, de *Bas* à *Maximal*) :
+bas pour une tâche simple, comme orchestrer une revue, qui coûte moins ; élevé pour une tâche difficile.
+*Par défaut* garde celui de la configuration de Claude Code (`/effort` pour en changer dans une session).
 **Fermer**, Échap ou un clic hors du dialogue le ferment. Le bouton porte un liseré rouge quand la MR a
 quelque chose à corriger : branche en retard ou en conflit, indicateur qualité imparfait, thread non
 résolu.
@@ -154,6 +157,7 @@ label = "…"        # libellé du choix dans le dialogue
 tab = "… !{iid}"   # titre de l'onglet Orca (défaut : label)
 when = "to-fix"    # facultatif : seulement quand la MR a quelque chose à corriger
 model = "sonnet"   # facultatif : modèle présélectionné pour Orca (fable, opus, sonnet ou haiku)
+effort = "low"     # facultatif : niveau d'effort présélectionné pour Orca (low, medium, high, xhigh ou max)
 prompt = """
 …
 """

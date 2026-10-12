@@ -24,6 +24,14 @@ window.MrAi = (() => {
       "dialog.model": "Modèle",
       "dialog.model.title": "Modèle de la session lancée dans Orca. Un prompt copié prend celui de la session où on le colle : /model pour en changer.",
       "dialog.model.default": "par défaut",
+      "dialog.effort": "Effort",
+      "dialog.effort.title": "Niveau d'effort de la session lancée dans Orca : bas pour une tâche simple, qui coûte moins, élevé pour une tâche difficile. Un prompt copié prend celui de la session où on le colle : /effort pour en changer.",
+      "dialog.effort.default": "par défaut",
+      "dialog.effort.low": "Bas",
+      "dialog.effort.medium": "Moyen",
+      "dialog.effort.high": "Élevé",
+      "dialog.effort.xhigh": "Très élevé",
+      "dialog.effort.max": "Maximal",
       "dialog.orca.opening": "Ouverture dans Orca…",
       "dialog.orca.opened": "Session lancée dans Orca",
       "dialog.orca.unconfirmed": "Orca n'a pas confirmé à temps : bascule sur Orca, l'onglet s'y ouvre dès que sa fenêtre est au premier plan",
@@ -50,6 +58,14 @@ window.MrAi = (() => {
       "dialog.model": "Model",
       "dialog.model.title": "Model of the session started in Orca. A copied prompt runs on the model of the session it is pasted into: /model to change it.",
       "dialog.model.default": "default",
+      "dialog.effort": "Effort",
+      "dialog.effort.title": "Effort level of the session started in Orca: low for a simple task, which costs less, high for a hard one. A copied prompt runs at the effort of the session it is pasted into: /effort to change it.",
+      "dialog.effort.default": "default",
+      "dialog.effort.low": "Low",
+      "dialog.effort.medium": "Medium",
+      "dialog.effort.high": "High",
+      "dialog.effort.xhigh": "Extra high",
+      "dialog.effort.max": "Max",
       "dialog.orca.opening": "Opening in Orca…",
       "dialog.orca.opened": "Session started in Orca",
       "dialog.orca.unconfirmed": "Orca did not confirm in time: switch to Orca, the tab opens as soon as its window is in front",
@@ -69,10 +85,11 @@ window.MrAi = (() => {
   let dialog = null;
   // MR du dialogue ouvert, et ce que ses actions demandent : { mr, toFix, fixContext }.
   let current = null;
-  // Prompts retouchés et modèles choisis, par MR et par action, jusqu'au rechargement de la page : un
+  // Prompts retouchés, modèles et niveaux d'effort choisis, par MR et par action, jusqu'au rechargement de la page : un
   // dialogue fermé par mégarde, ou une autre action essayée, ne perd pas ce qu'on y a changé.
   const drafts = new Map();
   const models = new Map();
+  const efforts = new Map();
 
   function t(
     key,
@@ -120,6 +137,7 @@ window.MrAi = (() => {
         <span class="muted" id="ai-copied" aria-live="polite"></span>
         <button type="button" id="ai-reset" hidden></button>
         <label class="ai-model" id="ai-model-label" hidden><span id="ai-model-name"></span> <select id="ai-model"></select></label>
+        <label class="ai-model" id="ai-effort-label" hidden><span id="ai-effort-name"></span> <select id="ai-effort"></select></label>
         <button type="button" id="ai-orca" class="with-icon" hidden>${ORCA_LOGO}<span id="ai-orca-label"></span></button>
         <button type="button" id="ai-copy" class="primary"></button>
       </div>`;
@@ -145,6 +163,7 @@ window.MrAi = (() => {
     });
     part("ai-text").addEventListener("input", keepDraft);
     part("ai-model").addEventListener("change", keepModel);
+    part("ai-effort").addEventListener("change", keepEffort);
     part("ai-reset").addEventListener("click", resetDraft);
     part("ai-copy").addEventListener("click", copy);
     part("ai-orca").addEventListener("click", openInOrca);
@@ -173,6 +192,13 @@ window.MrAi = (() => {
       `<option value="${escapeHtml(model)}">${escapeHtml(model ? model[0].toUpperCase() + model.slice(1) : t("dialog.model.default"))}</option>`
     ).join("");
     part("ai-model").value = choice;
+    part("ai-effort-label").title = t("dialog.effort.title");
+    part("ai-effort-name").textContent = t("dialog.effort");
+    const effort = part("ai-effort").value;
+    part("ai-effort").innerHTML = ["", ...(catalog?.efforts ?? [])].map(level =>
+      `<option value="${escapeHtml(level)}">${escapeHtml(t(`dialog.effort.${level || "default"}`) ?? level)}</option>`
+    ).join("");
+    part("ai-effort").value = effort;
     part("ai-orca-label").textContent = t("dialog.orca");
     part("ai-reset").textContent = t("dialog.reset");
     part("ai-reset").title = t("dialog.reset.title");
@@ -238,6 +264,7 @@ window.MrAi = (() => {
     part("ai-actions").hidden = !actions.length;
     part("ai-orca").hidden = !orcaEnabled();
     part("ai-model-label").hidden = !orcaEnabled();
+    part("ai-effort-label").hidden = !orcaEnabled();
     applyTexts();
     if (!dialog.open) dialog.showModal();
     select(actions[0]);
@@ -253,8 +280,10 @@ window.MrAi = (() => {
     text.readOnly = !action;
     part("ai-reset").hidden = !drafts.has(draftKey());
     part("ai-model").value = models.get(draftKey()) ?? action?.model ?? "";
+    part("ai-effort").value = efforts.get(draftKey()) ?? action?.effort ?? "";
     part("ai-copied").textContent = "";
     part("ai-model").disabled = !action;
+    part("ai-effort").disabled = !action;
     syncSendButtons();
     // Curseur sur la ligne vide de la fin, rien de sélectionné, le début du prompt à l'écran : ce qu'on
     // tape s'ajoute à la suite, sans rien remplacer.
@@ -287,6 +316,14 @@ window.MrAi = (() => {
     const model = part("ai-model").value;
     if (!action || model === (action.model ?? "")) models.delete(draftKey());
     else models.set(draftKey(), model);
+  }
+
+  // Niveau d'effort choisi pour l'action, gardé comme son modèle.
+  function keepEffort() {
+    const action = actionsFor(current.toFix).find(candidate => candidate.id === dialog.dataset.action);
+    const effort = part("ai-effort").value;
+    if (!action || effort === (action.effort ?? "")) efforts.delete(draftKey());
+    else efforts.set(draftKey(), effort);
   }
 
   function resetDraft() {
@@ -329,6 +366,7 @@ window.MrAi = (() => {
             action: dialog.dataset.action,
             prompt: promptToSend(),
             model: part("ai-model").value || null,
+            effort: part("ai-effort").value || null,
           }),
         }
       );
