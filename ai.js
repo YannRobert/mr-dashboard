@@ -258,8 +258,12 @@ window.MrAi = (() => {
     try {
       await navigator.clipboard.writeText(text);
     } catch (ignored) {
-      part("ai-text").select();
+      // Copie de secours, qui ne copie que la sélection : le curseur revient ensuite où il était.
+      const box = part("ai-text");
+      const { selectionStart, selectionEnd } = box;
+      box.select();
       document.execCommand("copy");
+      box.setSelectionRange(selectionStart, selectionEnd);
     }
     part("ai-copied").textContent = t("dialog.copied");
   }
