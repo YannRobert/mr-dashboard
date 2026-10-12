@@ -13,6 +13,7 @@ window.MrAi = (() => {
       "dialog.actions": "Action",
       "dialog.catalogError": p => `Catalogue des actions AI illisible : ${p.message}`,
       "dialog.hint": "Prompt à compléter ou retoucher ici si besoin, puis à coller dans Claude Code, lancé à la racine du dépôt — ou à lancer directement dans Orca.",
+      "dialog.hint.free": "Prompt à rédiger ici, puis à coller dans Claude Code, lancé à la racine du dépôt — ou à lancer directement dans Orca.",
       "dialog.reset": "Prompt d'origine",
       "dialog.reset.title": "Remplace le prompt modifié par celui de l'action",
       "dialog.aria": "Prompt pour Claude Code",
@@ -47,6 +48,7 @@ window.MrAi = (() => {
       "dialog.actions": "Action",
       "dialog.catalogError": p => `Unreadable AI actions catalogue: ${p.message}`,
       "dialog.hint": "Prompt to complete or adjust here if needed, then paste into Claude Code, started at the repository root — or to start directly in Orca.",
+      "dialog.hint.free": "Prompt to write here, then paste into Claude Code, started at the repository root — or to start directly in Orca.",
       "dialog.reset": "Original prompt",
       "dialog.reset.title": "Replace the edited prompt with the action's own",
       "dialog.aria": "Prompt for Claude Code",
@@ -181,7 +183,7 @@ window.MrAi = (() => {
 
   function applyTexts() {
     part("ai-actions").setAttribute("aria-label", t("dialog.actions"));
-    part("ai-hint").textContent = t("dialog.hint");
+    part("ai-hint").textContent = t(dialog.dataset.action === "free" ? "dialog.hint.free" : "dialog.hint");
     part("ai-text").setAttribute("aria-label", t("dialog.aria"));
     part("ai-close").textContent = t("dialog.close");
     part("ai-orca").title = t("dialog.orca.title");
@@ -272,6 +274,8 @@ window.MrAi = (() => {
 
   function select(action) {
     dialog.dataset.action = action?.id ?? "";
+    // Le prompt libre, rédigé par qui l'envoie, n'a pas d'autre mode d'emploi que de l'écrire.
+    part("ai-hint").textContent = t(action?.id === "free" ? "dialog.hint.free" : "dialog.hint");
     for (const button of part("ai-actions").querySelectorAll("[data-ai-action]")) {
       button.setAttribute("aria-pressed", String(button.dataset.aiAction === action?.id));
     }
