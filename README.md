@@ -167,6 +167,10 @@ variable inconnue reste telle quelle dans le prompt affiché.
 Sans catalogue, seule la correction est proposée, avec `{fix_context}` pour prompt. Un catalogue
 invalide n'en propose aucune : le dialogue dit pourquoi.
 
+Avec ou sans catalogue, la dernière action, **Libre**, ouvre un prompt vide, à rédiger dans le
+dialogue : de quoi lancer dans Orca une session sur le modèle choisi sans y taper la commande `claude`.
+Son identifiant `free` est réservé : un catalogue qui le reprend est invalide.
+
 ## Dépôt local : fetch et diff
 
 Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut), toujours dans son

@@ -11,7 +11,8 @@ demande : un prompt modifié s'essaie sans redémarrer le serveur ni commiter. C
     when = "to-fix"     facultatif : action proposée seulement quand la MR a quelque chose à corriger
     model = "sonnet"    facultatif : modèle présélectionné pour la session Orca, parmi MODELS
 
-Sans fichier, le catalogue se réduit à la correction, avec le prompt calculé par la page.
+Sans fichier, le catalogue se réduit à la correction, avec le prompt calculé par la page. Avec ou sans,
+il finit par l'action libre, au prompt vide, à rédiger dans le dialogue.
 """
 import subprocess
 import tomllib
@@ -21,6 +22,8 @@ CATALOG_PATH = Path(".mr-dashboard") / "ai-actions.toml"
 DEFAULT_ACTIONS = [
     {"id": "fix", "label": None, "tab": "Fix MR !{iid}", "prompt": "{fix_context}", "when": "to-fix", "model": None},
 ]
+# Prompt rédigé dans le dialogue : un modèle au choix, sans taper la commande claude dans Orca.
+FREE_ACTION = {"id": "free", "label": None, "tab": "Claude MR !{iid}", "prompt": "", "when": None, "model": None}
 WHEN_VALUES = {"to-fix"}
 # Alias de `claude --model`, qui désignent toujours la dernière version de chaque modèle. Seules valeurs
 # admises, dans le catalogue comme dans une demande de lancement : la commande passe par un shell.
@@ -53,14 +56,14 @@ class AiActions:
         try:
             content = self._path.read_bytes()
         except FileNotFoundError:
-            return {"source": None, "actions": DEFAULT_ACTIONS, "models": MODELS}
+            return {"source": None, "actions": [*DEFAULT_ACTIONS, FREE_ACTION], "models": MODELS}
         except OSError as error:
             raise AiActionsError(f"{CATALOG_PATH} illisible : {error}") from error
         try:
             document = tomllib.loads(content.decode("utf-8"))
         except (UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
             raise AiActionsError(f"{CATALOG_PATH} invalide : {error}") from error
-        return {"source": str(CATALOG_PATH), "actions": self._actions(document), "models": MODELS}
+        return {"source": str(CATALOG_PATH), "actions": [*self._actions(document), FREE_ACTION], "models": MODELS}
 
     def tab_title(
             self,
@@ -83,6 +86,8 @@ class AiActions:
                 entry
             ))
         ids = [action["id"] for action in actions]
+        if FREE_ACTION["id"] in ids:
+            raise AiActionsError(f"{CATALOG_PATH} : id {FREE_ACTION['id']} réservé à l'action libre")
         duplicates = sorted({i for i in ids if ids.count(i) > 1})
         if duplicates:
             raise AiActionsError(f"{CATALOG_PATH} : id en double : {', '.join(duplicates)}")

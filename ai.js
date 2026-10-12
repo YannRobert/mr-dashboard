@@ -8,6 +8,7 @@ window.MrAi = (() => {
       "ai.title": "Afficher un prompt Claude Code pour cette MR",
       "ai.title.toFix": "Afficher un prompt Claude Code pour cette MR, qui a quelque chose à corriger",
       "ai.fix": "Corriger",
+      "ai.free": "Libre",
       "dialog.title": p => `Claude Code sur la MR !${p.iid}`,
       "dialog.actions": "Action",
       "dialog.catalogError": p => `Catalogue des actions AI illisible : ${p.message}`,
@@ -33,6 +34,7 @@ window.MrAi = (() => {
       "ai.title": "Show a Claude Code prompt for this MR",
       "ai.title.toFix": "Show a Claude Code prompt for this MR, which has something to fix",
       "ai.fix": "Fix",
+      "ai.free": "Free",
       "dialog.title": p => `Claude Code on MR !${p.iid}`,
       "dialog.actions": "Action",
       "dialog.catalogError": p => `Unreadable AI actions catalogue: ${p.message}`,
@@ -202,8 +204,9 @@ window.MrAi = (() => {
 
   // mr : { iid, title, source_branch, target_branch, web_url }. Variables inconnues laissées telles
   // quelles : le prompt affiché montre la faute de frappe. Il finit par une ligne vide : un clic sous le
-  // texte y place le curseur, prêt pour ce qu'on veut ajouter.
+  // texte y place le curseur, prêt pour ce qu'on veut ajouter. Celui de l'action libre reste vide.
   function prompt(action) {
+    if (!action.prompt) return "";
     const { mr, fixContext } = current;
     const values = {
       iid: mr.iid,
@@ -230,7 +233,7 @@ window.MrAi = (() => {
     part("ai-error").hidden = !catalog.error;
     part("ai-error").textContent = catalog.error ? t("dialog.catalogError", { message: catalog.error }) : "";
     part("ai-actions").innerHTML = actions.map(action =>
-      `<button type="button" data-ai-action="${escapeHtml(action.id)}">${escapeHtml(action.label ?? t("ai.fix"))}</button>`
+      `<button type="button" data-ai-action="${escapeHtml(action.id)}">${escapeHtml(action.label ?? t(`ai.${action.id}`))}</button>`
     ).join("");
     part("ai-actions").hidden = !actions.length;
     part("ai-orca").hidden = !orcaEnabled();
@@ -251,7 +254,8 @@ window.MrAi = (() => {
     part("ai-reset").hidden = !drafts.has(draftKey());
     part("ai-model").value = models.get(draftKey()) ?? action?.model ?? "";
     part("ai-copied").textContent = "";
-    for (const id of ["ai-orca", "ai-copy", "ai-model"]) part(id).disabled = !action;
+    part("ai-model").disabled = !action;
+    syncSendButtons();
     // Curseur sur la ligne vide de la fin, rien de sélectionné, le début du prompt à l'écran : ce qu'on
     // tape s'ajoute à la suite, sans rien remplacer.
     text.focus();
@@ -268,6 +272,13 @@ window.MrAi = (() => {
     else drafts.set(draftKey(), text);
     part("ai-reset").hidden = !drafts.has(draftKey());
     part("ai-copied").textContent = "";
+    syncSendButtons();
+  }
+
+  // Rien à copier ni à lancer tant que le prompt est vide : celui de l'action libre, à son ouverture.
+  function syncSendButtons() {
+    const empty = !dialog.dataset.action || !promptToSend();
+    for (const id of ["ai-orca", "ai-copy"]) part(id).disabled = empty;
   }
 
   // Modèle choisi pour l'action, gardé comme son prompt ; celui du catalogue n'a pas besoin de l'être.
