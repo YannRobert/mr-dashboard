@@ -618,6 +618,8 @@
         <button type="button" data-sound="bell"><span aria-hidden="true">🔔</span><b data-i18n="soundTest.bell">Cloche</b><small data-i18n="soundTest.bellWhen"></small></button>
         <button type="button" data-sound="ding"><span aria-hidden="true">🎵</span><b data-i18n="soundTest.ding">Ding</b><small data-i18n="soundTest.dingWhen"></small></button>
         <button type="button" data-sound="alert"><span aria-hidden="true">⚠</span><b data-i18n="soundTest.alert">Alerte</b><small data-i18n="soundTest.alertWhen"></small></button>
+        <button type="button" data-sound="broken"><span aria-hidden="true">🔴</span><b data-i18n="soundTest.broken">Sirène</b><small data-i18n="soundTest.brokenWhen"></small></button>
+        <button type="button" data-sound="merged"><span aria-hidden="true">🔀</span><b data-i18n="soundTest.merged">Plop</b><small data-i18n="soundTest.mergedWhen"></small></button>
         <p id="sound-test-status" hidden></p>
       </div>
     </div>
@@ -772,6 +774,12 @@ const SOUND_CHANNEL = "mr-dashboard.sound";
 const TAB_ID = crypto.randomUUID?.() ?? String(Math.random());
 // Approbateurs déjà vus, par MR : un nom qui s'y ajoute est une approbation à annoncer.
 const APPROVALS_SEEN_KEY = "mr-dashboard.approvalsSeen";
+// MR ouvertes vues au passage précédent et MR déjà annoncées mergées : une MR qui quitte les ouvertes et
+// que GitLab dit mergée fait jouer son son, une fois.
+const MERGES_SEEN_KEY = "mr-dashboard.mergesSeen";
+const MERGES_ANNOUNCED_MAX = 50;
+// Dernier pipeline abouti de la branche suivie, et s'il était en échec : son passage en échec est annoncé.
+const BRANCH_PIPELINE_SEEN_KEY = "mr-dashboard.branchPipelineSeen";
 const THEME_KEY = "mr-dashboard.theme";
 const TEXT_SCALE_KEY = "mr-dashboard.textScale";
 // Langue choisie au bouton FR / EN, ou fixée à la première visite.
@@ -971,10 +979,15 @@ const I18N = {
     "soundTest.dingWhen": "Un autre approuve la MR d'un autre",
     "soundTest.alert": "Alerte",
     "soundTest.alertWhen": "Nouveau problème bloquant sur ta MR",
+    "soundTest.broken": "Sirène",
+    "soundTest.brokenWhen": () => `Le pipeline de ${state.config?.pipelineBranch || "la branche suivie"} passe en échec`,
+    "soundTest.merged": "Plop",
+    "soundTest.mergedWhen": "Une MR est mergée, la tienne ou celle d'un autre",
     "soundTest.played": "Son envoyé au système. Rien entendu ? Onglet coupé (clic droit sur l'onglet), son du site (icône à gauche de l'adresse), puis sortie et volume du navigateur dans le mélangeur de volume du système.",
     "soundTest.blocked": p => `Son bloqué par le navigateur (état audio : ${p.state}).`,
     "soundTest.error": p => `Son impossible : ${p.message}`,
-    "sound.title": "Joue un son : cloche de bar quand ta MR est approuvée ou que tu approuves celle d'un autre, un tintement quand un autre l'approuve, alerte grave sur un nouveau problème bloquant de ta MR. Cocher la case fait entendre la cloche.",
+    "sound.title": "Joue un son : cloche de bar quand ta MR est approuvée ou que tu approuves celle d'un autre, un tintement quand un autre l'approuve, alerte grave sur un nouveau problème bloquant de ta MR, sirène quand le pipeline de la branche suivie passe en échec, un son bref quand une MR est mergée. Cocher la case fait entendre la cloche.",
+    "branchBroken": p => `🔴 ${p.branch} cassé : pipeline #${p.id} en échec`,
     "approved.own": p => `✅ Ta MR !${p.iid} est approuvée par ${p.names}`,
     "approved.other": p => `✅ MR !${p.iid} de ${p.author} approuvée par ${p.names}`,
     "notify.title": () => `Notifie les problèmes des MR ; sur tes MR, la notification reste affichée et revient toutes les ${OWN_REMINDER_MS / 60000} minutes tant que le problème n'est pas traité`,
@@ -1247,10 +1260,15 @@ const I18N = {
     "soundTest.dingWhen": "Someone else approves someone else's MR",
     "soundTest.alert": "Alert",
     "soundTest.alertWhen": "New blocking problem on your MR",
+    "soundTest.broken": "Siren",
+    "soundTest.brokenWhen": () => `The ${state.config?.pipelineBranch || "followed branch"} pipeline fails`,
+    "soundTest.merged": "Plop",
+    "soundTest.mergedWhen": "An MR is merged, yours or someone else's",
     "soundTest.played": "Sound sent to the system. Heard nothing? Muted tab (right-click the tab), site sound (icon left of the address), then the browser's output and level in the system volume mixer.",
     "soundTest.blocked": p => `Sound blocked by the browser (audio state: ${p.state}).`,
     "soundTest.error": p => `Sound unavailable: ${p.message}`,
-    "sound.title": "Plays a sound: a bar bell when your MR is approved or you approve someone else's, a chime when someone else approves it, a low alert on a new blocking problem of your MR. Ticking the box rings the bell.",
+    "sound.title": "Plays a sound: a bar bell when your MR is approved or you approve someone else's, a chime when someone else approves it, a low alert on a new blocking problem of your MR, a siren when the followed branch's pipeline fails, a short sound when an MR is merged. Ticking the box rings the bell.",
+    "branchBroken": p => `🔴 ${p.branch} broken: pipeline #${p.id} failed`,
     "approved.own": p => `✅ Your MR !${p.iid} is approved by ${p.names}`,
     "approved.other": p => `✅ MR !${p.iid} by ${p.author} approved by ${p.names}`,
     "notify.title": () => `Notifies MR problems; on your own MRs, the notification stays on screen and comes back every ${OWN_REMINDER_MS / 60000} minutes until the problem is dealt with`,
@@ -3001,8 +3019,90 @@ function notifyProblems() {
     new Notification(t("notify.others", { n: othersWithProblems }), { body: t("notify.othersBody"), tag: "mr-others" });
   }
   const approvalSound = notifyApprovals(notifying);
-  const sound = approvalSound === "bell" ? "bell" : ownFreshBlocking ? "alert" : approvalSound;
+  const brokenSound = notifyBranchPipeline(notifying);
+  const sound = ownFreshBlocking ? "alert" : brokenSound ?? approvalSound;
   if (sound && state.sound) ringSound(sound);
+  announceMerges(sound);
+}
+
+// Pipeline abouti le plus récent de la branche suivie : le dernier, ou le précédent tant que le dernier
+// tourne. Son passage en échec est notifié et rend le son à jouer ; son retour au vert ferme la
+// notification, sans rien jouer. Le premier passage ne fait que relever l'état en place.
+function notifyBranchPipeline(notifying) {
+  const p = state.branchPipeline;
+  const conclusive = p && !p.error ? (isActive(p) ? p.previous : p) : null;
+  const group = conclusive?.detailedStatus.group;
+  if (group !== "success" && group !== "failed") return null;
+  const failed = group === "failed";
+  const seen = readStored(BRANCH_PIPELINE_SEEN_KEY);
+  if (seen?.id === conclusive.id) return null;
+  saveStored(
+    BRANCH_PIPELINE_SEEN_KEY,
+    { id: conclusive.id, failed }
+  );
+  if (!failed) {
+    state.branchNotification?.close();
+    state.branchNotification = null;
+    return null;
+  }
+  if (!seen || seen.failed) return null;
+  if (notifying) showBranchBroken(conclusive);
+  return "broken";
+}
+
+function showBranchBroken(p) {
+  const title = t("branchBroken", { branch: state.config.pipelineBranch, id: p.id.split("/").pop() });
+  const body = [p.commit?.title, p.user?.name].filter(Boolean).join(" — ");
+  const notification = new Notification(title, { body, tag: "branch-pipeline", renotify: true, requireInteraction: true });
+  notification.onclick = () => {
+    window.open(state.config.gitlabWeb + p.path, "_blank", "noopener");
+    notification.close();
+  };
+  state.branchNotification = notification;
+}
+
+// MR sorties des ouvertes depuis le passage précédent : GitLab dit lesquelles sont mergées (les autres
+// sont fermées), et une mergée fait jouer un son bref, sans notification, si le passage n'en a pas joué
+// d'autre. Le premier passage ne fait que relever les MR ouvertes.
+async function announceMerges(passSound) {
+  const seen = readStored(MERGES_SEEN_KEY);
+  const open = state.mrs.map(mr => mr.iid);
+  const announced = seen?.announced ?? [];
+  const gone = (seen?.open ?? []).filter(iid => !open.includes(iid) && !announced.includes(iid));
+  saveStored(
+    MERGES_SEEN_KEY,
+    { open, announced }
+  );
+  if (!gone.length) return;
+  try {
+    const merged = await gitlabAll(`${projectPath()}/merge_requests?state=merged&${gone.map(iid => `iids%5B%5D=${iid}`).join("&")}`);
+    if (!merged.length) return;
+    const latest = readStored(MERGES_SEEN_KEY) ?? { open };
+    saveStored(
+      MERGES_SEEN_KEY,
+      { ...latest, announced: [...merged.map(mr => mr.iid), ...announced].slice(0, MERGES_ANNOUNCED_MAX) }
+    );
+    if (!passSound && state.sound) ringSound("merged");
+  } catch (error) {
+    console.error("MR mergées introuvables :", error);
+  }
+}
+
+function readStored(key) {
+  try {
+    return JSON.parse(localStorage.getItem(key));
+  } catch (ignored) {
+    return null;
+  }
+}
+
+function saveStored(
+  key,
+  value
+) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (ignored) { /* stockage indisponible : l'état sera relevé au prochain chargement */ }
 }
 
 // Approbateurs apparus depuis le passage précédent : notification de succès, hors soi-même, et le son à
@@ -3187,6 +3287,25 @@ const SOUNDS = {
       ctx,
       output,
       { frequency: 294, at: 0.25, duration: 0.45, gain: 0.35, type: "triangle" }
+    );
+  },
+  // Deux-tons alternés, façon sirène : le pipeline de la branche suivie passe en échec.
+  broken: (ctx, output) => [0, 0.22, 0.44, 0.66].forEach((at, i) => tone(
+    ctx,
+    output,
+    { frequency: i % 2 ? 587 : 784, at, duration: 0.24, gain: 0.25, type: "square" }
+  )),
+  // Petite goutte montante, brève et douce : une MR est mergée.
+  merged: (ctx, output) => {
+    tone(
+      ctx,
+      output,
+      { frequency: 660, at: 0, duration: 0.12, gain: 0.18 }
+    );
+    tone(
+      ctx,
+      output,
+      { frequency: 990, at: 0.08, duration: 0.25, gain: 0.18 }
     );
   },
 };
@@ -4555,6 +4674,7 @@ async function pollBranchPipeline() {
   try {
     state.branchPipeline = await fetchBranchPipeline();
     renderBranchPipeline();
+    notifyProblems();
     fetchIfRepoChanged();
     // Sauvegardé à la date de la dernière mise à jour complète, et seulement si la sauvegarde est encore
     // celle qu'affiche cet onglet : un autre onglet a pu en écrire une plus récente depuis. Pas pendant une

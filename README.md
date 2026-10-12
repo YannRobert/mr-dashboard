@@ -64,10 +64,14 @@ ensemble — puis `start.sh <nom>`.
 - Pour recevoir les notifications, cocher **Notifications** dans l'en-tête et accepter la demande du
   navigateur. Sur ses propres MR, la notification reste affichée et revient toutes les 15 minutes tant
   qu'un problème reste ouvert.
-- Une nouvelle approbation d'une MR est notifiée aussi, sauf celle qu'on a donnée soi-même. **Sons**, à côté,
-  indépendant des notifications : cloche de bar quand sa MR est approuvée ou qu'on approuve celle
-  d'un autre (à la mise à jour suivante), un tintement quand un autre l'approuve, deux notes graves sur un nouveau problème bloquant de sa MR ; cocher la case fait entendre la
-  cloche. 🔊, à côté, joue chacun des trois sons à la demande, case cochée ou non : de quoi les
+- Une nouvelle approbation d'une MR est notifiée aussi, sauf celle qu'on a donnée soi-même, de même que
+  le passage en échec du pipeline de la branche suivie (notification fermée à son retour au vert).
+  **Sons**, à côté, indépendant des notifications : cloche de bar quand sa MR est approuvée ou qu'on
+  approuve celle d'un autre (à la mise à jour suivante), un tintement quand un autre l'approuve, deux notes
+  graves sur un nouveau problème bloquant de sa MR, sirène quand le pipeline de la branche suivie passe en
+  échec, un son bref bref, sans notification, quand une MR est mergée, la sienne ou celle d'un autre. Un seul
+  son par mise à jour, le plus important ; cocher la case fait entendre la
+  cloche. 🔊, à côté, joue chacun des sons à la demande, case cochée ou non : de quoi les
   essayer et vérifier qu'ils sortent sur le bon appareil, sans attendre un événement. Après un rechargement, le navigateur ne laisse jouer un son qu'après un clic ou une touche dans
   la page. Avec plusieurs onglets du dashboard ouverts, le son sort de celui où l'on a
   cliqué ou tapé en dernier, même si un autre onglet a détecté l'événement.
