@@ -96,13 +96,14 @@ ensemble — puis `start.sh <nom>`.
   montrables hors de l'équipe : à l'écran seulement, les personnes prennent des noms fictifs (Jane
   Doe, Erika Mustermann…), intitulés et messages de commit deviennent du lorem ipsum (Draft, emoji et
   ticket de tête gardés, le ticket en `DEMO-<n>`), les branches des slugs lorem (type, `main`,
-  `master`, `develop` et branche du pipeline gardés), le projet `demo/project`, et le corps des
+  `master`, `develop` et branche du pipeline gardés), les labels des mots lorem (portée `::` gardée),
+  les numéros de MR décalés d'un même écart tiré au hasard (ordre gardé), le projet `demo/project`, et le corps des
   commentaires du lorem ipsum ; notifications comprises. Les données de la page ne changent pas :
   actions, liens et filtres agissent toujours sur les vraies MR. Un second clic rend l'affichage
   d'origine, sans recharger ; le mode vaut pour tous les onglets du dashboard. Aucun mot d'origine
   n'est repris, et les valeurs fictives dépendent d'un sel aléatoire gardé dans le navigateur : la même
-  personne garde le même faux nom d'une capture à l'autre. Le diff n'est pas anonymisé, ni les labels,
-  ni les adresses des liens, visibles au survol.
+  personne garde le même faux nom d'une capture à l'autre. Le diff n'est pas anonymisé, ni les
+  adresses des liens, visibles au survol.
 - Le dernier pipeline de la branche suivie (`develop` d'ordinaire) tient dans une barre ancrée au bas de
   la fenêtre, visible quel que soit le nombre de MR, rouge quand il a échoué. Un clic la déplie : jobs
   par stage, pipeline précédent, durées des builds et historique ; dépliée ou repliée, elle le reste au

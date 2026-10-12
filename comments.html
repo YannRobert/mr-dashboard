@@ -428,7 +428,7 @@
 
   // Rend la MR et ses commentaires ; rend le conteneur, ou rien quand il n'y a aucun commentaire.
   function render({ mr, general, gitlabWeb }) {
-    shown = { mr, general };
+    shown = { mr, general, iid };
     renderHeader(mr);
     renderSummary(general);
     if (!general.length) {

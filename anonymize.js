@@ -1,6 +1,7 @@
 // Mode anonymisation, pour des captures d'écran montrables hors de l'équipe : à l'écran seulement, les noms
 // des personnes deviennent des noms fictifs, intitulés et messages du lorem ipsum, les branches des slugs
-// lorem, le projet « demo/project », et le corps des commentaires du lorem ipsum. Les données de la page
+// lorem, les labels des mots lorem, les numéros de MR décalés, le projet « demo/project », et le corps
+// des commentaires du lorem ipsum. Les données de la page
 // ne changent pas : actions, liens et filtres continuent d'agir sur les vraies valeurs, et désactiver le
 // mode rend l'affichage d'origine sans recharger. Partagé par index.html et comments.html.
 //
@@ -43,6 +44,7 @@ window.Anonymizer = (() => {
   const PERSON_CONTEXT = /author|user|assignee|reviewer|approv|committer|merged_?by|closed_?by|participant/i;
   const PERSON_KEYS = new Set(["author", "author_name", "committer_name", "authorName"]);
   const NAME_LIST_KEYS = new Set(["names", "changesRequested"]);
+  const LABEL_LIST_KEYS = new Set(["labels"]);
   const TEXT_KEYS = new Set(["title", "description", "message", "body"]);
   const BRANCH_KEYS = new Set(["source_branch", "sourceBranch", "target_branch", "targetBranch", "branch", "ref"]);
   // Clés d'un tableau GraphQL ou d'un index : la personne se lit dans la clé au-dessus.
@@ -198,9 +200,30 @@ window.Anonymizer = (() => {
 
   function addReplacement(
       real,
-      fake
+      fake,
+      minLength = MIN_TOKEN_LENGTH
   ) {
-    if (typeof real === "string" && real.length >= MIN_TOKEN_LENGTH && real !== fake) replacements.set(real, fake);
+    if (typeof real === "string" && real.length >= minLength && real !== fake) replacements.set(real, fake);
+  }
+
+  // Numéros de MR décalés d'un même écart tiré du sel : ordre et écarts gardés, valeurs méconnaissables.
+  function addIid(iid) {
+    const number = Number(iid);
+    if (!Number.isInteger(number) || number <= 0) return;
+    addReplacement(`!${number}`, `!${number + 100 + hash("iid", "") % 800}`, 2);
+  }
+
+  // Label : un mot lorem par mot, la portée d'un label « portée::valeur » comprise.
+  function addLabel(label) {
+    const fake = label.split("::").map(part => {
+      const next = generator("label", part);
+      const words = part.split(/[\s_-]+/).filter(Boolean).map(word => {
+        const lorem = LOREM[next(LOREM.length)];
+        return word.charAt(0) === word.charAt(0).toUpperCase() && word.charAt(0) !== word.charAt(0).toLowerCase() ? capitalize(lorem) : lorem;
+      });
+      return words.join(part.includes("_") ? "_" : part.includes("-") ? "-" : " ");
+    }).join("::");
+    addReplacement(label, fake, 2);
   }
 
   function addPerson(
@@ -257,6 +280,10 @@ window.Anonymizer = (() => {
       kept,
       seen
   ) {
+    if (key === "iid" && (typeof value === "number" || typeof value === "string")) {
+      addIid(value);
+      return;
+    }
     if (typeof value === "string") {
       if (PERSON_KEYS.has(key)) addPerson(value);
       else if (TEXT_KEYS.has(key)) addText(value);
@@ -271,6 +298,7 @@ window.Anonymizer = (() => {
     }
     if (Array.isArray(value)) {
       if (NAME_LIST_KEYS.has(key)) value.forEach(name => typeof name === "string" && addPerson(name));
+      else if (LABEL_LIST_KEYS.has(key)) value.forEach(label => typeof label === "string" && addLabel(label));
       else value.forEach(item => harvest(item, key, context, kept, seen));
       return;
     }
