@@ -256,15 +256,19 @@ window.MrAi = (() => {
     select(actionsFor(current.toFix).find(action => action.id === dialog.dataset.action));
   }
 
+  // Ce qui part, copié ou lancé dans Orca : sans la ligne vide laissée pour écrire à la suite, ni les
+  // blancs de fin, qui ne coûteraient que des tokens.
+  const promptToSend = () => part("ai-text").value.trimEnd();
+
   async function copy() {
-    const text = part("ai-text").value;
+    const text = promptToSend();
     try {
       await navigator.clipboard.writeText(text);
     } catch (ignored) {
       // Copie de secours, qui ne copie que la sélection : le curseur revient ensuite où il était.
       const box = part("ai-text");
       const { selectionStart, selectionEnd } = box;
-      box.select();
+      box.setSelectionRange(0, text.length);
       document.execCommand("copy");
       box.setSelectionRange(selectionStart, selectionEnd);
     }
@@ -285,7 +289,7 @@ window.MrAi = (() => {
           body: JSON.stringify({
             iid: Number(dialog.dataset.iid),
             action: dialog.dataset.action,
-            prompt: part("ai-text").value,
+            prompt: promptToSend(),
           }),
         }
       );
