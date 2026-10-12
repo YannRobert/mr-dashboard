@@ -3262,6 +3262,41 @@ function strike(
   ));
 }
 
+// Sirène d'alerte : glissando continu qui monte et redescend entre SIREN_LOW et SIREN_HIGH Hz, en
+// SIREN_CYCLES cycles de SIREN_CYCLE secondes. Une dent de scie filtrée en passe-bas lui donne le
+// timbre plein d'une sirène mécanique, sans l'aigreur d'un signal carré.
+const SIREN_LOW = 620;
+const SIREN_HIGH = 1240;
+const SIREN_CYCLE = 1.4;
+const SIREN_CYCLES = 2;
+
+function siren(
+  ctx,
+  output
+) {
+  const oscillator = ctx.createOscillator();
+  const filter = ctx.createBiquadFilter();
+  const envelope = ctx.createGain();
+  const start = ctx.currentTime;
+  const end = start + SIREN_CYCLE * SIREN_CYCLES;
+  oscillator.type = "sawtooth";
+  oscillator.frequency.setValueAtTime(SIREN_LOW, start);
+  for (let i = 0; i < SIREN_CYCLES; i++) {
+    const cycle = start + i * SIREN_CYCLE;
+    oscillator.frequency.linearRampToValueAtTime(SIREN_HIGH, cycle + SIREN_CYCLE * 0.55);
+    oscillator.frequency.linearRampToValueAtTime(SIREN_LOW, cycle + SIREN_CYCLE);
+  }
+  filter.type = "lowpass";
+  filter.frequency.value = 2200;
+  envelope.gain.setValueAtTime(0.0001, start);
+  envelope.gain.exponentialRampToValueAtTime(0.22, start + 0.15);
+  envelope.gain.setValueAtTime(0.22, end - 0.4);
+  envelope.gain.exponentialRampToValueAtTime(0.0001, end);
+  oscillator.connect(filter).connect(envelope).connect(output);
+  oscillator.start(start);
+  oscillator.stop(end + 0.05);
+}
+
 const SOUNDS = {
   // Cloche de bar, plusieurs coups : sa MR est approuvée.
   bell: (ctx, output) => [0, 0.28, 0.56, 0.84].forEach(at => strike(
@@ -3289,12 +3324,8 @@ const SOUNDS = {
       { frequency: 294, at: 0.25, duration: 0.45, gain: 0.35, type: "triangle" }
     );
   },
-  // Deux-tons alternés, façon sirène : le pipeline de la branche suivie passe en échec.
-  broken: (ctx, output) => [0, 0.22, 0.44, 0.66].forEach((at, i) => tone(
-    ctx,
-    output,
-    { frequency: i % 2 ? 587 : 784, at, duration: 0.24, gain: 0.25, type: "square" }
-  )),
+  // Sirène : le pipeline de la branche suivie passe en échec.
+  broken: siren,
   // Petite goutte montante, brève et douce : une MR est mergée.
   merged: (ctx, output) => {
     tone(
