@@ -134,8 +134,15 @@ gardé, par MR et par action, jusqu'au rechargement de la page ; **Prompt d'orig
 **Modèle**, à côté de **Ouvrir dans Orca**, choisit celui de la session lancée (`claude --model`) :
 celui de l'action dans le catalogue, présélectionné, ou celui de la configuration de Claude Code (*par défaut*). Il est gardé
 comme le prompt. Un prompt copié prend le modèle de la session où on le colle (`/model` pour en changer).
+La liste propose les alias, qui prennent toujours la dernière version (*Opus (5.5)*), puis chaque version
+précise que Claude Code propose au compte connecté (*Opus 4.8*…). Le dashboard la lit dans le cache que
+Claude Code tient lui-même à jour (`~/.claude/cache/model-catalog/`, relu à chaque ouverture du dialogue) :
+un nouveau modèle y apparaît sans rien changer ici. Faute de ce cache, non documenté par Anthropic, seuls
+les alias sont proposés.
 **Effort**, à côté, choisit de même son niveau d'effort (`claude --effort`, de *Bas* à *Maximal*) :
 bas pour une tâche simple, comme orchestrer une revue, qui coûte moins ; élevé pour une tâche difficile.
+La liste ne garde que les niveaux du modèle choisi, celui qu'Anthropic recommande signalé ; un niveau que
+le nouveau modèle refuse revient à *par défaut*, et un modèle sans effort (Haiku 4.5) grise la liste.
 *Par défaut* garde celui de la configuration de Claude Code (`/effort` pour en changer dans une session).
 **Fermer**, Échap ou un clic hors du dialogue le ferment. Le bouton porte un liseré rouge quand la MR a
 quelque chose à corriger : branche en retard ou en conflit, indicateur qualité imparfait, thread non
@@ -156,7 +163,7 @@ id = "…"           # unique dans le fichier
 label = "…"        # libellé du choix dans le dialogue
 tab = "… !{iid}"   # titre de l'onglet Orca (défaut : label)
 when = "to-fix"    # facultatif : seulement quand la MR a quelque chose à corriger
-model = "sonnet"   # facultatif : modèle présélectionné pour Orca (fable, opus, sonnet ou haiku)
+model = "sonnet"   # facultatif : modèle présélectionné pour Orca, alias (fable, opus, sonnet, haiku) ou version (claude-opus-4-8)
 effort = "low"     # facultatif : niveau d'effort présélectionné pour Orca (low, medium, high, xhigh ou max)
 prompt = """
 …
