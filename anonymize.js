@@ -1,9 +1,10 @@
 // Mode anonymisation, pour des captures d'écran montrables hors de l'équipe : à l'écran seulement, les noms
 // des personnes deviennent des noms fictifs, intitulés et messages du lorem ipsum, les branches des slugs
-// lorem, les labels des mots lorem, les numéros de MR décalés, le projet « demo/project », et le corps
-// des commentaires du lorem ipsum. Les données de la page
-// ne changent pas : actions, liens et filtres continuent d'agir sur les vraies valeurs, et désactiver le
-// mode rend l'affichage d'origine sans recharger. Partagé par index.html et comments.html.
+// lorem, les labels des mots lorem, les numéros de MR décalés, le projet « demo/project », le corps
+// des commentaires du lorem ipsum, et l'adresse des liens, que le navigateur affiche au survol, une
+// adresse neutre. Les données de la page ne changent pas : actions, liens et filtres continuent d'agir
+// sur les vraies valeurs, et désactiver le mode rend l'affichage d'origine sans recharger. Partagé par
+// index.html and comments.html.
 //
 // Chaque valeur fictive dépend d'un sel aléatoire gardé dans le navigateur : la même personne garde le
 // même faux nom d'un rafraîchissement et d'un onglet à l'autre, et aucun mot du texte d'origine n'est
@@ -38,7 +39,12 @@ window.Anonymizer = (() => {
   const TICKET = /^[A-Z][A-Z0-9]+-\d+$/;
   const LEADING_TICKET = /^\[?([A-Z][A-Z0-9]+-\d+)\]?\s*/;
   const LEADING_SYMBOLS = /^(Draft:\s*)?([\p{Extended_Pictographic}️‍\s]*)/iu;
-  const ATTRIBUTES = ["title", "aria-label"];
+  const ATTRIBUTES = ["title", "aria-label", "href"];
+  // Adresse affichée au survol d'un lien vers un autre site (GitLab, Sonar…) ; vers le dashboard, son
+  // chemin sans paramètres.
+  const STAND_IN_URL = "https://example.com/demo/project";
+  // Délai après lequel un lien révélé par un clic reprend son adresse neutre.
+  const REVEAL_DELAY = 1000;
 
   // Lecture des données : clés qui portent une personne, un texte libre, une branche.
   const PERSON_CONTEXT = /author|user|assignee|reviewer|approv|committer|merged_?by|closed_?by|participant/i;
@@ -68,6 +74,8 @@ window.Anonymizer = (() => {
   const attributes = new WeakMap();
   const blocks = new WeakMap();
   const touched = new Set();
+  // Liens qui portent leur vraie adresse le temps d'un clic, et l'échéance qui la leur retire.
+  const revealed = new Map();
 
   function readSettings() {
     try {
@@ -347,15 +355,27 @@ window.Anonymizer = (() => {
     write(texts, node, original, replace(original), value => { node.nodeValue = value; });
   }
 
+  // Lien http(s) : adresse neutre ; ancre, mailto: et autres schémas gardés.
+  function fakeHref(href) {
+    try {
+      const url = new URL(href, location.href);
+      if (url.protocol !== "http:" && url.protocol !== "https:") return href;
+      if (url.origin !== location.origin) return STAND_IN_URL;
+      return url.pathname === location.pathname && !url.search ? href : url.pathname;
+    } catch (ignored) {
+      return href;
+    }
+  }
+
   function anonymizeAttribute(
       element,
       name
   ) {
     const current = element.getAttribute(name);
-    if (current == null) return;
+    if (current == null || name === "href" && (element.localName !== "a" || revealed.has(element))) return;
     const saved = attributes.get(element) ?? {};
     if (saved[name]?.value === current) return;
-    const value = replace(current);
+    const value = name === "href" ? fakeHref(current) : replace(current);
     if (value === current) return;
     saved[name] = { original: current, value };
     attributes.set(element, saved);
@@ -471,6 +491,27 @@ window.Anonymizer = (() => {
     saveSettings();
     apply();
   }
+
+  // Un lien suivi garde sa vraie adresse : elle lui est rendue le temps du clic, avant que la page
+  // (onglets de tabs.js) ou le navigateur ne la lisent, puis retirée.
+  function reveal(event) {
+    const link = event.target.closest?.("a[href]");
+    const saved = link && attributes.get(link)?.href;
+    if (!saved) return;
+    if (link.getAttribute("href") === saved.value) {
+      revealed.set(link, null);
+      link.setAttribute("href", saved.original);
+    } else if (!revealed.has(link)) {
+      return;
+    }
+    clearTimeout(revealed.get(link));
+    revealed.set(link, setTimeout(() => {
+      revealed.delete(link);
+      if (observer && link.getAttribute("href") === saved.original) link.setAttribute("href", saved.value);
+    }, REVEAL_DELAY));
+  }
+
+  for (const type of ["pointerdown", "click", "auxclick", "contextmenu"]) document.addEventListener(type, reveal, true);
 
   // Bouton [data-anonymize] : active ou désactive le mode, pour tous les onglets du dashboard.
   document.addEventListener("click", event => {
