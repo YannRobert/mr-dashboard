@@ -11,7 +11,9 @@ window.MrAi = (() => {
       "dialog.title": p => `Claude Code sur la MR !${p.iid}`,
       "dialog.actions": "Action",
       "dialog.catalogError": p => `Catalogue des actions AI illisible : ${p.message}`,
-      "dialog.hint": "Prompt à coller dans Claude Code, lancé à la racine du dépôt — ou à lancer directement dans Orca.",
+      "dialog.hint": "Prompt à compléter ou retoucher ici si besoin, puis à coller dans Claude Code, lancé à la racine du dépôt — ou à lancer directement dans Orca.",
+      "dialog.reset": "Prompt d'origine",
+      "dialog.reset.title": "Remplace le prompt modifié par celui de l'action",
       "dialog.aria": "Prompt pour Claude Code",
       "dialog.close": "Fermer",
       "dialog.copy": "Copier",
@@ -31,7 +33,9 @@ window.MrAi = (() => {
       "dialog.title": p => `Claude Code on MR !${p.iid}`,
       "dialog.actions": "Action",
       "dialog.catalogError": p => `Unreadable AI actions catalogue: ${p.message}`,
-      "dialog.hint": "Prompt to paste into Claude Code, started at the repository root — or to start directly in Orca.",
+      "dialog.hint": "Prompt to complete or adjust here if needed, then paste into Claude Code, started at the repository root — or to start directly in Orca.",
+      "dialog.reset": "Original prompt",
+      "dialog.reset.title": "Replace the edited prompt with the action's own",
       "dialog.aria": "Prompt for Claude Code",
       "dialog.close": "Close",
       "dialog.copy": "Copy",
@@ -57,6 +61,9 @@ window.MrAi = (() => {
   let dialog = null;
   // MR du dialogue ouvert, et ce que ses actions demandent : { mr, toFix, fixContext }.
   let current = null;
+  // Prompts retouchés, par MR et par action, jusqu'au rechargement de la page : un dialogue fermé par
+  // mégarde, ou une autre action essayée, ne perd pas ce qu'on y a ajouté.
+  const drafts = new Map();
 
   function t(
     key,
@@ -98,10 +105,11 @@ window.MrAi = (() => {
       <div class="ai-actions" id="ai-actions" role="group"></div>
       <p class="ai-error" id="ai-error" hidden></p>
       <p id="ai-hint"></p>
-      <textarea id="ai-text" readonly></textarea>
+      <textarea id="ai-text" spellcheck="false"></textarea>
       <div class="actions">
         <button type="button" id="ai-close" class="dismiss"></button>
         <span class="muted" id="ai-copied" aria-live="polite"></span>
+        <button type="button" id="ai-reset" hidden></button>
         <button type="button" id="ai-orca" class="with-icon" hidden>${ORCA_LOGO}<span id="ai-orca-label"></span></button>
         <button type="button" id="ai-copy" class="primary"></button>
       </div>`;
@@ -125,6 +133,8 @@ window.MrAi = (() => {
       if (pressedOutside && outside(event)) dialog.close();
       pressedOutside = false;
     });
+    part("ai-text").addEventListener("input", keepDraft);
+    part("ai-reset").addEventListener("click", resetDraft);
     part("ai-copy").addEventListener("click", copy);
     part("ai-orca").addEventListener("click", openInOrca);
   }
@@ -146,6 +156,8 @@ window.MrAi = (() => {
     part("ai-close").textContent = t("dialog.close");
     part("ai-orca").title = t("dialog.orca.title");
     part("ai-orca-label").textContent = t("dialog.orca");
+    part("ai-reset").textContent = t("dialog.reset");
+    part("ai-reset").title = t("dialog.reset.title");
     part("ai-copy").textContent = t("dialog.copy");
   }
 
@@ -213,10 +225,32 @@ window.MrAi = (() => {
     for (const button of part("ai-actions").querySelectorAll("[data-ai-action]")) {
       button.setAttribute("aria-pressed", String(button.dataset.aiAction === action?.id));
     }
-    part("ai-text").value = action ? prompt(action) : "";
+    const text = part("ai-text");
+    text.value = action ? drafts.get(draftKey()) ?? prompt(action) : "";
+    text.readOnly = !action;
+    part("ai-reset").hidden = !drafts.has(draftKey());
     part("ai-copied").textContent = "";
     for (const id of ["ai-orca", "ai-copy"]) part(id).disabled = !action;
-    part("ai-text").select();
+    // Curseur en tête, rien de sélectionné : la première touche frappée ne remplace pas tout le prompt.
+    text.focus();
+    text.setSelectionRange(0, 0);
+    text.scrollTop = 0;
+  }
+
+  const draftKey = () => `${dialog.dataset.iid} ${dialog.dataset.action}`;
+
+  function keepDraft() {
+    const action = actionsFor(current.toFix).find(candidate => candidate.id === dialog.dataset.action);
+    const text = part("ai-text").value;
+    if (!action || text === prompt(action)) drafts.delete(draftKey());
+    else drafts.set(draftKey(), text);
+    part("ai-reset").hidden = !drafts.has(draftKey());
+    part("ai-copied").textContent = "";
+  }
+
+  function resetDraft() {
+    drafts.delete(draftKey());
+    select(actionsFor(current.toFix).find(action => action.id === dialog.dataset.action));
   }
 
   async function copy() {
