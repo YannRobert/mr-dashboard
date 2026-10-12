@@ -100,6 +100,7 @@ STATIC_FILES = {
     "/ai.js": "text/javascript; charset=utf-8",
     "/ai.css": "text/css; charset=utf-8",
     "/avatars.js": "text/javascript; charset=utf-8",
+    "/anonymize.js": "text/javascript; charset=utf-8",
     "/dates.js": "text/javascript; charset=utf-8",
     "/avatars.css": "text/css; charset=utf-8",
 }

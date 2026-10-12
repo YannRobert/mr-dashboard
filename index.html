@@ -419,6 +419,7 @@
   .actions-row > .mr-action { flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center; min-height: 1.7em; padding: 0; }
   a.mr-action { text-decoration: none; border: 1px solid var(--border-strong); border-radius: 0.5rem; background: var(--surface); text-align: center; }
   button.icon-button { padding-inline: 0.55em; line-height: 1; }
+  button.anonymize[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
   /* Activité des commits, au survol du nombre de commits : courbe cumulée et commentaires. Volet ancré
      dans le coin bas droit de la fenêtre, pour ne jamais recouvrir la ligne de la MR survolée. */
   .commit-activity {
@@ -642,6 +643,7 @@
       <button type="button" data-text-step="1" aria-label="Texte plus grand" data-i18n-aria-label="textSize.larger">A+</button>
     </div>
     <span class="divider" aria-hidden="true"></span>
+    <button type="button" class="icon-button anonymize" data-anonymize aria-pressed="false" aria-label="Anonymiser" data-i18n-aria-label="anonymize" data-i18n-title="anonymize.title"><span aria-hidden="true">🕶</span></button>
     <button type="button" id="clear-storage" class="icon-button" aria-label="Effacer les données locales" data-i18n-aria-label="clearStorage" data-i18n-title="clearStorage.title"><span aria-hidden="true">🧹</span></button>
   </div>
 </header>
@@ -707,6 +709,7 @@
 <script src="ai.js"></script>
 <script src="avatars.js"></script>
 <script src="dates.js"></script>
+<script src="anonymize.js"></script>
 <script>
 "use strict";
 
@@ -961,6 +964,8 @@ const I18N = {
     "textSize.title": "Taille du texte, reprise par la page de diff ; sans toucher au zoom du navigateur",
     "textSize.smaller": "Texte plus petit",
     "textSize.larger": "Texte plus grand",
+    "anonymize": "Anonymiser",
+    "anonymize.title": "Mode démo, pour des captures d'écran : noms, intitulés, branches et projet remplacés à l'écran par des valeurs fictives, notifications comprises. Les actions agissent toujours sur les vraies MR. Un second clic rend l'affichage d'origine",
     "clearStorage": "Effacer les données locales",
     "clearStorage.title": "Efface tout ce que le dashboard a enregistré dans ce navigateur (dernières données affichées, historique des builds, notifications déjà envoyées, préférences), puis recharge la page",
     "clearStorage.confirm": "Effacer toutes les données enregistrées par le dashboard dans ce navigateur ? Les notifications seront désactivées et la page rechargée.",
@@ -1244,6 +1249,8 @@ const I18N = {
     "textSize.title": "Text size, also used by the diff page; leaves the browser zoom untouched",
     "textSize.smaller": "Smaller text",
     "textSize.larger": "Larger text",
+    "anonymize": "Anonymize",
+    "anonymize.title": "Demo mode, for screenshots: names, titles, branches and project replaced on screen by fictitious values, notifications included. Actions still act on the real MRs. A second click restores the original display",
     "clearStorage": "Clear local data",
     "clearStorage.title": "Clears everything the dashboard saved in this browser (last displayed data, build history, notifications already sent, preferences), then reloads the page",
     "clearStorage.confirm": "Clear all data saved by the dashboard in this browser? Notifications will be turned off and the page reloaded.",
@@ -3060,7 +3067,7 @@ function notifyBranchPipeline(notifying) {
 function showBranchBroken(p) {
   const title = t("branchBroken", { branch: state.config.pipelineBranch, id: p.id.split("/").pop() });
   const body = [p.commit?.title, p.user?.name].filter(Boolean).join(" — ");
-  const notification = new Notification(title, { body, tag: "branch-pipeline", renotify: true, requireInteraction: true });
+  const notification = new Notification(Anonymizer.text(title), { body: Anonymizer.text(body), tag: "branch-pipeline", renotify: true, requireInteraction: true });
   notification.onclick = () => {
     window.open(state.config.gitlabWeb + p.path, "_blank", "noopener");
     notification.close();
@@ -3154,8 +3161,8 @@ function showApproval(
   const title = own
     ? t("approved.own", { iid: mr.iid, names: names.join(", ") })
     : t("approved.other", { iid: mr.iid, author: mr.author?.name ?? "?", names: names.join(", ") });
-  const notification = new Notification(title, {
-    body: mr.title,
+  const notification = new Notification(Anonymizer.text(title), {
+    body: Anonymizer.text(mr.title),
     tag: `mr-approved-${mr.iid}`,
     renotify: true,
     requireInteraction: own,
@@ -3491,8 +3498,8 @@ function showNotification(
   const title = own
     ? t("notify.own", { iid: mr.iid, n: problems.length, tone: tone(blocking) })
     : t("notify.other", { iid: mr.iid, author: mr.author?.name ?? "?", tone: tone(blocking) });
-  const notification = new Notification(title, {
-    body: [mr.title, ...problems.map(p => `${tone(p.blocking)} ${p.text}`)].join("\n"),
+  const notification = new Notification(Anonymizer.text(title), {
+    body: Anonymizer.text([mr.title, ...problems.map(p => `${tone(p.blocking)} ${p.text}`)].join("\n")),
     tag: `mr-${mr.iid}`,
     renotify: true,
     requireInteraction: own,
@@ -3744,7 +3751,7 @@ function choosePerson(li) {
   updateFilters({ [root.dataset.people]: li.dataset.value });
 }
 
-const avatar = name => `<span class="avatar" style="--avatar-color:${Avatars.color(name)}" aria-hidden="true">${escapeHtml(Avatars.initials(name))}</span>`;
+const avatar = name => `<span class="avatar" data-name="${escapeHtml(name)}" style="--avatar-color:${Avatars.color(name)}" aria-hidden="true">${escapeHtml(Avatars.initials(name))}</span>`;
 
 function fillSelect(id, placeholder, options) {
   const select = $(id);
@@ -4338,8 +4345,10 @@ function loadCommitActivity(mr) {
     mr,
     error
   ));
-  promise.catch(() => commitActivity.cache.delete(mr.iid));
-  commitActivity.cache.set(mr.iid, { key, promise });
+  const entry = { key, promise };
+  // Résultat gardé aussi en clair, pour que le mode anonymisation en lise les commits.
+  promise.then(activity => { entry.activity = activity; }, () => commitActivity.cache.delete(mr.iid));
+  commitActivity.cache.set(mr.iid, entry);
   return promise;
 }
 
@@ -5270,6 +5279,19 @@ new ResizeObserver(([entry]) => {
   fitTitles();
 }).observe(document.querySelector("table.mrs"));
 $("clear-storage").addEventListener("click", clearStorage);
+// Données lues par le mode anonymisation : les MR, leurs signaux et l'activité de leurs commits.
+Anonymizer.attach({
+  data: () => ({
+    mrs: state.mrs,
+    merged: state.merged.mrs,
+    signals: [state.signals, state.merged.signals],
+    branchPipeline: state.branchPipeline,
+    sonarPullRequests: state.sonarPullRequests,
+    commitActivity: [...commitActivity.cache.values()].map(entry => entry.activity),
+  }),
+  keptBranches: () => [state.config?.pipelineBranch, state.config?.targetBranch],
+  fixed: () => (state.config ? [[state.config.gitlabProject, "demo/project"], [state.config.sonarProject, "demo-project"]] : []),
+});
 $("refresh").addEventListener("click", async () => {
   state.bypassCache = true;
   try {

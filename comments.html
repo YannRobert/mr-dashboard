@@ -89,6 +89,7 @@
     font: inherit; font-size: 0.85rem; color: var(--text); padding: 0.25em 0.8em; cursor: pointer;
     border: 1px solid var(--border-strong); border-radius: 0.5rem; background: var(--surface);
   }
+  .links button.anonymize[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
   main { box-sizing: border-box; max-width: 62rem; margin: 0 auto; padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
   .message { color: var(--muted); }
   .cached-banner {
@@ -147,6 +148,7 @@
     <nav class="links">
       <a id="diff-link" target="_blank" data-tab="diff" hidden></a>
       <a id="gitlab-link" target="_blank" rel="noopener" hidden></a>
+      <button type="button" id="anonymize" class="anonymize" data-anonymize aria-pressed="false">🕶</button>
       <button type="button" id="close-tab" data-close-tab></button>
     </nav>
   </div>
@@ -163,6 +165,7 @@
 <script src="tabs.js"></script>
 <script src="dates.js"></script>
 <script src="avatars.js"></script>
+<script src="anonymize.js"></script>
 <script>
   const TEXTS = {
     fr: {
@@ -191,6 +194,7 @@
       closeTitle: "Fermer cet onglet",
       closeRefused: "Le navigateur refuse de fermer un onglet qu'il n'a pas ouvert depuis le dashboard : Ctrl+W",
       openNote: "GitLab",
+      anonymize: "Mode démo, pour des captures d'écran : noms, intitulés et branches remplacés à l'écran par des valeurs fictives, commentaires par du lorem ipsum. Un second clic rend l'affichage d'origine",
     },
     en: {
       title: p => `!${p.iid}${p.title ? ` ${p.title}` : ""}`,
@@ -218,6 +222,7 @@
       closeTitle: "Close this tab",
       closeRefused: "The browser does not let the page close a tab it did not open from the dashboard: Ctrl+W",
       openNote: "GitLab",
+      anonymize: "Demo mode, for screenshots: names, titles and branches replaced on screen by fictitious values, comments by lorem ipsum. A second click restores the original display",
     },
   };
   const params = new URLSearchParams(location.search);
@@ -242,6 +247,10 @@
   closeTab.textContent = texts.close;
   closeTab.title = texts.closeTitle;
   closeTab.dataset.closeRefused = texts.closeRefused;
+  document.getElementById("anonymize").title = texts.anonymize;
+  // MR et commentaires affichés, lus par le mode anonymisation ; le corps des commentaires y est remplacé en entier.
+  let shown = null;
+  Anonymizer.attach({ data: () => shown, opaque: ".gl-body" });
 
   function escapeHtml(text) {
     return String(text).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -272,7 +281,7 @@
     if (authorName) {
       const author = document.getElementById("mr-author");
       author.title = texts.author;
-      author.innerHTML = `<span class="avatar" style="--avatar-color:${Avatars.color(authorName)}" aria-hidden="true">${escapeHtml(Avatars.initials(authorName))}</span>`
+      author.innerHTML = `<span class="avatar" data-name="${escapeHtml(authorName)}" style="--avatar-color:${Avatars.color(authorName)}" aria-hidden="true">${escapeHtml(Avatars.initials(authorName))}</span>`
         + escapeHtml(authorName);
       author.hidden = false;
     }
@@ -419,6 +428,7 @@
 
   // Rend la MR et ses commentaires ; rend le conteneur, ou rien quand il n'y a aucun commentaire.
   function render({ mr, general, gitlabWeb }) {
+    shown = { mr, general };
     renderHeader(mr);
     renderSummary(general);
     if (!general.length) {
