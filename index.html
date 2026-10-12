@@ -3275,7 +3275,7 @@ function strike(
 const SIREN_LOW = 620;
 const SIREN_HIGH = 1240;
 const SIREN_CYCLE = 1.4;
-const SIREN_CYCLES = 2;
+const SIREN_CYCLES = 3;
 
 function siren(
   ctx,
@@ -3372,7 +3372,7 @@ const SOUNDS = {
 // ramène : les sons, si différents qu'ils soient, sortent tous à peu près aussi fort.
 const SOUND_LOUDNESS_TARGET = -27;
 const SOUND_MEASURE_RATE = 48000;
-const SOUND_MEASURE_SECONDS = 4;
+const SOUND_MEASURE_SECONDS = 5;
 // Gain des sons quand la mesure est impossible (pas d'OfflineAudioContext).
 const SOUND_FALLBACK_GAIN = 0.6;
 // Filtres de la pondération K, coefficients de la norme à 48 kHz : plateau qui relève les aigus, puis
