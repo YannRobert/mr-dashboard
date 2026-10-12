@@ -1754,7 +1754,7 @@ async function refresh() {
       state.progress.done++;
       render();
       renderStatus();
-    });
+    }, shownFirst);
     state.lastFailure = null;
     applySnapshot(snapshot);
     saveSnapshot(snapshot);
@@ -2232,12 +2232,28 @@ async function loadSonarPullRequests(report) {
   }
 }
 
-async function runLimited(items, limit, task) {
+// next choisit dans la file l'élément à traiter, au moment où un emplacement se libère.
+async function runLimited(
+  items,
+  limit,
+  task,
+  next = queue => queue[0]
+) {
   const queue = [...items];
   const workers = Array.from({ length: Math.min(limit, queue.length) }, async () => {
-    while (queue.length) await task(queue.shift());
+    while (queue.length) {
+      const item = next(queue);
+      queue.splice(queue.indexOf(item), 1);
+      await task(item);
+    }
   });
   await Promise.all(workers);
+}
+
+// Les MR affichées d'abord, de haut en bas du tableau, pour que l'attente porte sur celles qu'on regarde.
+// Réévalué à chaque prise : un filtre ou un tri changé pendant l'actualisation est suivi aussitôt.
+function shownFirst(queue) {
+  return queue.filter(matches).sort(tableComparator())[0] ?? queue[0];
 }
 
 // Tout part en parallèle : le détail de la MR n'attend ni la note PIT ni les commits, et la chaîne
@@ -3458,9 +3474,8 @@ function render() {
   syncControlsFromState();
   renderHeaders();
   const columns = shownColumns();
-  const column = columns.find(c => c.key === state.filters.sort) ?? columns.find(c => c.key === defaultSort().key);
   const mrs = viewMrs();
-  const visible = mrs.filter(matches).sort(comparator(column, state.filters.dir));
+  const visible = mrs.filter(matches).sort(tableComparator());
   const merged = state.merged;
   const mergedLoading = mergedView() && merged.loading;
   const loadingText = t(mergedNeedsAll() ? "summary.mergedLoadingAll" : "summary.mergedLoading");
@@ -3511,6 +3526,12 @@ function gitlabListLink() {
 
 // Une valeur inconnue (signal en chargement, absent, en erreur) est toujours rangée en fin de liste,
 // quel que soit le sens du tri : elle ne doit ni masquer ni passer pour un bon résultat.
+function tableComparator() {
+  const columns = shownColumns();
+  const column = columns.find(c => c.key === state.filters.sort) ?? columns.find(c => c.key === defaultSort().key);
+  return comparator(column, state.filters.dir);
+}
+
 function comparator(column, dir) {
   const sign = dir === "asc" ? 1 : -1;
   return (a, b) => {

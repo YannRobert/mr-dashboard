@@ -82,6 +82,8 @@ ensemble — puis `start.sh <nom>`.
   dernière, d'où qu'elle vienne (autre onglet compris). Le serveur ne fetch que si une page lui signale
   un état des MR qu'il n'a jamais vu : une sauvegarde rejouée, ou celle, plus ancienne, d'un autre
   navigateur, ne relance rien. **Rafraîchir** et **git fetch** partent toujours.
+- Une actualisation charge d'abord les signaux des MR affichées, de haut en bas du tableau, puis ceux
+  des MR masquées par les filtres : un filtre ou un tri changé en cours de route est suivi aussitôt.
 - Le texte grandit avec la largeur de la fenêtre : à 100 % de zoom, le tableau tient dès 1366 px de
   large ; en deçà, il défile dans son cadre, sans les en-têtes collants.
   **A− / A+**, dans l'en-tête, l'ajustent de 70 à 150 % (retenu dans le navigateur, repris par la page
