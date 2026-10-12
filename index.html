@@ -3383,6 +3383,7 @@ function electNotifier() {
 // ---------- Filtres ----------
 
 function populateFilterOptions() {
+  rememberPeopleNames();
   const people = key => {
     const map = new Map();
     for (const mr of viewMrs()) {
@@ -3404,14 +3405,67 @@ const PEOPLE_FILTERS = ["author", "reviewer", "assignee"];
 // Personnes proposées par chaque filtre, [username, nom], et son libellé « tous ».
 const peopleFilters = {};
 
-// Une personne filtrée absente des MR affichées (lien partagé, autre vue) reste proposée, sous son username.
-function fillPeopleFilter(id, placeholder, people) {
+// Une personne filtrée absente des MR affichées (lien partagé, autre vue, aucune MR ouverte) reste proposée,
+// sous son nom s'il est connu, demandé à GitLab sinon, et sous son username en attendant.
+function fillPeopleFilter(
+  id,
+  placeholder,
+  people
+) {
   const current = state.filters[id];
+  const absent = current && !people.some(([username]) => username === current);
+  if (absent && !peopleNames.has(current)) lookUpPersonName(current);
   peopleFilters[id] = {
     placeholder,
-    people: current && !people.some(([username]) => username === current) ? [...people, [current, current]] : people,
+    people: absent ? [...people, [current, peopleNames.get(current) ?? current]] : people,
   };
   renderPeopleFilter(id);
+}
+
+// Noms des personnes déjà vues, par username, retenus dans le navigateur : ouvertes ou mergées, auteurs,
+// relecteurs ou assignés.
+const PEOPLE_NAMES_KEY = "mr-dashboard.peopleNames";
+const peopleNames = readPeopleNames();
+const peopleNameLookups = new Set();
+
+function readPeopleNames() {
+  try {
+    return new Map(Object.entries(JSON.parse(localStorage.getItem(PEOPLE_NAMES_KEY)) ?? {}));
+  } catch (ignored) {
+    return new Map();
+  }
+}
+
+function savePeopleNames() {
+  try {
+    localStorage.setItem(PEOPLE_NAMES_KEY, JSON.stringify(Object.fromEntries(peopleNames)));
+  } catch (ignored) { /* stockage indisponible : les noms seront redemandés au prochain chargement */ }
+}
+
+function rememberPeopleNames() {
+  let changed = false;
+  for (const mr of [...state.mrs, ...state.merged.mrs]) {
+    for (const u of [mr.author, ...(mr.reviewers ?? []), ...(mr.assignees ?? [])]) {
+      if (u?.username && u.name && peopleNames.get(u.username) !== u.name) {
+        peopleNames.set(u.username, u.name);
+        changed = true;
+      }
+    }
+  }
+  if (changed) savePeopleNames();
+}
+
+// Une fois par username et par page : un username inconnu de GitLab reste affiché tel quel.
+async function lookUpPersonName(username) {
+  if (peopleNameLookups.has(username)) return;
+  peopleNameLookups.add(username);
+  try {
+    const [user] = (await api(`/gitlab/users?${new URLSearchParams({ username })}`)).body;
+    if (!user?.name) return;
+    peopleNames.set(username, user.name);
+    savePeopleNames();
+    populateFilterOptions();
+  } catch (ignored) { /* GitLab injoignable : le username reste affiché */ }
 }
 
 const personHtml = name => avatar(name) + `<span>${escapeHtml(name)}</span>`;
