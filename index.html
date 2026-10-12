@@ -619,7 +619,7 @@
         <button type="button" data-sound="ding"><span aria-hidden="true">🎵</span><b data-i18n="soundTest.ding">Ding</b><small data-i18n="soundTest.dingWhen"></small></button>
         <button type="button" data-sound="alert"><span aria-hidden="true">⚠</span><b data-i18n="soundTest.alert">Alerte</b><small data-i18n="soundTest.alertWhen"></small></button>
         <button type="button" data-sound="broken"><span aria-hidden="true">🔴</span><b data-i18n="soundTest.broken">Sirène</b><small data-i18n="soundTest.brokenWhen"></small></button>
-        <button type="button" data-sound="merged"><span aria-hidden="true">🔀</span><b data-i18n="soundTest.merged">Plop</b><small data-i18n="soundTest.mergedWhen"></small></button>
+        <button type="button" data-sound="merged"><span aria-hidden="true">🔀</span><b data-i18n="soundTest.merged">Arpège</b><small data-i18n="soundTest.mergedWhen"></small></button>
         <p id="sound-test-status" hidden></p>
       </div>
     </div>
@@ -981,12 +981,12 @@ const I18N = {
     "soundTest.alertWhen": "Nouveau problème bloquant sur ta MR",
     "soundTest.broken": "Sirène",
     "soundTest.brokenWhen": () => `Le pipeline de ${state.config?.pipelineBranch || "la branche suivie"} passe en échec`,
-    "soundTest.merged": "Plop",
+    "soundTest.merged": "Arpège",
     "soundTest.mergedWhen": "Une MR est mergée, la tienne ou celle d'un autre",
     "soundTest.played": "Son envoyé au système. Rien entendu ? Onglet coupé (clic droit sur l'onglet), son du site (icône à gauche de l'adresse), puis sortie et volume du navigateur dans le mélangeur de volume du système.",
     "soundTest.blocked": p => `Son bloqué par le navigateur (état audio : ${p.state}).`,
     "soundTest.error": p => `Son impossible : ${p.message}`,
-    "sound.title": "Joue un son : cloche de bar quand ta MR est approuvée ou que tu approuves celle d'un autre, un tintement quand un autre l'approuve, alerte grave sur un nouveau problème bloquant de ta MR, sirène quand le pipeline de la branche suivie passe en échec, un son bref quand une MR est mergée. Cocher la case fait entendre la cloche.",
+    "sound.title": "Joue un son : cloche de bar quand ta MR est approuvée ou que tu approuves celle d'un autre, un tintement quand un autre l'approuve, alerte grave sur un nouveau problème bloquant de ta MR, sirène quand le pipeline de la branche suivie passe en échec, arpège joyeux quand une MR est mergée. Cocher la case fait entendre la cloche.",
     "branchBroken": p => `🔴 ${p.branch} cassé : pipeline #${p.id} en échec`,
     "approved.own": p => `✅ Ta MR !${p.iid} est approuvée par ${p.names}`,
     "approved.other": p => `✅ MR !${p.iid} de ${p.author} approuvée par ${p.names}`,
@@ -1262,12 +1262,12 @@ const I18N = {
     "soundTest.alertWhen": "New blocking problem on your MR",
     "soundTest.broken": "Siren",
     "soundTest.brokenWhen": () => `The ${state.config?.pipelineBranch || "followed branch"} pipeline fails`,
-    "soundTest.merged": "Plop",
+    "soundTest.merged": "Arpeggio",
     "soundTest.mergedWhen": "An MR is merged, yours or someone else's",
     "soundTest.played": "Sound sent to the system. Heard nothing? Muted tab (right-click the tab), site sound (icon left of the address), then the browser's output and level in the system volume mixer.",
     "soundTest.blocked": p => `Sound blocked by the browser (audio state: ${p.state}).`,
     "soundTest.error": p => `Sound unavailable: ${p.message}`,
-    "sound.title": "Plays a sound: a bar bell when your MR is approved or you approve someone else's, a chime when someone else approves it, a low alert on a new blocking problem of your MR, a siren when the followed branch's pipeline fails, a short sound when an MR is merged. Ticking the box rings the bell.",
+    "sound.title": "Plays a sound: a bar bell when your MR is approved or you approve someone else's, a chime when someone else approves it, a low alert on a new blocking problem of your MR, a siren when the followed branch's pipeline fails, a cheerful arpeggio when an MR is merged. Ticking the box rings the bell.",
     "branchBroken": p => `🔴 ${p.branch} broken: pipeline #${p.id} failed`,
     "approved.own": p => `✅ Your MR !${p.iid} is approved by ${p.names}`,
     "approved.other": p => `✅ MR !${p.iid} by ${p.author} approved by ${p.names}`,
@@ -3326,19 +3326,12 @@ const SOUNDS = {
   },
   // Sirène : le pipeline de la branche suivie passe en échec.
   broken: siren,
-  // Petite goutte montante, brève et douce : une MR est mergée.
-  merged: (ctx, output) => {
-    tone(
-      ctx,
-      output,
-      { frequency: 660, at: 0, duration: 0.12, gain: 0.18 }
-    );
-    tone(
-      ctx,
-      output,
-      { frequency: 990, at: 0.08, duration: 0.25, gain: 0.18 }
-    );
-  },
+  // Arpège majeur montant, do-mi-sol-do, la dernière note tenue : une MR est mergée.
+  merged: (ctx, output) => [[523, 0], [659, 0.09], [784, 0.18], [1046, 0.27]].forEach(([frequency, at], i, notes) => tone(
+    ctx,
+    output,
+    { frequency, at, duration: i === notes.length - 1 ? 0.7 : 0.18, gain: 0.2, type: "triangle" }
+  )),
 };
 
 // Rend l'état du contexte audio une fois le son lancé (« running » : il est parti vers la sortie du
