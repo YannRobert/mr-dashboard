@@ -280,6 +280,10 @@
   .d2h-file-wrapper.wrap-lines .d2h-code-line, .d2h-file-wrapper.wrap-lines .d2h-code-side-line { white-space: normal; }
   .d2h-file-wrapper.wrap-lines .d2h-code-line-ctn { white-space: pre-wrap; overflow-wrap: anywhere; }
   .d2h-file-wrapper.wrap-lines .d2h-file-side-diff { overflow-x: hidden; }
+  /* Espace maintenue : main ouverte au-dessus du code, fermée pendant qu'on le déplace ; le texte ne se sélectionne pas. */
+  #diff-files.pan-ready { user-select: none; }
+  #diff-files.pan-ready :is(.d2h-file-diff, .d2h-file-side-diff), #diff-files.pan-ready :is(.d2h-file-diff, .d2h-file-side-diff) * { cursor: grab !important; }
+  #diff-files.panning :is(.d2h-file-diff, .d2h-file-side-diff), #diff-files.panning :is(.d2h-file-diff, .d2h-file-side-diff) * { cursor: grabbing !important; }
   /* Témoin ADDED / CHANGED / DELETED / RENAMED en tête de l'en-tête, de largeur fixe : le nom du fichier commence
      au même endroit quel que soit le témoin, que l'œil trouve toujours à la même place. */
   .d2h-tag {
@@ -1255,6 +1259,83 @@
     saveCommitsShare(null);
     applyCommitsShare(null);
   });
+
+  // Espace maintenue au-dessus du diff, le code se saisit à la main : glisser le déplace sous la souris, comme
+  // une page sur un téléphone, sans aller chercher l'ascenseur au bas d'un long fichier. Le geste garde l'axe
+  // de son départ, à l'horizontale le fichier, à la verticale la page. Espace relâchée sans avoir glissé
+  // descend d'une page, comme d'ordinaire ; sans Espace, clic et sélection restent ceux du texte.
+  const PAN_AREAS = "#diff-files :is(.d2h-file-diff, .d2h-file-side-diff)";
+  const PAN_AXIS_THRESHOLD_PX = 6;
+  let pointerTarget = null;
+  let panArmed = false;
+  let panUsed = false;
+  let clickSuppressed = false;
+
+  function setPanArmed(armed) {
+    panArmed = armed;
+    document.getElementById("diff-files")?.classList.toggle("pan-ready", armed);
+  }
+
+  document.addEventListener("pointerover", event => {
+    pointerTarget = event.target;
+  });
+
+  document.addEventListener("keydown", event => {
+    if (event.code !== "Space" || event.ctrlKey || event.altKey || event.metaKey) return;
+    if (event.target.closest?.("textarea, select, [contenteditable], input:not([type=checkbox], [type=radio], [type=button])")) return;
+    if (!panArmed && !pointerTarget?.closest?.("#diff-files")) return;
+    event.preventDefault();
+    if (event.repeat || panArmed) return;
+    panUsed = false;
+    setPanArmed(true);
+  });
+
+  document.addEventListener("keyup", event => {
+    if (event.code !== "Space" || !panArmed) return;
+    setPanArmed(false);
+    if (panUsed) return;
+    const header = document.querySelector("header")?.offsetHeight ?? 0;
+    scrollBy({ top: (event.shiftKey ? -1 : 1) * (innerHeight - header) * 0.875 });
+  });
+
+  addEventListener("blur", () => setPanArmed(false));
+
+  document.addEventListener("pointerdown", event => {
+    const area = panArmed && event.button === 0 ? event.target.closest?.(PAN_AREAS) : null;
+    if (!area) return;
+    event.preventDefault();
+    panUsed = true;
+    const start = { x: event.clientX, y: event.clientY, left: area.scrollLeft, top: scrollY };
+    let axis = null;
+    area.setPointerCapture(event.pointerId);
+    document.getElementById("diff-files").classList.add("panning");
+    const move = moveEvent => {
+      const dx = moveEvent.clientX - start.x;
+      const dy = moveEvent.clientY - start.y;
+      if (!axis) {
+        if (Math.hypot(dx, dy) < PAN_AXIS_THRESHOLD_PX) return;
+        axis = Math.abs(dx) >= Math.abs(dy) ? "x" : "y";
+      }
+      if (axis === "x") area.scrollLeft = start.left - dx;
+      else scrollTo(scrollX, start.top - dy);
+    };
+    const end = () => {
+      area.removeEventListener("pointermove", move);
+      document.getElementById("diff-files")?.classList.remove("panning");
+      // Le clic qui suit le relâchement ne doit ni ouvrir un commentaire ni cocher une case sous la souris.
+      clickSuppressed = true;
+      setTimeout(() => clickSuppressed = false);
+    };
+    area.addEventListener("pointermove", move);
+    area.addEventListener("pointerup", end, { once: true });
+    area.addEventListener("pointercancel", end, { once: true });
+  });
+
+  document.addEventListener("click", event => {
+    if (!clickSuppressed) return;
+    event.preventDefault();
+    event.stopPropagation();
+  }, true);
 
   function readEnabled(key) {
     try {
