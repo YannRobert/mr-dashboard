@@ -73,6 +73,12 @@
   /* Une ligne par ensemble — titre, branches, commandes alignées à droite — pour qu'ils ne se mélangent pas au gré des retours à la ligne. */
   header .controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0.5rem 1.4rem; }
   header h1 { margin: 0; font-size: 1.05rem; overflow-wrap: anywhere; }
+  /* Nature de la page, devant le titre : le diff et les commentaires d'une MR ont le même en-tête. */
+  .page-kind {
+    display: inline-block; margin-right: 0.6em; padding: 0.1em 0.6em; border-radius: 0.4rem; vertical-align: 0.1em;
+    font-size: 0.8rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--accent-fg); background: var(--accent);
+  }
   .branches { color: var(--muted); font-size: 0.9rem; overflow-wrap: anywhere; }
   .branches code { font-size: 0.85rem; }
   /* Auteur de la MR, pastille comprise : qui l'a ouverte, même dans un onglet ouvert depuis longtemps. */
@@ -318,7 +324,7 @@
 <body>
 <header>
   <div class="review-bar" id="review-bar" hidden><span></span></div>
-  <h1 id="title"></h1>
+  <h1><span class="page-kind" id="page-kind"></span><span id="title"></span></h1>
   <div class="subtitle">
     <span class="mr-author" id="mr-author" hidden></span>
     <span class="branches" id="branches"></span>
@@ -377,6 +383,7 @@
   const TEXTS = {
     fr: {
       title: p => `Diff de !${p.iid}`,
+      pageKind: "Diff",
       branches: p => `<code>${p.branch}</code> comparée à <code>${p.target}</code>, depuis leur point de divergence`,
       mergedBranches: p => `<code>${p.branch}</code> telle que mergée dans <code>${p.target}</code>`,
       author: "Auteur de la MR",
@@ -456,6 +463,7 @@
     },
     en: {
       title: p => `Diff of !${p.iid}`,
+      pageKind: "Diff",
       branches: p => `<code>${p.branch}</code> compared with <code>${p.target}</code>, from where they diverge`,
       mergedBranches: p => `<code>${p.branch}</code> as merged into <code>${p.target}</code>`,
       author: "Author of the MR",
@@ -1883,7 +1891,8 @@
   function renderHeader() {
     document.documentElement.lang = lang;
     const title = mr.title ? `!${mr.iid} ${mr.title}` : texts.title(mr);
-    document.title = title;
+    document.title = `${texts.pageKind} · ${title}`;
+    document.getElementById("page-kind").textContent = texts.pageKind;
     document.getElementById("title").textContent = title;
     const branches = mr.merge ? texts.mergedBranches : texts.branches;
     document.getElementById("branches").innerHTML = branches({ branch: escapeHtml(mr.branch), target: escapeHtml(mr.target) })

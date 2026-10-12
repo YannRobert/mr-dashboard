@@ -56,10 +56,22 @@
   a { color: var(--link); }
   header {
     position: sticky; top: 0; z-index: 10;
-    display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 1.4rem;
+    display: flex; flex-direction: column; gap: 0.45rem;
     padding: 0.75rem 1rem; background: var(--surface); border-bottom: 1px solid var(--border);
   }
+  /* Même disposition que l'en-tête du diff : titre, puis auteur et branches, liens à droite du titre. */
+  .title-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 1.4rem; }
   header h1 { flex: 1 1 30rem; margin: 0; font-size: 1.05rem; overflow-wrap: anywhere; }
+  /* Nature de la page, devant le titre : le diff et les commentaires d'une MR ont le même en-tête. */
+  .page-kind {
+    display: inline-block; margin-right: 0.6em; padding: 0.1em 0.6em; border-radius: 0.4rem; vertical-align: 0.1em;
+    font-size: 0.8rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--accent-fg); background: var(--accent);
+  }
+  .subtitle { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 1.4rem; }
+  .subtitle .loaded-at { margin-left: auto; }
+  .branches { color: var(--muted); font-size: 0.9rem; overflow-wrap: anywhere; }
+  .branches code { font-size: 0.85rem; }
   .summary { color: var(--muted); font-size: 0.85rem; }
   /* Auteur de la MR, pastille comprise : qui l'a ouverte, même dans un onglet ouvert depuis longtemps. */
   .mr-author { display: inline-flex; align-items: center; gap: 0.4em; font-size: 0.85rem; white-space: nowrap; }
@@ -130,15 +142,20 @@
 </head>
 <body>
 <header>
-  <h1 id="title"></h1>
-  <span class="mr-author" id="mr-author" hidden></span>
-  <span class="summary" id="summary"></span>
-  <span class="loaded-at" id="loaded-at"></span>
-  <nav class="links">
-    <a id="diff-link" target="_blank" data-tab="diff" hidden></a>
-    <a id="gitlab-link" target="_blank" rel="noopener" hidden></a>
-    <button type="button" id="close-tab" data-close-tab></button>
-  </nav>
+  <div class="title-row">
+    <h1><span class="page-kind" id="page-kind"></span><span id="title"></span></h1>
+    <nav class="links">
+      <a id="diff-link" target="_blank" data-tab="diff" hidden></a>
+      <a id="gitlab-link" target="_blank" rel="noopener" hidden></a>
+      <button type="button" id="close-tab" data-close-tab></button>
+    </nav>
+  </div>
+  <div class="subtitle">
+    <span class="mr-author" id="mr-author" hidden></span>
+    <span class="branches" id="branches"></span>
+    <span class="summary" id="summary"></span>
+    <span class="loaded-at" id="loaded-at"></span>
+  </div>
 </header>
 <p class="cached-banner" id="cached-banner" hidden></p>
 <main id="comments"></main>
@@ -149,7 +166,10 @@
 <script>
   const TEXTS = {
     fr: {
-      title: p => `Commentaires de !${p.iid}${p.title ? ` ${p.title}` : ""}`,
+      title: p => `!${p.iid}${p.title ? ` ${p.title}` : ""}`,
+      pageKind: "Commentaires",
+      branches: p => `<code>${p.branch}</code> vers <code>${p.target}</code>`,
+      mergedBranches: p => `<code>${p.branch}</code> mergée dans <code>${p.target}</code>`,
       loading: "Chargement des commentaires GitLab…",
       unavailable: "Commentaires indisponibles",
       noCopy: "Ils n'ont encore jamais été chargés sur ce poste : aucune copie à montrer en attendant GitLab.",
@@ -173,7 +193,10 @@
       openNote: "GitLab",
     },
     en: {
-      title: p => `Comments on !${p.iid}${p.title ? ` ${p.title}` : ""}`,
+      title: p => `!${p.iid}${p.title ? ` ${p.title}` : ""}`,
+      pageKind: "Comments",
+      branches: p => `<code>${p.branch}</code> into <code>${p.target}</code>`,
+      mergedBranches: p => `<code>${p.branch}</code> merged into <code>${p.target}</code>`,
       loading: "Loading GitLab comments…",
       unavailable: "Comments unavailable",
       noCopy: "They were never loaded on this computer: no copy to show while waiting for GitLab.",
@@ -238,9 +261,12 @@
 
   function renderHeader(mr) {
     const title = texts.title({ iid, title: mr?.title.replace(/^Draft:\s*/i, "") });
+    document.getElementById("page-kind").textContent = texts.pageKind;
     document.getElementById("title").textContent = title;
-    document.title = `${title} — MisteR Dashboard`;
+    document.title = `${texts.pageKind} · ${title} — MisteR Dashboard`;
     if (!mr) return;
+    const branches = mr.state === "merged" ? texts.mergedBranches : texts.branches;
+    document.getElementById("branches").innerHTML = branches({ branch: escapeHtml(mr.sourceBranch), target: escapeHtml(mr.targetBranch) });
     // Absent d'une sauvegarde antérieure à son ajout : affiché au chargement suivant.
     const authorName = mr.author?.name;
     if (authorName) {
