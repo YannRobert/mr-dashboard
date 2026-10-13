@@ -265,9 +265,11 @@ Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut
 - **✕ Fermer**, dans l'en-tête du diff et des commentaires, ferme l'onglet sans confirmation du
   navigateur. Celui-ci ne laisse fermer qu'un onglet ouvert depuis le dashboard ou un lien ; pour un
   onglet ouvert à la main, le bouton devient « Ctrl+W ».
-- Diff notes affichées, sur tout le diff (sans plage de commits) et un clone local à jour du dernier
-  push : un clic sur un numéro de ligne ouvre un éditeur dessous, Maj+clic l'étend à une plage ;
-  **Publier dans GitLab** (Ctrl+Entrée) y crée la discussion.
+- Sur tout le diff (sans plage de commits) et un clone local à jour du dernier push : un clic sur un
+  numéro de ligne ouvre un éditeur dessous, Maj+clic l'étend à une plage ; **Publier dans GitLab**
+  (Ctrl+Entrée) y crée la discussion. Diff notes masquées, ce clic les affiche d'abord, la ligne cliquée
+  restant à sa place à l'écran. Sinon, une infobulle sur la ligne dit pourquoi commenter est impossible
+  et comment y remédier (**Tout**, ou **git fetch** dans le dashboard puis F5).
 - Au bas de chaque fil, commentaire comme diff note, **Répondre** ouvre une réponse à publier dans
   GitLab (Ctrl+Entrée, Échap pour annuler), et **Résoudre** ou **Rouvrir** change son état ; le fil est
   aussitôt relu dans GitLab et réaffiché à sa place.
