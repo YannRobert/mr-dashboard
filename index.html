@@ -4245,9 +4245,12 @@ function aiFixPrompt(mr) {
   // Toute modification de la MR — mise à jour, correction, réponse à un thread — relance la CI et peut
   // dégrader un indicateur jusque-là parfait : la boucle de vérification vaut donc dans tous les cas.
   parts.push(
-    "Pousse le tout en une fois sur la branche de la MR, puis attends la fin du pipeline et vérifie " +
-    `l'état des indicateurs avec \`${state.config.signalsCommand} ${mr.iid}\`. Tant que les indicateurs ne sont pas ` +
-    `parfaits (${perfectIndicators().join(", ")}), effectue les corrections nécessaires.`
+    "Pousse le tout en une fois sur la branche de la MR, puis lance en tâche de fond (run_in_background) " +
+    `\`${state.config.signalsCommand} ${mr.iid} --wait\` : la commande attend seule la fin du pipeline du commit ` +
+    "poussé, puis affiche l'état des indicateurs. N'interroge pas le pipeline entre-temps : attends la notification " +
+    "de fin de la commande et lis sa sortie. Tant que les indicateurs ne sont pas " +
+    `parfaits (${perfectIndicators().join(", ")}), effectue les corrections nécessaires, pousse-les en une fois ` +
+    "et relance la même commande en tâche de fond."
   );
   return parts.join("\n\n");
 }
