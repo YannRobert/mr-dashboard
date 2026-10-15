@@ -15,7 +15,7 @@ relayé, et le serveur n'écoute que sur 127.0.0.1 : les seules écritures dans 
 
 Actions locales, en POST :
     /orca/launch  ouvre dans Orca une session Claude Code avec le prompt d'une action du bouton AI
-                d'une MR : {"iid", "action", "prompt", "model"} (cf. orca_launcher.py), quand le serveur tourne
+                d'une MR : {"iid", "action", "prompt", "model", "effort"} (cf. orca_launcher.py), quand le serveur tourne
                 dans WSL et qu'Orca est installé ; GET /ai/actions en donne le catalogue (cf. ai_actions.py)
     /git/fetch  git fetch du clone local, qui tourne aussi tout seul toutes les --git-fetch-interval
                 secondes ; GET /git/status en donne le dernier résultat (cf. git_actions.py)
@@ -68,7 +68,8 @@ from copy import copy
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlsplit
 
-from ai_actions import MODELS as AI_MODELS, AiActions, AiActionsError
+import claude_models
+from ai_actions import AiActions, AiActionsError
 from avatar_colors import DEFAULT_PATH as AVATAR_COLORS_PATH, AvatarColors
 from git_actions import GitActions, GitError
 from orca_launcher import OrcaError, OrcaLauncher
@@ -377,11 +378,17 @@ def make_handler(
                 action = str(payload["action"])
                 prompt = str(payload["prompt"])
                 model = payload.get("model")
+                effort = payload.get("effort")
             except (ValueError, KeyError, TypeError):
                 self.send_json(400, {"message": "requête invalide"})
                 return
-            if model is not None and model not in AI_MODELS:
-                self.send_json(400, {"message": f"modèle inconnu : {model}"})
+            # Seuls un modèle et un niveau proposés passent : la commande lancée dans Orca passe par un shell.
+            choice = claude_models.find(model) if model is not None else None
+            if model is not None and choice is None:
+                self.send_json(400, {"message": f"modèle non proposé : {model}"})
+                return
+            if effort is not None and effort not in (choice["efforts"] if choice else claude_models.EFFORTS):
+                self.send_json(400, {"message": f"niveau d'effort non proposé pour ce modèle : {effort}"})
                 return
             if not orca:
                 self.send_json(503, {"message": "Orca introuvable, ou serveur lancé hors WSL"})
@@ -399,7 +406,8 @@ def make_handler(
                     iid,
                     title,
                     prompt,
-                    model
+                    model,
+                    effort
                 )
             except OrcaError as error:
                 self.send_json(502, {"message": str(error)})

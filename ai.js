@@ -8,10 +8,12 @@ window.MrAi = (() => {
       "ai.title": "Afficher un prompt Claude Code pour cette MR",
       "ai.title.toFix": "Afficher un prompt Claude Code pour cette MR, qui a quelque chose à corriger",
       "ai.fix": "Corriger",
+      "ai.free": "Libre",
       "dialog.title": p => `Claude Code sur la MR !${p.iid}`,
       "dialog.actions": "Action",
       "dialog.catalogError": p => `Catalogue des actions AI illisible : ${p.message}`,
       "dialog.hint": "Prompt à compléter ou retoucher ici si besoin, puis à coller dans Claude Code, lancé à la racine du dépôt — ou à lancer directement dans Orca.",
+      "dialog.hint.free": "Prompt à rédiger ici, puis à coller dans Claude Code, lancé à la racine du dépôt — ou à lancer directement dans Orca.",
       "dialog.reset": "Prompt d'origine",
       "dialog.reset.title": "Remplace le prompt modifié par celui de l'action",
       "dialog.aria": "Prompt pour Claude Code",
@@ -23,6 +25,17 @@ window.MrAi = (() => {
       "dialog.model": "Modèle",
       "dialog.model.title": "Modèle de la session lancée dans Orca. Un prompt copié prend celui de la session où on le colle : /model pour en changer.",
       "dialog.model.default": "par défaut",
+      "dialog.model.latest": "Dernière version",
+      "dialog.model.versions": "Version précise",
+      "dialog.effort": "Effort",
+      "dialog.effort.title": "Niveau d'effort de la session lancée dans Orca : bas pour une tâche simple, qui coûte moins, élevé pour une tâche difficile. Un prompt copié prend celui de la session où on le colle : /effort pour en changer.",
+      "dialog.effort.default": "par défaut",
+      "dialog.effort.low": "Bas",
+      "dialog.effort.medium": "Moyen",
+      "dialog.effort.high": "Élevé",
+      "dialog.effort.xhigh": "Très élevé",
+      "dialog.effort.max": "Maximal",
+      "dialog.effort.recommended": p => `${p.level} (recommandé)`,
       "dialog.orca.opening": "Ouverture dans Orca…",
       "dialog.orca.opened": "Session lancée dans Orca",
       "dialog.orca.unconfirmed": "Orca n'a pas confirmé à temps : bascule sur Orca, l'onglet s'y ouvre dès que sa fenêtre est au premier plan",
@@ -33,10 +46,12 @@ window.MrAi = (() => {
       "ai.title": "Show a Claude Code prompt for this MR",
       "ai.title.toFix": "Show a Claude Code prompt for this MR, which has something to fix",
       "ai.fix": "Fix",
+      "ai.free": "Free",
       "dialog.title": p => `Claude Code on MR !${p.iid}`,
       "dialog.actions": "Action",
       "dialog.catalogError": p => `Unreadable AI actions catalogue: ${p.message}`,
       "dialog.hint": "Prompt to complete or adjust here if needed, then paste into Claude Code, started at the repository root — or to start directly in Orca.",
+      "dialog.hint.free": "Prompt to write here, then paste into Claude Code, started at the repository root — or to start directly in Orca.",
       "dialog.reset": "Original prompt",
       "dialog.reset.title": "Replace the edited prompt with the action's own",
       "dialog.aria": "Prompt for Claude Code",
@@ -48,6 +63,17 @@ window.MrAi = (() => {
       "dialog.model": "Model",
       "dialog.model.title": "Model of the session started in Orca. A copied prompt runs on the model of the session it is pasted into: /model to change it.",
       "dialog.model.default": "default",
+      "dialog.model.latest": "Latest version",
+      "dialog.model.versions": "Specific version",
+      "dialog.effort": "Effort",
+      "dialog.effort.title": "Effort level of the session started in Orca: low for a simple task, which costs less, high for a hard one. A copied prompt runs at the effort of the session it is pasted into: /effort to change it.",
+      "dialog.effort.default": "default",
+      "dialog.effort.low": "Low",
+      "dialog.effort.medium": "Medium",
+      "dialog.effort.high": "High",
+      "dialog.effort.xhigh": "Extra high",
+      "dialog.effort.max": "Max",
+      "dialog.effort.recommended": p => `${p.level} (recommended)`,
       "dialog.orca.opening": "Opening in Orca…",
       "dialog.orca.opened": "Session started in Orca",
       "dialog.orca.unconfirmed": "Orca did not confirm in time: switch to Orca, the tab opens as soon as its window is in front",
@@ -67,10 +93,11 @@ window.MrAi = (() => {
   let dialog = null;
   // MR du dialogue ouvert, et ce que ses actions demandent : { mr, toFix, fixContext }.
   let current = null;
-  // Prompts retouchés et modèles choisis, par MR et par action, jusqu'au rechargement de la page : un
+  // Prompts retouchés, modèles et niveaux d'effort choisis, par MR et par action, jusqu'au rechargement de la page : un
   // dialogue fermé par mégarde, ou une autre action essayée, ne perd pas ce qu'on y a changé.
   const drafts = new Map();
   const models = new Map();
+  const efforts = new Map();
 
   function t(
     key,
@@ -118,6 +145,7 @@ window.MrAi = (() => {
         <span class="muted" id="ai-copied" aria-live="polite"></span>
         <button type="button" id="ai-reset" hidden></button>
         <label class="ai-model" id="ai-model-label" hidden><span id="ai-model-name"></span> <select id="ai-model"></select></label>
+        <label class="ai-model" id="ai-effort-label" hidden><span id="ai-effort-name"></span> <select id="ai-effort"></select></label>
         <button type="button" id="ai-orca" class="with-icon" hidden>${ORCA_LOGO}<span id="ai-orca-label"></span></button>
         <button type="button" id="ai-copy" class="primary"></button>
       </div>`;
@@ -142,7 +170,12 @@ window.MrAi = (() => {
       pressedOutside = false;
     });
     part("ai-text").addEventListener("input", keepDraft);
-    part("ai-model").addEventListener("change", keepModel);
+    part("ai-model").addEventListener("change", () => {
+      keepModel();
+      syncEfforts(part("ai-effort").value);
+      keepEffort();
+    });
+    part("ai-effort").addEventListener("change", keepEffort);
     part("ai-reset").addEventListener("click", resetDraft);
     part("ai-copy").addEventListener("click", copy);
     part("ai-orca").addEventListener("click", openInOrca);
@@ -160,21 +193,60 @@ window.MrAi = (() => {
 
   function applyTexts() {
     part("ai-actions").setAttribute("aria-label", t("dialog.actions"));
-    part("ai-hint").textContent = t("dialog.hint");
+    part("ai-hint").textContent = t(dialog.dataset.action === "free" ? "dialog.hint.free" : "dialog.hint");
     part("ai-text").setAttribute("aria-label", t("dialog.aria"));
     part("ai-close").textContent = t("dialog.close");
     part("ai-orca").title = t("dialog.orca.title");
     part("ai-model-label").title = t("dialog.model.title");
     part("ai-model-name").textContent = t("dialog.model");
     const choice = part("ai-model").value;
-    part("ai-model").innerHTML = ["", ...(catalog?.models ?? [])].map(model =>
-      `<option value="${escapeHtml(model)}">${escapeHtml(model ? model[0].toUpperCase() + model.slice(1) : t("dialog.model.default"))}</option>`
-    ).join("");
-    part("ai-model").value = choice;
+    const choices = catalog?.models ?? [];
+    const option = model => `<option value="${escapeHtml(model.id)}">${escapeHtml(modelLabel(model))}</option>`;
+    const group = (label, list) => (list.length ? `<optgroup label="${escapeHtml(label)}">${list.map(option).join("")}</optgroup>` : "");
+    part("ai-model").innerHTML = `<option value="">${escapeHtml(t("dialog.model.default"))}</option>`
+      + group(t("dialog.model.latest"), choices.filter(model => model.alias))
+      + group(t("dialog.model.versions"), choices.filter(model => !model.alias));
+    choose(part("ai-model"), choice);
+    part("ai-effort-label").title = t("dialog.effort.title");
+    part("ai-effort-name").textContent = t("dialog.effort");
+    syncEfforts(part("ai-effort").value);
     part("ai-orca-label").textContent = t("dialog.orca");
     part("ai-reset").textContent = t("dialog.reset");
     part("ai-reset").title = t("dialog.reset.title");
     part("ai-copy").textContent = t("dialog.copy");
+  }
+
+  // Alias : la version qu'il désigne aujourd'hui, si Claude Code la donne (« Opus (5.5) »).
+  function modelLabel(model) {
+    if (!model.alias) return model.label;
+    const version = model.version?.startsWith(model.label) ? model.version.slice(model.label.length).trim() : model.version;
+    return version ? `${model.label} (${version})` : model.label;
+  }
+
+  // Une valeur absente de la liste, modèle retiré par Anthropic ou niveau refusé par le modèle, laisse
+  // le choix par défaut.
+  function choose(
+    select,
+    value
+  ) {
+    select.value = value;
+    if (select.value !== value) select.value = "";
+  }
+
+  const chosenModel = () => (catalog?.models ?? []).find(model => model.id === part("ai-model").value);
+
+  // Niveaux d'effort du modèle choisi, son niveau recommandé signalé ; tous pour le modèle par défaut, que
+  // seule la configuration de Claude Code connaît. Un modèle sans effort grise la liste.
+  function syncEfforts(wanted) {
+    const model = chosenModel();
+    const levels = model ? model.efforts : catalog?.efforts ?? [];
+    part("ai-effort").innerHTML = ["", ...levels].map(level => {
+      const label = t(`dialog.effort.${level || "default"}`) ?? level;
+      const text = level && level === model?.recommended ? t("dialog.effort.recommended", { level: label }) : label;
+      return `<option value="${escapeHtml(level)}">${escapeHtml(text)}</option>`;
+    }).join("");
+    choose(part("ai-effort"), wanted);
+    part("ai-effort").disabled = !dialog.dataset.action || !levels.length;
   }
 
   function setLang(value) {
@@ -202,8 +274,9 @@ window.MrAi = (() => {
 
   // mr : { iid, title, source_branch, target_branch, web_url }. Variables inconnues laissées telles
   // quelles : le prompt affiché montre la faute de frappe. Il finit par une ligne vide : un clic sous le
-  // texte y place le curseur, prêt pour ce qu'on veut ajouter.
+  // texte y place le curseur, prêt pour ce qu'on veut ajouter. Celui de l'action libre reste vide.
   function prompt(action) {
+    if (!action.prompt) return "";
     const { mr, fixContext } = current;
     const values = {
       iid: mr.iid,
@@ -230,11 +303,12 @@ window.MrAi = (() => {
     part("ai-error").hidden = !catalog.error;
     part("ai-error").textContent = catalog.error ? t("dialog.catalogError", { message: catalog.error }) : "";
     part("ai-actions").innerHTML = actions.map(action =>
-      `<button type="button" data-ai-action="${escapeHtml(action.id)}">${escapeHtml(action.label ?? t("ai.fix"))}</button>`
+      `<button type="button" data-ai-action="${escapeHtml(action.id)}">${escapeHtml(action.label ?? t(`ai.${action.id}`))}</button>`
     ).join("");
     part("ai-actions").hidden = !actions.length;
     part("ai-orca").hidden = !orcaEnabled();
     part("ai-model-label").hidden = !orcaEnabled();
+    part("ai-effort-label").hidden = !orcaEnabled();
     applyTexts();
     if (!dialog.open) dialog.showModal();
     select(actions[0]);
@@ -242,6 +316,8 @@ window.MrAi = (() => {
 
   function select(action) {
     dialog.dataset.action = action?.id ?? "";
+    // Le prompt libre, rédigé par qui l'envoie, n'a pas d'autre mode d'emploi que de l'écrire.
+    part("ai-hint").textContent = t(action?.id === "free" ? "dialog.hint.free" : "dialog.hint");
     for (const button of part("ai-actions").querySelectorAll("[data-ai-action]")) {
       button.setAttribute("aria-pressed", String(button.dataset.aiAction === action?.id));
     }
@@ -249,9 +325,11 @@ window.MrAi = (() => {
     text.value = action ? drafts.get(draftKey()) ?? prompt(action) : "";
     text.readOnly = !action;
     part("ai-reset").hidden = !drafts.has(draftKey());
-    part("ai-model").value = models.get(draftKey()) ?? action?.model ?? "";
+    choose(part("ai-model"), models.get(draftKey()) ?? action?.model ?? "");
+    part("ai-model").disabled = !action;
+    syncEfforts(efforts.get(draftKey()) ?? action?.effort ?? "");
     part("ai-copied").textContent = "";
-    for (const id of ["ai-orca", "ai-copy", "ai-model"]) part(id).disabled = !action;
+    syncSendButtons();
     // Curseur sur la ligne vide de la fin, rien de sélectionné, le début du prompt à l'écran : ce qu'on
     // tape s'ajoute à la suite, sans rien remplacer.
     text.focus();
@@ -268,6 +346,13 @@ window.MrAi = (() => {
     else drafts.set(draftKey(), text);
     part("ai-reset").hidden = !drafts.has(draftKey());
     part("ai-copied").textContent = "";
+    syncSendButtons();
+  }
+
+  // Rien à copier ni à lancer tant que le prompt est vide : celui de l'action libre, à son ouverture.
+  function syncSendButtons() {
+    const empty = !dialog.dataset.action || !promptToSend();
+    for (const id of ["ai-orca", "ai-copy"]) part(id).disabled = empty;
   }
 
   // Modèle choisi pour l'action, gardé comme son prompt ; celui du catalogue n'a pas besoin de l'être.
@@ -276,6 +361,14 @@ window.MrAi = (() => {
     const model = part("ai-model").value;
     if (!action || model === (action.model ?? "")) models.delete(draftKey());
     else models.set(draftKey(), model);
+  }
+
+  // Niveau d'effort choisi pour l'action, gardé comme son modèle.
+  function keepEffort() {
+    const action = actionsFor(current.toFix).find(candidate => candidate.id === dialog.dataset.action);
+    const effort = part("ai-effort").value;
+    if (!action || effort === (action.effort ?? "")) efforts.delete(draftKey());
+    else efforts.set(draftKey(), effort);
   }
 
   function resetDraft() {
@@ -318,6 +411,7 @@ window.MrAi = (() => {
             action: dialog.dataset.action,
             prompt: promptToSend(),
             model: part("ai-model").value || null,
+            effort: part("ai-effort").value || null,
           }),
         }
       );

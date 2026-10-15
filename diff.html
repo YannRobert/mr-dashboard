@@ -422,7 +422,12 @@
       notesCount: n => `${n} diff note${n > 1 ? "s" : ""} dans la MR`,
       placedNotes: n => `${n} diff note${n > 1 ? "s" : ""} placée${n > 1 ? "s" : ""} dans le diff affiché`,
       notesTitle: "Afficher les diff notes GitLab sous les lignes commentées ; désactivé, la page ne les charge pas. "
-        + "Activé, sur tout le diff à jour : un clic sur un numéro de ligne la commente, Maj+clic pour une plage",
+        + "Sur tout le diff à jour, un clic sur un numéro de ligne la commente, Maj+clic pour une plage, et active l'affichage",
+      cannotCommentRange: "Diff note impossible sur une plage de commits : « Tout » revient au diff complet, où commenter",
+      cannotCommentMerged: "Diff note impossible sur une MR mergée",
+      cannotCommentVersions: "Diff note impossible : les versions de la MR n'ont pas pu être lues dans GitLab",
+      cannotCommentOutdated: "Diff note impossible : le diff affiché n'est pas celui du dernier push de la MR dans GitLab. "
+        + "« git fetch » dans le dashboard, puis F5",
       newNote: p => p.first === p.last ? `Nouvelle diff note, ligne ${p.last}` : `Nouvelle diff note, lignes ${p.first} à ${p.last}`,
       notePlaceholder: "Markdown GitLab — Ctrl+Entrée pour publier, Échap pour annuler",
       publishNote: "Publier dans GitLab",
@@ -502,7 +507,12 @@
       notesCount: n => `${n} diff note${n > 1 ? "s" : ""} in the MR`,
       placedNotes: n => `${n} diff note${n > 1 ? "s" : ""} placed in the displayed diff`,
       notesTitle: "Show the GitLab diff notes under the commented lines; off, the page does not load them. "
-        + "On, over the whole up-to-date diff: click a line number to comment on it, Shift+click for a range",
+        + "Over the whole up-to-date diff, click a line number to comment on it, Shift+click for a range, which turns them on",
+      cannotCommentRange: "No diff note on a range of commits: \"All\" goes back to the full diff, where to comment",
+      cannotCommentMerged: "No diff note on a merged MR",
+      cannotCommentVersions: "No diff note: the MR versions could not be read from GitLab",
+      cannotCommentOutdated: "No diff note: the displayed diff is not the one of the MR's last push in GitLab. "
+        + "\"git fetch\" in the dashboard, then F5",
       newNote: p => p.first === p.last ? `New diff note, line ${p.last}` : `New diff note, lines ${p.first} to ${p.last}`,
       notePlaceholder: "GitLab Markdown — Ctrl+Enter to publish, Esc to cancel",
       publishNote: "Publish to GitLab",
@@ -714,7 +724,8 @@
     showFileList(container);
     showDiffSize();
     if (readNotesEnabled()) placeNotes(container);
-    container.classList.toggle("can-comment", canComment());
+    // Diff notes masquées, un clic sur un numéro de ligne les affiche avant de la commenter.
+    container.classList.toggle("can-comment", canComment() || (!readNotesEnabled() && !commentBlocker()));
   }
 
   // Coloration d'un fichier seul, par tranches de lignes : d'un bloc, un gros fichier figerait le défilement.
@@ -1639,8 +1650,68 @@
   // Une note se pose sur le diff que GitLab connaît : celui de sa dernière version, que la page montre
   // en entier, sans plage de commits, quand le clone local est à jour.
   function canComment() {
-    return readNotesEnabled() && discussions !== null && !range && !mr.merge && !!latestVersion
-      && commits?.at(-1)?.sha === latestVersion.head_commit_sha;
+    return readNotesEnabled() && discussions !== null && !commentBlocker();
+  }
+
+  // Ce qui empêche de commenter, diff notes affichées ou non : dit à qui clique sur un numéro de ligne.
+  function commentBlocker() {
+    if (discussionsError !== null) return texts.notesFailed(discussionsError);
+    if (range) return texts.cannotCommentRange;
+    if (mr.merge) return texts.cannotCommentMerged;
+    if (!latestVersion) return texts.cannotCommentVersions;
+    if (commits?.at(-1)?.sha !== latestVersion.head_commit_sha) return texts.cannotCommentOutdated;
+    return null;
+  }
+
+  // Un clic sur un numéro de ligne la commente, ou dit pourquoi il ne le peut pas. Diff notes masquées, il les
+  // affiche d'abord : le diff redessiné, la même ligne est retrouvée et gardée à la même hauteur de l'écran.
+  async function commentLine(cell, extend) {
+    if (!lineOf(cell.parentElement)) return;
+    const blocker = commentBlocker();
+    if (blocker) {
+      showTipFor(cell, blocker);
+      return;
+    }
+    if (readNotesEnabled()) {
+      if (canComment()) selectLine(cell.parentElement, extend);
+      return;
+    }
+    const spot = lineSpot(cell);
+    saveEnabled(NOTES_KEY, true);
+    await showNotes();
+    // Hauteurs du diff redessiné posées à l'image suivante : celles des espaces en face des fils comprises.
+    await nextFrame();
+    cell = findLine(spot);
+    if (!cell) return;
+    if (canComment()) selectLine(cell.parentElement, false);
+    // Après l'éditeur, dont le champ, en prenant le focus, fait défiler le diff.
+    scrollBy(0, cell.getBoundingClientRect().top - spot.top);
+    if (canComment()) return;
+    // Discussions illisibles : l'infobulle ne doit pas être fermée par ce défilement, signalé à l'image suivante.
+    await nextFrame();
+    showTipFor(cell, commentBlocker());
+  }
+
+  const nextFrame = () => new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve)));
+
+  // Une ligne du diff, de quoi la retrouver une fois le diff redessiné : fichier, colonne, numéro et type.
+  function lineSpot(cell) {
+    const wrapper = cell.closest(".d2h-file-wrapper");
+    return {
+      path: wrapperPaths(wrapper).join(" → "),
+      side: [...wrapper.querySelectorAll(".d2h-file-side-diff")].indexOf(cell.closest(".d2h-file-side-diff")),
+      text: cell.textContent.trim(),
+      className: cell.className,
+      top: cell.getBoundingClientRect().top,
+    };
+  }
+
+  function findLine(spot) {
+    const wrapper = [...document.querySelectorAll("#diff-files .d2h-file-wrapper")]
+      .find(w => wrapperPaths(w).join(" → ") === spot.path);
+    const scope = spot.side < 0 ? wrapper : wrapper?.querySelectorAll(".d2h-file-side-diff")[spot.side];
+    return [...scope?.querySelectorAll("td.d2h-code-side-linenumber, td.d2h-code-linenumber") ?? []]
+      .find(cell => cell.className === spot.className && cell.textContent.trim() === spot.text) ?? null;
   }
 
   // Numéros d'une ligne du diff : l'ancien pour une ligne supprimée, le nouveau pour une ligne ajoutée,
@@ -2050,8 +2121,8 @@
     }, TIP_LEAVE_MS);
   }
 
-  function showTip(owner) {
-    tip.textContent = owner.dataset.tip;
+  function showTip(owner, text = owner.dataset.tip) {
+    tip.textContent = text;
     tip.hidden = false;
     const box = owner.getBoundingClientRect();
     tip.style.top = `${box.bottom + tip.offsetHeight > innerHeight ? box.top - tip.offsetHeight + 1 : box.bottom - 1}px`;
@@ -2059,7 +2130,7 @@
   }
 
   document.addEventListener("mouseover", e => {
-    const owner = e.target.closest("[data-tip]");
+    const owner = e.target.closest("[data-tip]") ?? (tipOwner?.contains(e.target) ? tipOwner : null);
     if (tip.contains(e.target) || (owner && owner === tipOwner)) {
       if (!tip.hidden) clearTimeout(tipTimer);
       return;
@@ -2074,6 +2145,13 @@
     tipOwner = owner;
     tipTimer = setTimeout(() => showTip(owner), 500);
   });
+
+  // Infobulle ouverte sur-le-champ par un clic, sur un élément sans [data-tip] : elle se ferme comme les autres.
+  function showTipFor(owner, text) {
+    hideTip();
+    tipOwner = owner;
+    showTip(owner, text);
+  }
   document.addEventListener("mousedown", e => {
     if (!tip.contains(e.target)) hideTip();
   });
@@ -2087,7 +2165,7 @@
     const lineNumber = e.target.closest("#diff-files td.d2h-code-side-linenumber, #diff-files td.d2h-code-linenumber");
     if (lineNumber) {
       if (e.shiftKey) getSelection()?.removeAllRanges();
-      selectLine(lineNumber.parentElement, e.shiftKey);
+      commentLine(lineNumber, e.shiftKey);
       return;
     }
     if (e.target.closest("[data-editor-cancel]")) {
