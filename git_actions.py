@@ -21,6 +21,8 @@ from pathlib import Path
 FETCH_TIMEOUT_S = 60
 DIFF_TIMEOUT_S = 30
 MAX_DIFF_BYTES = 5_000_000
+# Contexte d'un diff de fichier entier : plus de lignes qu'aucun fichier n'en compte.
+WHOLE_FILE_CONTEXT = 100_000_000
 # Jamais d'invite d'identifiants : sans terminal pour y répondre, git attendrait jusqu'au délai.
 GIT_ENV = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
 SHA = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
@@ -206,17 +208,20 @@ class GitActions:
             self,
             revisions,
             first=None,
-            last=None
+            last=None,
+            paths=()
     ):
         """Sans plage, le diff de la MR depuis le point où elle part de sa cible, celui de l'onglet
-        Changes de GitLab ; avec, ce qu'ont apporté ensemble ses commits de first à last."""
+        Changes de GitLab ; avec, ce qu'ont apporté ensemble ses commits de first à last. Avec des
+        chemins, le diff de ces seuls fichiers, chacun en entier : ses lignes inchangées en contexte."""
         base, head = revisions
+        options = [f"--unified={WHOLE_FILE_CONTEXT}", "--", *paths] if paths else []
         if first is None and last is None:
-            return self._diff_range(f"{base}...{head}")
+            return self._diff_range(f"{base}...{head}", *options)
         shas = [commit["sha"] for commit in self.commits(revisions)]
         if first not in shas or last not in shas or shas.index(first) > shas.index(last):
             raise GitError("plage de commits hors de la MR")
-        return self._diff_range(f"{first}^1", last)
+        return self._diff_range(f"{first}^1", last, *options)
 
     def commits(self, revisions):
         """Commits de la MR, du plus ancien au plus récent, sans ceux de la cible qu'elle a mergée."""

@@ -525,7 +525,8 @@ def make_handler(
                 diff = git.diff(
                     self.mr_revisions(query),
                     first,
-                    last
+                    last,
+                    query.get("path", [])
                 )
             except (GitError, ValueError) as error:
                 self.send_json(409 if isinstance(error, GitError) else 400, {"message": str(error)})

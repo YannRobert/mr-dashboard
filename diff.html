@@ -287,6 +287,7 @@
   .d2h-file-collapse { font-size: 0.8rem; }
   /* Retour à la ligne, fichier par fichier : un long paragraphe se lit sans ascenseur, le code garde ses lignes. */
   .d2h-file-collapse.wrap-toggle { display: flex; flex: none; margin-right: 0.4rem; white-space: nowrap; }
+  .d2h-file-collapse.wrap-toggle.failed { color: var(--red-fg); }
   .d2h-file-wrapper.wrap-lines .d2h-code-line, .d2h-file-wrapper.wrap-lines .d2h-code-side-line { white-space: normal; }
   .d2h-file-wrapper.wrap-lines .d2h-code-line-ctn { white-space: pre-wrap; overflow-wrap: anywhere; }
   .d2h-file-wrapper.wrap-lines .d2h-file-side-diff { overflow-x: hidden; }
@@ -457,6 +458,9 @@
       partialDiff: p => `⚠ Diff partiel : ${p.shown} fichier${p.shown > 1 ? "s" : ""} sur ${p.total} affiché${p.shown > 1 ? "s" : ""}, `
         + `filtre « ${p.filter} »${p.exclude ? " en exclusion" : ""}. Les autres fichiers de la MR sont masqués.`,
       showAllFiles: "Retirer le filtre, voir tous les fichiers",
+      wholeFile: "Fichier complet",
+      wholeFileTitle: "Affiche ce fichier en entier, ses lignes inchangées comprises, et non plus seulement autour des modifications",
+      wholeFileFailed: ({ message }) => `Fichier complet indisponible : ${message}`,
       wrapLines: "Retour à la ligne",
       wrapLinesTitle: "Replie les lignes trop longues de ce fichier au lieu de les faire défiler",
       nextNote: "Diff note suivante",
@@ -542,6 +546,9 @@
       partialDiff: p => `⚠ Partial diff: showing ${p.shown} of ${p.total} file${p.total > 1 ? "s" : ""}, `
         + `filter "${p.filter}"${p.exclude ? " (excluding)" : ""}. The MR's other files are hidden.`,
       showAllFiles: "Clear the filter, show all files",
+      wholeFile: "Whole file",
+      wholeFileTitle: "Show this whole file, unchanged lines included, not only around the changes",
+      wholeFileFailed: ({ message }) => `Whole file unavailable: ${message}`,
       wrapLines: "Wrap lines",
       wrapLinesTitle: "Wrap this file's long lines instead of scrolling them",
       nextNote: "Next diff note",
@@ -612,6 +619,9 @@
   let clearFileFilter = null;
   // Fichiers affichés avec retour à la ligne, par chemin : le choix survit aux rendus du diff.
   const wrappedFiles = new Set();
+  // Fichiers affichés en entier, par chemin, et leur diff à contexte complet par plage de commits et chemin.
+  const wholeFiles = new Set();
+  const wholeFileDiffs = new Map();
   // Au-delà, en lignes ajoutées ou supprimées, le diff n'est coloré qu'à l'approche de l'écran : colorer d'un coup
   // un gros diff fige la page et multiplie les éléments qu'elle garde en mémoire.
   const LARGE_DIFF_LINES = 2000;
@@ -703,7 +713,7 @@
     }
     const ui = new Diff2HtmlUI(
       container,
-      diffText,
+      withWholeFiles(diffText),
       {
         outputFormat: format,
         drawFileList: true,
@@ -721,6 +731,7 @@
     highlight(ui, container, changed);
     trackReview(changed);
     addWrapToggles(container);
+    addWholeFileToggles(container);
     showFileList(container);
     showDiffSize();
     if (readNotesEnabled()) placeNotes(container);
@@ -841,6 +852,92 @@
       });
       apply();
     }
+  }
+
+  // Case « fichier complet » devant « Retour à la ligne » : le fichier est redemandé avec tout son contexte,
+  // puis remplace le sien dans le diff, qui est redessiné ; notes, filtre et cases suivent comme à tout rendu.
+  function addWholeFileToggles(container) {
+    for (const wrapper of container.querySelectorAll(".d2h-file-wrapper")) {
+      const anchor = wrapper.querySelector(".d2h-file-header .wrap-toggle");
+      if (!anchor) continue;
+      const paths = wrapperPaths(wrapper);
+      const path = paths.join(" → ");
+      const label = document.createElement("label");
+      label.className = "d2h-file-collapse wrap-toggle";
+      label.title = texts.wholeFileTitle;
+      label.innerHTML = `<input class="d2h-file-collapse-input" type="checkbox"> ${escapeHtml(texts.wholeFile)}`;
+      anchor.before(label);
+      const input = label.querySelector("input");
+      input.checked = wholeFiles.has(path);
+      label.classList.toggle("d2h-selected", input.checked);
+      input.addEventListener("change", async () => {
+        input.disabled = true;
+        if (input.checked) {
+          try {
+            await loadWholeFile(paths);
+          } catch (error) {
+            input.checked = false;
+            input.disabled = false;
+            label.classList.add("failed");
+            label.title = texts.wholeFileFailed(error);
+            return;
+          }
+          wholeFiles.add(path);
+        } else {
+          wholeFiles.delete(path);
+        }
+        rerenderKeeping(path);
+      });
+    }
+  }
+
+  // Plage affichée, en requête : le diff d'un fichier entier est propre à la plage.
+  function diffQuery() {
+    const query = mrQuery();
+    if (range) {
+      query.set("first", commits[range[0]].sha);
+      query.set("last", commits[range[1]].sha);
+    }
+    return query;
+  }
+
+  const wholeFileKey = paths => `${diffQuery()}|${paths.join(" → ")}`;
+
+  async function loadWholeFile(paths) {
+    const key = wholeFileKey(paths);
+    if (wholeFileDiffs.has(key)) return;
+    const query = diffQuery();
+    for (const path of new Set(paths)) query.append("path", path);
+    wholeFileDiffs.set(key, await fetchText(`git/diff?${query}`));
+  }
+
+  // Diff découpé par fichier, sur ses lignes « diff --git » ; la première ligne de chacun l'identifie.
+  const splitFiles = text => text.split(/^(?=diff --git )/m);
+
+  // Diff affiché : chaque fichier demandé en entier y prend la place du sien.
+  function withWholeFiles(text) {
+    const replacements = new Map();
+    for (const path of wholeFiles) {
+      const whole = wholeFileDiffs.get(`${diffQuery()}|${path}`);
+      for (const file of whole ? splitFiles(whole) : []) {
+        if (file.startsWith("diff --git ")) replacements.set(file.slice(0, file.indexOf("\n")), file);
+      }
+    }
+    if (!replacements.size) return text;
+    return splitFiles(text).map(file => {
+      const whole = replacements.get(file.slice(0, file.indexOf("\n")));
+      return whole ? whole + (file.endsWith("\n") && !whole.endsWith("\n") ? "\n" : "") : file;
+    }).join("");
+  }
+
+  // Redessine le diff en gardant à la même place de l'écran l'en-tête du fichier dont on a changé l'affichage.
+  function rerenderKeeping(path) {
+    const find = () => [...document.querySelectorAll("#diff-files .d2h-file-wrapper")]
+      .find(wrapper => wrapperPaths(wrapper).join(" → ") === path);
+    const top = find()?.getBoundingClientRect().top;
+    render();
+    const wrapper = find();
+    if (wrapper && top !== undefined) window.scrollBy(0, wrapper.getBoundingClientRect().top - top);
   }
 
   // En côte à côte, chaque colonne est un tableau à part : une ligne repliée d'un côté décalerait tout
@@ -2074,14 +2171,13 @@
 
   async function loadDiff() {
     const seq = ++loadSeq;
-    const query = mrQuery();
-    if (range) {
-      query.set("first", commits[range[0]].sha);
-      query.set("last", commits[range[1]].sha);
-    }
+    const query = diffQuery();
+    // Le diff relu peut compter de nouveaux commits : les fichiers en entier sont relus avec lui.
+    wholeFileDiffs.clear();
     let text;
     try {
       text = await fetchText(`git/diff?${query}`);
+      await Promise.all([...wholeFiles].map(path => loadWholeFile(path.split(" → ")).catch(() => wholeFiles.delete(path))));
     } catch (error) {
       if (seq === loadSeq) showMessage(texts.failed(error.message), true);
       return;
