@@ -266,7 +266,7 @@ class GitActions:
                 raise GitError(f"branche absente du clone local : {name}")
         common = self._git_output(["merge-base", head, base])
         count = int(self._git_output(["rev-list", "--count", f"{base}..{head}"]))
-        commit_date = self._git_output(["log", "-1", "--format=%cI", head])
+        commit_date, author_date = self._git_output(["log", "-1", "--format=%cI%x1f%aI", head]).split("\x1f")
         behind = int(self._git_output(["rev-list", "--count", f"{head}..{base}"]))
         since = next_short = None
         if behind:
@@ -282,6 +282,7 @@ class GitActions:
         return {
             "count": count,
             "commitDate": commit_date,
+            "authorDate": author_date,
             "behind": {"count": behind, "since": since, "base": self._git_output(["rev-parse", "--short", common]), "next": next_short},
             "fetchedAt": self._last_fetch_at(),
         }
