@@ -314,6 +314,7 @@
   table.mrs tbody tr.stalled td { background: var(--red-bg); }
   table.mrs tbody tr.stalled td:first-child { box-shadow: inset 3px 0 0 var(--red-dot); }
   .commit-mood { margin-left: 0.3em; cursor: help; }
+  .commit-age { color: var(--muted); font-size: 0.8em; }
   table.mrs thead th {
     position: sticky; z-index: 1; background: var(--surface);
     font-size: var(--fs-small); font-weight: 600; color: var(--muted); white-space: nowrap;
@@ -739,6 +740,13 @@ const ACTIVE_COMMIT_HOURS = 2;
 const IDLE_COMMIT_HOURS = 24;
 const STALLED_ALERT_HOURS = 8;
 
+// Âge du commit affiché sous celui du push quand le push le flatte : écart d'au moins COMMIT_GAP_ALWAYS_MINUTES,
+// ou d'au moins COMMIT_GAP_MIN_MINUTES s'il pèse COMMIT_GAP_MIN_RATIO de l'âge du push. En deçà du plancher,
+// c'est le temps ordinaire entre commit et push (tests, rebase).
+const COMMIT_GAP_MIN_MINUTES = 15;
+const COMMIT_GAP_MIN_RATIO = 0.2;
+const COMMIT_GAP_ALWAYS_MINUTES = 60;
+
 // Actualisation automatique, tant que la case est cochée.
 const AUTO_REFRESH_MS = 5 * 60 * 1000;
 const AUTO_REFRESH_KEY = "mr-dashboard.autoRefresh";
@@ -1058,16 +1066,17 @@ const I18N = {
     "col.coverage": "Couverture",
     "col.pit": "Mutants\nrestants",
     "col.behind": "Commits",
-    "col.last_commit": "Dernier\ncommit",
+    "col.last_commit": "Dernier\npush",
     "col.activity": "Activité",
     "col.created": "Créée",
     "help.threads": "Threads non résolus / threads résolubles au total",
     "help.coverage": "Couverture Sonar du nouveau code de la MR",
     "help.pit": "Mutants PIT survivants, non couverts ou en erreur, sur les classes modifiées par la MR",
     "help.behind": "Commits de la branche cible absents de la MR ; entre parenthèses, depuis quand : date du commit de la cible qui suit le dernier commit commun avec la MR",
-    "help.last_commit": "Date du dernier push, à l'heure de GitLab — un commentaire ne la fait pas bouger ; la date du commit, fixée par le poste du développeur, est dans l'infobulle",
+    "help.last_commit": "Date du dernier push, à l'heure de GitLab — un commentaire ne la fait pas bouger ; dessous, l'âge du dernier commit quand il est nettement plus ancien que le push (date d'auteur, conservée au rebase)",
     "help.activity": "Dernière activité GitLab : commit, commentaire, label, approbation…",
-    "date.lastCommit": p => `Dernier push : ${p.push}\nDate du commit : ${p.commit}`,
+    "date.lastCommit": p => `Dernier push : ${p.push}\nDate du commit (auteur) : ${p.commit}`,
+    "date.commitAge": p => `commit ${p.age}`,
     "commit.active": `Active : dernier commit il y a moins de ${ACTIVE_COMMIT_HOURS} h`,
     "commit.idle": `Endormie : aucun commit depuis plus de ${IDLE_COMMIT_HOURS} h`,
     "signals.stale": "Signaux anciens",
@@ -1343,16 +1352,17 @@ const I18N = {
     "col.coverage": "Coverage",
     "col.pit": "Remaining\nmutants",
     "col.behind": "Commits",
-    "col.last_commit": "Last\ncommit",
+    "col.last_commit": "Last\npush",
     "col.activity": "Activity",
     "col.created": "Created",
     "help.threads": "Unresolved threads / resolvable threads in total",
     "help.coverage": "Sonar coverage of the MR's new code",
     "help.pit": "PIT mutants surviving, not covered or in error, on the classes changed by the MR",
     "help.behind": "Target branch commits missing from the MR; in parentheses, since when: date of the target commit that follows the last commit shared with the MR",
-    "help.last_commit": "Date of the last push, by GitLab's clock — a comment does not move it; the commit date, set by the developer's machine, is in the tooltip",
+    "help.last_commit": "Date of the last push, by GitLab's clock — a comment does not move it; below, the age of the last commit when it is clearly older than the push (author date, kept on rebase)",
     "help.activity": "Last GitLab activity: commit, comment, label, approval…",
-    "date.lastCommit": p => `Last push: ${p.push}\nCommit date: ${p.commit}`,
+    "date.lastCommit": p => `Last push: ${p.push}\nCommit date (author): ${p.commit}`,
+    "date.commitAge": p => `commit ${p.age}`,
     "commit.active": `Active: last commit less than ${ACTIVE_COMMIT_HOURS} h ago`,
     "commit.idle": `Idle: no commit for more than ${IDLE_COMMIT_HOURS} h`,
     "signals.stale": "Stale signals",
@@ -2199,7 +2209,7 @@ const GRAPHQL_MR_FIELDS = `
   iid
   diffStatsSummary { additions deletions fileCount }
   commitCount
-  commits(first: 1) { nodes { committedDate } }
+  commits(first: 1) { nodes { committedDate authoredDate } }
   mergeRequestDiffs(first: 1) { nodes { createdAt } }
   approvedBy { nodes { name username } }
   reviewers { nodes { name mergeRequestInteraction { reviewState } } }
@@ -2527,6 +2537,7 @@ function graphqlCommits(node) {
   return {
     count: node.commitCount,
     commitDate: node.commits.nodes[0]?.committedDate ?? null,
+    authorDate: node.commits.nodes[0]?.authoredDate ?? null,
     pushDate: node.mergeRequestDiffs.nodes[0]?.createdAt ?? null,
   };
 }
@@ -2564,6 +2575,7 @@ async function loadCommits(mr) {
     return {
       count: commits.length,
       commitDate: commits.map(c => c.committed_date).sort().at(-1) ?? null,
+      authorDate: commits[0]?.authored_date ?? null,
       pushDate: versions[0]?.created_at ?? null,
     };
   } catch (error) {
@@ -2861,10 +2873,21 @@ function lastCommitCell(mr) {
   if (!pushDate) return dateCell(null, "");
   const tooltip = t("date.lastCommit", {
     push: commits.pushDate ? formatDate(commits.pushDate) : "—",
-    commit: commits.commitDate ? formatDate(commits.commitDate) : "—",
+    commit: commits.authorDate ? formatDate(commits.authorDate) : "—",
   }) + localNote(commits);
   const local = commits.localAt !== undefined ? ' class="local"' : "";
-  return `<span${local} title="${escapeHtml(tooltip)}">${relative(pushDate)}</span>${badge}`;
+  const commitAge = isCommitGapWorthShowing(commits)
+    ? `<div class="commit-age">${escapeHtml(t("date.commitAge", { age: relative(commits.authorDate) }))}</div>`
+    : "";
+  return `<span${local} title="${escapeHtml(tooltip)}">${relative(pushDate)}</span>${badge}${commitAge}`;
+}
+
+function isCommitGapWorthShowing(commits) {
+  if (!commits.pushDate || !commits.authorDate) return false;
+  const gapMinutes = (new Date(commits.pushDate) - new Date(commits.authorDate)) / 60000;
+  const pushAgeMinutes = (gitlabNow() - new Date(commits.pushDate)) / 60000;
+  return gapMinutes >= COMMIT_GAP_ALWAYS_MINUTES
+    || (gapMinutes >= COMMIT_GAP_MIN_MINUTES && gapMinutes >= COMMIT_GAP_MIN_RATIO * pushAgeMinutes);
 }
 
 // Une action simple est attendue (correction, rebase) et personne n'a poussé depuis STALLED_ALERT_HOURS.
