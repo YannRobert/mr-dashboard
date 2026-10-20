@@ -2861,8 +2861,41 @@ function runningNote(
   link,
   progress = null
 ) {
-  const tooltip = progress ? `${title}\n${progress.title}` : title;
-  return `<a class="running-note${progress ? ` ${progress.className}` : ""}"${progress?.style ? ` style="${progress.style}"` : ""} href="${escapeHtml(link)}" target="_blank" rel="noopener" title="${escapeHtml(tooltip)}">${escapeHtml(t("refreshing"))}</a>`;
+  return `<a${progressAttributes("running-note", title, progress)} href="${escapeHtml(link)}" target="_blank" rel="noopener">${escapeHtml(t("refreshing"))}</a>`;
+}
+
+// Classe, style et info-bulle d'un élément souligné par l'avancement ; ses données d'estimation l'accompagnent
+// pour que tickProgress le fasse avancer entre deux actualisations sans redessiner le tableau.
+function progressAttributes(
+  className,
+  title,
+  progress
+) {
+  if (!progress) return ` class="${className}" title="${escapeHtml(title)}"`;
+  const view = progressView(
+    progress,
+    className,
+    title
+  );
+  const data = escapeHtml(JSON.stringify({ ...progress, className, title }));
+  return ` class="${view.className}" style="${view.style}" title="${escapeHtml(view.title)}" data-progress="${data}"`;
+}
+
+const PROGRESS_TICK_MS = 5 * 1000;
+
+// L'info-bulle native déjà ouverte garde son texte : la nouvelle valeur s'affiche au survol suivant.
+function tickProgress() {
+  for (const element of document.querySelectorAll("[data-progress]")) {
+    const { className, title, ...progress } = JSON.parse(element.dataset.progress);
+    const view = progressView(
+      progress,
+      className,
+      title
+    );
+    element.className = view.className;
+    element.setAttribute("style", view.style);
+    element.title = view.title;
+  }
 }
 
 // Avancement estimé d'un pipeline en cours, d'après la médiane des durées réussies de même nature : null
@@ -2873,17 +2906,33 @@ function pipelineProgress(
   kind
 ) {
   if (!startedAt || !durations?.length) return null;
-  const typical = median(durations);
-  const elapsed = (gitlabNow() - new Date(startedAt)) / 1000;
-  const ratio = elapsed / typical;
-  const values = { elapsed: minutesSeconds(elapsed), typical: minutesSeconds(typical) };
-  const basis = t("progress.basis", { count: durations.length, kind });
+  return { startedAt, typical: median(durations), count: durations.length, kind };
+}
+
+// Rendu de l'avancement à l'instant : recalculé à chaque tick, l'estimation suit l'horloge.
+function progressView(
+  progress,
+  className,
+  title
+) {
+  const elapsed = (gitlabNow() - new Date(progress.startedAt)) / 1000;
+  const ratio = elapsed / progress.typical;
+  const values = { elapsed: minutesSeconds(elapsed), typical: minutesSeconds(progress.typical) };
+  const basis = t("progress.basis", { count: progress.count, kind: progress.kind });
   if (ratio >= 1) {
-    return { className: "progress-underline overdue", style: "", title: `${t("progress.overdue", values)}\n${basis}` };
+    return {
+      className: `${className} progress-underline overdue`,
+      style: "",
+      title: `${title}\n${t("progress.overdue", values)}\n${basis}`,
+    };
   }
   const percent = Math.round(ratio * 100);
-  const estimate = t("progress.estimate", { ...values, percent, remaining: minutesSeconds(typical - elapsed) });
-  return { className: "progress-underline", style: `--progress: ${percent}%`, title: `${estimate}\n${basis}` };
+  const estimate = t("progress.estimate", { ...values, percent, remaining: minutesSeconds(progress.typical - elapsed) });
+  return {
+    className: `${className} progress-underline`,
+    style: `--progress: ${percent}%`,
+    title: `${title}\n${estimate}\n${basis}`,
+  };
 }
 
 function median(values) {
@@ -5266,10 +5315,11 @@ function pipelineHead(
       t("progress.kind.branch", { branch: state.config.pipelineBranch })
     );
   }
-  const durationTitle = progress ? `${t("branchPipeline.durationTitle")}\n${progress.title}` : t("branchPipeline.durationTitle");
-  const durationAttributes = progress
-    ? ` class="muted ${progress.className}"${progress.style ? ` style="${progress.style}"` : ""}`
-    : ` class="muted"`;
+  const durationAttributes = progressAttributes(
+    "muted",
+    t("branchPipeline.durationTitle"),
+    progress
+  );
   return [
     label,
     pill(PIPELINE_TONE[status.group] ?? "grey", status.text, t("pipeline.title", { id, label: status.label }), web(p.path)),
@@ -5277,7 +5327,7 @@ function pipelineHead(
     p.commit ? link(p.commit.webPath, escapeHtml(p.commit.title), "bp-commit") : "",
     `<code>${escapeHtml(p.sha)}</code>`,
     p.user ? `<span class="muted">${escapeHtml(p.user.name)}</span>` : "",
-    duration ? `<span${durationAttributes} title="${escapeHtml(durationTitle)}">⏱ ${escapeHtml(duration)}</span>` : "",
+    duration ? `<span${durationAttributes}>⏱ ${escapeHtml(duration)}</span>` : "",
     `<span class="muted" title="${escapeHtml(formatDate(p.createdAt))}">${escapeHtml(t("branchPipeline.ago", { age: compactDuration(gitlabNow() - new Date(p.createdAt)) }))}</span>`,
   ].filter(Boolean).join("");
 }
@@ -5628,6 +5678,7 @@ systemDark.addEventListener("change", () => {
   applyTheme();
 });
 setInterval(renderStatus, 30 * 1000);
+setInterval(tickProgress, PROGRESS_TICK_MS);
 setInterval(loadGitFetchStatus, 30 * 1000);
 loadRequestStats();
 setInterval(loadRequestStats, REQUEST_STATS_POLL_MS);
