@@ -381,6 +381,21 @@
   .running-note { font-size: var(--fs-small); color: var(--muted); text-decoration: none; }
   .running-note::before { content: "⟳ "; }
   .running-note:hover { color: var(--text); text-decoration: underline; }
+  /* « En cours » s'écrit une fois, dans la colonne Pipeline ; les autres colonnes n'en gardent que l'icône. */
+  .running-note.icon-only::before { content: "⟳"; }
+  /* Issues et couverture Sonar viennent du même job : un seul ⟳, à cheval sur la jonction des deux
+     cellules, relié par un trait à chacune — les deux valeurs arriveront ensemble. */
+  table.mrs td.signal:has(.sonar-join) { position: relative; }
+  .sonar-join { display: block; height: 1em; }
+  .sonar-join::after {
+    content: ""; position: absolute; bottom: calc(0.5em + 0.35rem); height: 1px;
+    background: color-mix(in srgb, var(--muted) 50%, transparent);
+  }
+  .sonar-join.start::after { left: 50%; right: 0.7em; }
+  .sonar-join.end::after { left: 0.7em; right: 50%; }
+  .sonar-join .running-note {
+    position: absolute; right: 0; bottom: 0.35rem; transform: translateX(50%); z-index: 1; line-height: 1;
+  }
   /* Avancement estimé d'un pipeline en cours : un trait de 2 px sous « En cours », sans place en plus. */
   .progress-underline {
     padding-bottom: 2px;
@@ -2902,9 +2917,13 @@ function pitCell(mr) {
 }
 
 // Signal inexploitable (absent, en cours, non configuré…) : sa raison, en pastille grise.
-function reasonPill(kind, signal) {
+function reasonPill(
+  kind,
+  signal,
+  join = null
+) {
   if (signal.reason === "pending") {
-    return `<div class="stack"><span class="muted">—</span>${runningNote(t(`${kind}.pending`, signal.info), signal.link)}</div>`;
+    return `<div class="stack"><span class="muted">—</span>${compactRunningNote(t(`${kind}.pending`, signal.info), signal.link, join)}</div>`;
   }
   return pill("grey", t(`reason.${signal.reason}`), t(`${kind}.${signal.reason}`, signal.info), signal.link);
 }
@@ -2913,17 +2932,29 @@ function sonarUsable(sonar) {
   return sonar && (sonar.state === "ok" || sonar.state === "stale");
 }
 
-function sonarUnusable(mr) {
+function sonarUnusable(
+  mr,
+  join
+) {
   const s = signalsOf(mr);
   const pending = loadingOrError(s);
   if (pending) return pending;
   if (!s.sonar) return "";
-  if (!sonarUsable(s.sonar)) return reasonPill("sonar", s.sonar);
+  if (!sonarUsable(s.sonar)) {
+    return reasonPill(
+      "sonar",
+      s.sonar,
+      join
+    );
+  }
   return null;
 }
 
 function issuesCell(mr) {
-  const unusable = sonarUnusable(mr);
+  const unusable = sonarUnusable(
+    mr,
+    "start"
+  );
   if (unusable !== null) return unusable;
   const sonar = signalsOf(mr).sonar;
   const out = [];
@@ -2931,21 +2962,35 @@ function issuesCell(mr) {
   if (sonar.issues > 0) out.push(pill("red", t("sonar.issues", { n: sonar.issues }), t("sonar.issuesTitle"), sonar.links.issues));
   if (sonar.gate && sonar.gate !== "OK") out.push(pill("red", t("sonar.gate", { gate: sonar.gate }), t("sonar.gateTitle"), sonar.links.dashboard));
   if (sonar.jobFailed) out.push(pill("orange", t("job.failed"), t("sonar.jobFailed"), sonar.links.dashboard));
-  return signalStack(sonar, out, `<a class="ok good" href="${escapeHtml(sonar.links.issues)}" target="_blank" rel="noopener">0</a>`);
+  return signalStack(
+    sonar,
+    out,
+    `<a class="ok good" href="${escapeHtml(sonar.links.issues)}" target="_blank" rel="noopener">0</a>`,
+    "start"
+  );
 }
 
 function coverageCell(mr) {
-  const unusable = sonarUnusable(mr);
+  const unusable = sonarUnusable(
+    mr,
+    "end"
+  );
   if (unusable !== null) return unusable;
   const sonar = signalsOf(mr).sonar;
-  if (sonar.coverage == null) return signalStack(sonar, [], `<span class="ok" title="${escapeHtml(t("coverage.none"))}">—</span>`);
+  const stack = (alerts, clean) => signalStack(
+    sonar,
+    alerts,
+    clean,
+    "end"
+  );
+  if (sonar.coverage == null) return stack([], `<span class="ok" title="${escapeHtml(t("coverage.none"))}">—</span>`);
   const detail = t("coverage.detail", {
     lines: sonar.linesToCover ?? "?",
     uncovered: sonar.uncoveredLines ?? "?",
     conditions: sonar.uncoveredConditions ?? "?",
   });
-  if (sonar.coverage >= 100) return signalStack(sonar, [], `<a class="ok good" href="${escapeHtml(sonar.links.coverage)}" target="_blank" rel="noopener" title="${escapeHtml(detail)}">${formatPercent(100)}</a>`);
-  return signalStack(sonar, [pill("orange", formatPercent(sonar.coverage), detail, sonar.links.coverage)], "");
+  if (sonar.coverage >= 100) return stack([], `<a class="ok good" href="${escapeHtml(sonar.links.coverage)}" target="_blank" rel="noopener" title="${escapeHtml(detail)}">${formatPercent(100)}</a>`);
+  return stack([pill("orange", formatPercent(sonar.coverage), detail, sonar.links.coverage)], "");
 }
 
 function commitsCount(mr) {
@@ -3041,14 +3086,40 @@ function dateCell(iso, key) {
 
 // Valeurs d'un run précédent pendant qu'un nouveau job tourne : suivies d'un « En cours » en petit, et
 // jamais affichées en vert — un signal propre peut encore se dégrader à la fin du job.
-function refreshingNote(signal) {
+function refreshingNote(
+  signal,
+  join
+) {
   const r = signal.refreshing;
   if (!r) return "";
-  return runningNote(t("refreshing.title", { job: r.job, status: r.status, date: formatDate(r.valuesDate) }), r.link);
+  return compactRunningNote(
+    t("refreshing.title", { job: r.job, status: r.status, date: formatDate(r.valuesDate) }),
+    r.link,
+    join
+  );
 }
 
-function signalStack(signal, alerts, clean) {
-  const note = refreshingNote(signal);
+// join : "start" (cellule issues Sonar, porte le ⟳) ou "end" (couverture, le trait seul) ; sinon l'icône seule.
+function compactRunningNote(
+  title,
+  link,
+  join = null
+) {
+  const icon = `<a class="running-note icon-only" href="${escapeHtml(link)}" target="_blank" rel="noopener" title="${escapeHtml(title)}" aria-label="${escapeHtml(t("refreshing"))}"></a>`;
+  if (!join) return icon;
+  return `<span class="sonar-join ${join}">${join === "start" ? icon : ""}</span>`;
+}
+
+function signalStack(
+  signal,
+  alerts,
+  clean,
+  join = null
+) {
+  const note = refreshingNote(
+    signal,
+    join
+  );
   if (!note && !alerts.length) return clean;
   const body = alerts.length ? alerts : [note ? clean.replace(' class="ok good"', ' class="ok"') : clean];
   return `<div class="stack">${[...body, note].join("")}</div>`;
