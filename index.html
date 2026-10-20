@@ -267,6 +267,30 @@
   .people-list li:hover, .people-list li:focus { outline: none; background: var(--surface-2); }
   .people-list li[aria-selected="true"] { font-weight: 600; }
   .people-filter .avatar { width: 1.6em; height: 1.6em; font-size: 0.62rem; }
+  /* Auteurs : toujours visibles, un clic sélectionne ou retire ; aucune sélection = tous. */
+  .author-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem; }
+  .author-chip {
+    display: inline-flex; align-items: center; gap: 0.4em; font: inherit; font-size: 0.85rem; color: var(--muted);
+    background: transparent; border: 1px solid transparent; border-radius: 999px; padding: 0.2em 0.6em 0.2em 0.2em;
+    cursor: pointer; white-space: nowrap; transition: background-color .15s, border-color .15s, color .15s;
+  }
+  .author-chip:hover { color: var(--text); background: var(--surface-2); }
+  .author-chip:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); }
+  .author-chip[aria-pressed="true"] {
+    color: var(--text); font-weight: 600;
+    background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+    border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  .author-chip .avatar { width: 1.6em; height: 1.6em; font-size: 0.62rem; }
+  /* Sélection partielle : les auteurs écartés s'effacent, sans disparaître. */
+  .author-chips.filtering .author-chip[aria-pressed="false"] .avatar { opacity: 0.45; }
+  .author-chip .count { font-variant-numeric: tabular-nums; font-weight: 400; color: var(--muted); font-size: 0.78rem; }
+  .author-chips-clear {
+    font: inherit; font-size: 0.78rem; color: var(--muted); background: none; border: none; cursor: pointer;
+    padding: 0.2em 0.4em; border-radius: 0.35rem; text-decoration: underline; text-underline-offset: 0.2em;
+  }
+  .author-chips-clear:hover { color: var(--text); }
+  .author-chips-clear[hidden] { display: none; }
   .reset-filters {
     font: inherit; font-size: 0.85rem; color: var(--muted); background: none; cursor: pointer;
     border: 1px solid transparent; border-radius: 0.5rem; padding: 0.25em 0.6em; margin-left: auto;
@@ -659,10 +683,7 @@
     <option value="all" data-i18n="period.all">Toutes les MR mergées</option>
   </select>
   <!-- Rangés du plus utile au moins utile. -->
-  <div class="people-filter" data-people="author">
-    <button type="button" class="people-button" aria-haspopup="listbox" aria-expanded="false" aria-label="Auteur" data-i18n-aria-label="filter.author"></button>
-    <ul class="people-list" role="listbox" aria-label="Auteur" data-i18n-aria-label="filter.author" hidden></ul>
-  </div>
+  <div class="author-chips" id="author-chips" role="group" aria-label="Auteur" data-i18n-aria-label="filter.author"></div>
   <select id="target" aria-label="Branche cible" data-i18n-aria-label="filter.target"></select>
   <select id="draft" aria-label="Draft" data-i18n-aria-label="filter.draft">
     <option value="" data-i18n="filter.draftAll">Draft : toutes</option>
@@ -1041,7 +1062,9 @@ const I18N = {
     "filter.alerts": "Avec alertes seulement",
     "filter.reset": "Réinitialiser les filtres",
     "filter.anyTarget": "Cible : toutes",
-    "filter.anyAuthor": "Auteur : tous",
+    "filter.allAuthors": "Tous",
+    "filter.allAuthorsHint": "Afficher les MR de tous les auteurs",
+    "filter.authorHint": p => `${p.name} — ${p.n} MR ; un clic ajoute ou retire l'auteur du filtre`,
     "filter.anyReviewer": "Reviewer : tous",
     "filter.anyAssignee": "Assignee : tous",
     "filter.addLabel": "Label : ajouter…",
@@ -1327,7 +1350,9 @@ const I18N = {
     "filter.alerts": "With alerts only",
     "filter.reset": "Reset filters",
     "filter.anyTarget": "Target: all",
-    "filter.anyAuthor": "Author: all",
+    "filter.allAuthors": "All",
+    "filter.allAuthorsHint": "Show MRs from every author",
+    "filter.authorHint": p => `${p.name} — ${p.n} MR${pluralEn(p.n)}; click to add or remove this author from the filter`,
     "filter.anyReviewer": "Reviewer: all",
     "filter.anyAssignee": "Assignee: all",
     "filter.addLabel": "Label: add…",
@@ -1634,7 +1659,7 @@ function readFiltersFromUrl() {
     q: p.get("q") || "",
     // null : branche cible par défaut du profil, connue une fois la config lue (cf. applyDefaultTarget).
     target: p.has("target") ? p.get("target") : null,
-    author: p.get("author") || "",
+    authors: (p.get("author") || "").split(",").filter(Boolean),
     reviewer: p.get("reviewer") || "",
     assignee: p.get("assignee") || "",
     labels: (p.get("labels") || "").split(",").filter(Boolean),
@@ -1659,7 +1684,7 @@ function writeFiltersToUrl() {
   if (f.view === "merged" && f.period !== DEFAULT_MERGED_PERIOD) p.set("period", f.period);
   if (f.q) p.set("q", f.q);
   if (f.target !== null && (state.targetChosen || f.target !== defaultTarget())) p.set("target", f.target);
-  if (f.author) p.set("author", f.author);
+  if (f.authors.length) p.set("author", f.authors.join(","));
   if (f.reviewer) p.set("reviewer", f.reviewer);
   if (f.assignee) p.set("assignee", f.assignee);
   if (f.labels.length) p.set("labels", f.labels.join(","));
@@ -3675,7 +3700,7 @@ function populateFilterOptions() {
     }
     return [...map].sort((a, b) => a[1].localeCompare(b[1], locale()));
   };
-  fillPeopleFilter("author", t("filter.anyAuthor"), people("author"));
+  fillAuthorChips(people("author"));
   fillPeopleFilter("reviewer", t("filter.anyReviewer"), people("reviewers"));
   fillPeopleFilter("assignee", t("filter.anyAssignee"), people("assignees"));
   const targets = [...new Set(viewMrs().map(mr => mr.target_branch).concat(state.filters.target ? [state.filters.target] : []))].sort();
@@ -3685,7 +3710,48 @@ function populateFilterOptions() {
   $("label").value = "";
 }
 
-const PEOPLE_FILTERS = ["author", "reviewer", "assignee"];
+const PEOPLE_FILTERS = ["reviewer", "assignee"];
+let authorChips = [];
+
+// Comme les autres filtres de personnes, un auteur filtré absent des MR affichées reste proposé.
+function fillAuthorChips(people) {
+  const absent = state.filters.authors.filter(username => !people.some(([known]) => known === username));
+  for (const username of absent) if (!peopleNames.has(username)) lookUpPersonName(username);
+  authorChips = [...people, ...absent.map(username => [username, peopleNames.get(username) ?? username])];
+  renderAuthorChips();
+}
+
+// Prénom seul, sauf quand deux auteurs le partagent.
+function chipLabels(people) {
+  const first = name => name.split(/\s+/)[0];
+  const counts = new Map();
+  for (const [, name] of people) counts.set(first(name), (counts.get(first(name)) ?? 0) + 1);
+  return people.map(([, name]) => counts.get(first(name)) > 1 ? name : first(name));
+}
+
+function renderAuthorChips() {
+  const selected = state.filters.authors;
+  const mrCounts = new Map();
+  for (const mr of viewMrs()) if (mr.author) mrCounts.set(mr.author.username, (mrCounts.get(mr.author.username) ?? 0) + 1);
+  const labels = chipLabels(authorChips);
+  const root = $("author-chips");
+  root.classList.toggle("filtering", selected.length > 0);
+  root.innerHTML = authorChips
+    .map(([username, name], i) => {
+      const n = mrCounts.get(username) ?? 0;
+      return `<button type="button" class="author-chip" data-author="${escapeHtml(username)}" aria-pressed="${selected.includes(username)}"`
+        + ` title="${escapeHtml(t("filter.authorHint", { name, n }))}">${avatar(name)}<span>${escapeHtml(labels[i])}</span>`
+        + `<span class="count">${n}</span></button>`;
+    })
+    .join("")
+    + `<button type="button" class="author-chips-clear" data-author-clear title="${escapeHtml(t("filter.allAuthorsHint"))}"`
+    + `${selected.length ? "" : " hidden"}>${escapeHtml(t("filter.allAuthors"))}</button>`;
+}
+
+function toggleAuthor(username) {
+  const authors = state.filters.authors;
+  updateFilters({ authors: authors.includes(username) ? authors.filter(a => a !== username) : [...authors, username] });
+}
 // Personnes proposées par chaque filtre, [username, nom], et son libellé « tous ».
 const peopleFilters = {};
 
@@ -3815,6 +3881,7 @@ function syncControlsFromState() {
   $("draft").value = f.draft;
   $("alerts").checked = f.alerts;
   PEOPLE_FILTERS.forEach(renderPeopleFilter);
+  renderAuthorChips();
   $("reset-filters").disabled = !filtersActive();
   $("activeLabels").innerHTML = f.labels
     .map(l => `<button type="button" class="label" data-remove-label="${escapeHtml(l)}" title="${escapeHtml(t("label.remove"))}">${escapeHtml(l)}</button>`)
@@ -3824,7 +3891,7 @@ function syncControlsFromState() {
 function matches(mr) {
   const f = state.filters;
   if (f.target && mr.target_branch !== f.target) return false;
-  if (f.author && mr.author?.username !== f.author) return false;
+  if (f.authors.length && !f.authors.includes(mr.author?.username)) return false;
   if (f.reviewer && !mr.reviewers?.some(u => u.username === f.reviewer)) return false;
   if (f.assignee && !mr.assignees?.some(u => u.username === f.assignee)) return false;
   const merged = mergedView();
@@ -5141,13 +5208,13 @@ function setView(view) {
 // Le tri et la vue ne sont pas des filtres : la réinitialisation les laisse.
 function filtersActive() {
   const f = state.filters;
-  return Boolean(f.q || f.author || f.reviewer || f.assignee || f.labels.length || f.draft || f.alerts
+  return Boolean(f.q || f.authors.length || f.reviewer || f.assignee || f.labels.length || f.draft || f.alerts
     || (f.target ?? "") !== (defaultTarget() ?? ""));
 }
 
 function resetFilters() {
   state.targetChosen = false;
-  updateFilters({ q: "", target: defaultTarget(), author: "", reviewer: "", assignee: "", labels: [], draft: "", alerts: false });
+  updateFilters({ q: "", target: defaultTarget(), authors: [], reviewer: "", assignee: "", labels: [], draft: "", alerts: false });
   $("q").focus();
 }
 
@@ -5167,6 +5234,11 @@ for (const id of ["target", "draft"]) {
     updateFilters({ [id]: e.target.value });
   });
 }
+$("author-chips").addEventListener("click", e => {
+  const chip = e.target.closest(".author-chip");
+  if (chip) toggleAuthor(chip.dataset.author);
+  else if (e.target.closest("[data-author-clear]")) updateFilters({ authors: [] });
+});
 document.addEventListener("click", e => {
   const root = e.target.closest(".people-filter");
   const li = e.target.closest(".people-list li");
