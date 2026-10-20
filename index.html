@@ -1841,6 +1841,7 @@ async function refresh() {
       loadSonarPullRequests(report),
     ]);
     state.mrPipelineDurations = mrPipelineDurations;
+    snapshot.mrPipelineDurations = mrPipelineDurations;
     for (const mr of mrs) {
       mr.graphql = graphqlNodes.get(String(mr.iid));
       mr.diffStats = mr.graphql?.diffStatsSummary;
@@ -2047,6 +2048,7 @@ function applySnapshot(snapshot) {
   }
   state.mrs = snapshot.mrs;
   state.branchPipeline = snapshot.branchPipeline;
+  state.mrPipelineDurations = snapshot.mrPipelineDurations;
   state.signals = snapshot.signals;
   state.refreshedAt = snapshot.at;
   if (!snapshot.initial) {
@@ -2072,6 +2074,7 @@ function saveSnapshot(snapshot) {
       config: snapshot.config,
       mrs: snapshot.mrs,
       branchPipeline: snapshot.branchPipeline,
+      mrPipelineDurations: snapshot.mrPipelineDurations,
       signals: [...snapshot.signals],
     }));
   } catch (ignored) {
@@ -2088,6 +2091,7 @@ function readSnapshot() {
       config: saved.config,
       mrs: saved.mrs,
       branchPipeline: saved.branchPipeline,
+      mrPipelineDurations: saved.mrPipelineDurations,
       signals: new Map(saved.signals),
       errors: [],
     };
@@ -5015,6 +5019,7 @@ async function pollBranchPipeline() {
         config: state.config,
         mrs: state.mrs,
         branchPipeline: state.branchPipeline,
+        mrPipelineDurations: state.mrPipelineDurations,
         signals: state.signals,
       });
     }
