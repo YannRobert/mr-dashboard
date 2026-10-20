@@ -386,7 +386,9 @@
     padding-bottom: 2px;
     background:
       linear-gradient(var(--accent), var(--accent)) 0 100% / var(--progress) 2px no-repeat,
-      linear-gradient(var(--grey-bg), var(--grey-bg)) 0 100% / 100% 2px no-repeat;
+      linear-gradient(var(--progress-track), var(--progress-track)) 0 100% / 100% 2px no-repeat;
+    /* Dérivé du texte atténué, pas d'un fond : le reste à parcourir se voit dans les deux thèmes. */
+    --progress-track: color-mix(in srgb, var(--muted) 40%, transparent);
   }
   .progress-underline.overdue {
     background: linear-gradient(var(--orange-fg), var(--orange-fg)) 0 100% / 100% 2px no-repeat;
