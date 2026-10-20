@@ -281,6 +281,9 @@
     background: color-mix(in srgb, var(--accent) 14%, var(--surface));
     border-color: color-mix(in srgb, var(--accent) 45%, transparent);
   }
+  /* Le nom réserve sa largeur en gras : cocher une puce ne déplace pas ses voisines. */
+  .author-chip .name { display: inline-flex; flex-direction: column; }
+  .author-chip .name::after { content: attr(data-text); font-weight: 600; height: 0; overflow: hidden; visibility: hidden; }
   .author-chip .avatar { width: 1.6em; height: 1.6em; font-size: 0.62rem; }
   /* Sélection partielle : les auteurs écartés s'effacent, sans disparaître. */
   .author-chips.filtering .author-chip[aria-pressed="false"] .avatar { opacity: 0.45; }
@@ -290,7 +293,7 @@
     padding: 0.2em 0.4em; border-radius: 0.35rem; text-decoration: underline; text-underline-offset: 0.2em;
   }
   .author-chips-clear:hover { color: var(--text); }
-  .author-chips-clear[hidden] { display: none; }
+  .author-chips-clear[hidden] { display: inline; visibility: hidden; }
   .reset-filters {
     font: inherit; font-size: 0.85rem; color: var(--muted); background: none; cursor: pointer;
     border: 1px solid transparent; border-radius: 0.5rem; padding: 0.25em 0.6em; margin-left: auto;
@@ -3740,7 +3743,7 @@ function renderAuthorChips() {
     .map(([username, name], i) => {
       const n = mrCounts.get(username) ?? 0;
       return `<button type="button" class="author-chip" data-author="${escapeHtml(username)}" aria-pressed="${selected.includes(username)}"`
-        + ` title="${escapeHtml(t("filter.authorHint", { name, n }))}">${avatar(name)}<span>${escapeHtml(labels[i])}</span>`
+        + ` title="${escapeHtml(t("filter.authorHint", { name, n }))}">${avatar(name)}<span class="name" data-text="${escapeHtml(labels[i])}">${escapeHtml(labels[i])}</span>`
         + `<span class="count">${n}</span></button>`;
     })
     .join("")
