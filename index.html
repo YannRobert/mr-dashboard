@@ -267,8 +267,8 @@
   .people-list li:hover, .people-list li:focus { outline: none; background: var(--surface-2); }
   .people-list li[aria-selected="true"] { font-weight: 600; }
   .people-filter .avatar { width: 1.6em; height: 1.6em; font-size: 0.62rem; }
-  /* Auteurs : toujours visibles ; « Tous » coche tout le monde, un clic depuis « Tous » isole un auteur,
-     puis chaque clic l'ajoute ou le retire. */
+  /* Auteurs : toujours visibles. Un clic isole toujours l'auteur (re-cliquer l'auteur isolé revient à « Tous ») ;
+     Ctrl ou Maj + clic l'ajoute ou le retire. */
   .author-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem; }
   .author-chip {
     display: inline-flex; align-items: center; gap: 0.4em; font: inherit; font-size: 0.85rem; color: var(--muted);
@@ -290,6 +290,7 @@
   .author-chip[aria-pressed="false"] .avatar { opacity: 0.45; }
   .author-chip .count { font-variant-numeric: tabular-nums; font-weight: 400; color: var(--muted); font-size: 0.78rem; }
   .author-chip.all { padding-left: 0.6em; }
+  .author-chips-label { font-size: 0.78rem; color: var(--muted); margin-right: 0.15rem; }
   .reset-filters {
     font: inherit; font-size: 0.85rem; color: var(--muted); background: none; cursor: pointer;
     border: 1px solid transparent; border-radius: 0.5rem; padding: 0.25em 0.6em; margin-left: auto;
@@ -1063,7 +1064,8 @@ const I18N = {
     "filter.anyTarget": "Cible : toutes",
     "filter.allAuthors": "Tous",
     "filter.allAuthorsHint": "Afficher les MR de tous les auteurs",
-    "filter.authorHint": p => `${p.name} — ${p.n} MR ; un clic ajoute ou retire l'auteur du filtre`,
+    "filter.authorsLabel": "Auteurs",
+    "filter.authorHint": p => `${p.name} — ${p.n} MR\nClic : ses MR seules (re-clic : tous)\nCtrl + clic : l'ajouter ou le retirer`,
     "filter.anyReviewer": "Reviewer : tous",
     "filter.anyAssignee": "Assignee : tous",
     "filter.addLabel": "Label : ajouter…",
@@ -1351,7 +1353,8 @@ const I18N = {
     "filter.anyTarget": "Target: all",
     "filter.allAuthors": "All",
     "filter.allAuthorsHint": "Show MRs from every author",
-    "filter.authorHint": p => `${p.name} — ${p.n} MR${pluralEn(p.n)}; click to add or remove this author from the filter`,
+    "filter.authorsLabel": "Authors",
+    "filter.authorHint": p => `${p.name} — ${p.n} MR${pluralEn(p.n)}\nClick: only their MRs (click again: all)\nCtrl + click: add or remove`,
     "filter.anyReviewer": "Reviewer: all",
     "filter.anyAssignee": "Assignee: all",
     "filter.addLabel": "Label: add…",
@@ -3736,7 +3739,8 @@ function renderAuthorChips() {
   const root = $("author-chips");
   const everyone = selected.length === 0;
   const allLabel = t("filter.allAuthors");
-  root.innerHTML = `<button type="button" class="author-chip all" data-author-all aria-pressed="${everyone}"`
+  root.innerHTML = `<span class="author-chips-label" aria-hidden="true">${escapeHtml(t("filter.authorsLabel"))}</span>`
+    + `<button type="button" class="author-chip all" data-author-all aria-pressed="${everyone}"`
     + ` title="${escapeHtml(t("filter.allAuthorsHint"))}"><span class="name" data-text="${escapeHtml(allLabel)}">${escapeHtml(allLabel)}</span></button>`
     + authorChips
     .map(([username, name], i) => {
@@ -3748,10 +3752,16 @@ function renderAuthorChips() {
     .join("");
 }
 
-// Depuis « Tous », un clic isole l'auteur. Retirer le dernier ou cocher tout le monde revient à « Tous ».
-function toggleAuthor(username) {
+// Un clic simple donne toujours le même résultat : cet auteur seul, ou « Tous » s'il l'était déjà.
+// Ctrl ou Maj + clic compose une sélection ; la vider ou y mettre tout le monde revient à « Tous ».
+function chooseAuthor(
+  username,
+  additive
+) {
   const authors = state.filters.authors;
-  const next = !authors.length ? [username]
+  const alone = authors.length === 1 && authors[0] === username;
+  const next = !additive ? (alone ? [] : [username])
+    : !authors.length ? authorChips.map(([known]) => known).filter(known => known !== username)
     : authors.includes(username) ? authors.filter(a => a !== username) : [...authors, username];
   const everyone = authorChips.every(([known]) => next.includes(known));
   updateFilters({ authors: everyone ? [] : next });
@@ -5242,7 +5252,7 @@ $("author-chips").addEventListener("click", e => {
   const chip = e.target.closest(".author-chip");
   if (!chip) return;
   if (chip.matches("[data-author-all]")) updateFilters({ authors: [] });
-  else toggleAuthor(chip.dataset.author);
+  else chooseAuthor(chip.dataset.author, e.ctrlKey || e.metaKey || e.shiftKey);
 });
 document.addEventListener("click", e => {
   const root = e.target.closest(".people-filter");
