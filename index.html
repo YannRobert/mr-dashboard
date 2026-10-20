@@ -2325,8 +2325,13 @@ const GRAPHQL_BRANCH_PIPELINE = `
 // (develop…) enchaîne plus d'étapes, sa durée fausserait l'estimation.
 const MR_PIPELINE_SOURCE = "merge_request_event";
 const MR_PIPELINES_SAMPLE = 10;
+// Un push rapproché annule les jobs du pipeline en cours : GitLab le dit réussi quand ces jobs avaient le
+// droit d'échouer, mais sa durée, écourtée, fausserait la médiane. Lus en surnombre, puis écartés.
+const INTERRUPTED_PIPELINES_MARGIN = 10;
 const GRAPHQL_MR_PIPELINE_DURATIONS = `
-  pipelines(source: "${MR_PIPELINE_SOURCE}", status: SUCCESS, first: ${MR_PIPELINES_SAMPLE}) { nodes { duration } }`;
+  pipelines(source: "${MR_PIPELINE_SOURCE}", status: SUCCESS, first: ${MR_PIPELINES_SAMPLE + INTERRUPTED_PIPELINES_MARGIN}) {
+    nodes { duration canceledJobs: jobs(statuses: [CANCELED]) { count } }
+  }`;
 
 async function loadGraphqlMergeRequests(report) {
   const nodes = new Map();
@@ -2381,7 +2386,11 @@ async function loadMrPipelineDurations(report) {
   try {
     const { body } = await api(`/graphql?query=${encodeURIComponent(query)}&variables=${encodeURIComponent(variables)}`);
     if (body.errors?.length) throw new Error(body.errors.map(e => e.message).join(", "));
-    return body.data.project.pipelines.nodes.map(node => node.duration).filter(Boolean);
+    return body.data.project.pipelines.nodes
+      .filter(node => node.canceledJobs.count === 0)
+      .map(node => node.duration)
+      .filter(Boolean)
+      .slice(0, MR_PIPELINES_SAMPLE);
   } catch (error) {
     report(t("error.graphql", { message: error.message }));
     return [];
@@ -2542,6 +2551,9 @@ const localNote = signal => (signal?.localAt === undefined ? ""
 //
 // Tant que le pipeline de tête reste le même, ce précédent est repris sans relire GitLab : seul un pipeline
 // plus ancien encore en cours, qui finirait après, le laisserait périmé jusqu'au prochain pipeline de tête.
+// Une rafale de pushes interrompt autant de pipelines : au-delà, on renonce plutôt que tout parcourir.
+const PREVIOUS_PIPELINE_CANDIDATES = 5;
+
 async function loadPreviousPipeline(
   mr,
   headId
@@ -2552,8 +2564,16 @@ async function loadPreviousPipeline(
   }
   try {
     const pipelines = (await api(`/gitlab/${projectPath()}/merge_requests/${mr.iid}/pipelines?per_page=20`)).body;
-    const previous = pipelines.find(p => p.id !== headId && ["success", "failed"].includes(p.status));
-    return previous ? (await api(`/gitlab/${projectPath()}/pipelines/${previous.id}`)).body : null;
+    const candidates = pipelines
+      .filter(p => p.id !== headId && ["success", "failed"].includes(p.status))
+      .slice(0, PREVIOUS_PIPELINE_CANDIDATES);
+    // Un pipeline interrompu par un push plus récent n'a pas de résultat à montrer : son « Warning » ou son
+    // échec ne vient que des jobs annulés. Le précédent est le dernier allé à son terme.
+    for (const candidate of candidates) {
+      const canceled = (await api(`/gitlab/${projectPath()}/pipelines/${candidate.id}/jobs?scope[]=canceled&per_page=1`)).body;
+      if (!canceled.length) return (await api(`/gitlab/${projectPath()}/pipelines/${candidate.id}`)).body;
+    }
+    return null;
   } catch (ignored) {
     return null;
   }
