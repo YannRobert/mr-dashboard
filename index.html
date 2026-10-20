@@ -381,6 +381,16 @@
   .running-note { font-size: var(--fs-small); color: var(--muted); text-decoration: none; }
   .running-note::before { content: "⟳ "; }
   .running-note:hover { color: var(--text); text-decoration: underline; }
+  /* Avancement estimé d'un pipeline en cours : un trait de 2 px sous « En cours », sans place en plus. */
+  .progress-underline {
+    padding-bottom: 2px;
+    background:
+      linear-gradient(var(--accent), var(--accent)) 0 100% / var(--progress) 2px no-repeat,
+      linear-gradient(var(--grey-bg), var(--grey-bg)) 0 100% / 100% 2px no-repeat;
+  }
+  .progress-underline.overdue {
+    background: linear-gradient(var(--orange-fg), var(--orange-fg)) 0 100% / 100% 2px no-repeat;
+  }
 
   /* Toute la largeur que les autres colonnes laissent : ses deux lignes y tiennent sans retour à la ligne. */
   .mr-cell { min-width: 22rem; width: 100%; }
@@ -1135,6 +1145,11 @@ const I18N = {
     "branchPipeline.buildsTitle": p => `${p.count} derniers pipelines réussis : ${p.durations}`,
     "pipeline.title": p => `Pipeline #${p.id} : ${p.label}`,
     "pipeline.runningTitle": p => `Pipeline #${p.id} : ${p.label} — au-dessus, le résultat du pipeline précédent #${p.previous}`,
+    "progress.estimate": p => `Environ ${p.percent} % : ${p.elapsed} sur ${p.typical} habituellement, reste environ ${p.remaining}`,
+    "progress.overdue": p => `Plus long que d'habitude : ${p.elapsed} pour ${p.typical} habituellement`,
+    "progress.basis": p => `Estimation : médiane des ${p.count} derniers pipelines ${p.kind} réussis`,
+    "progress.kind.mr": "de MR",
+    "progress.kind.branch": p => `de ${p.branch}`,
     "reason.notApplicable": "Non applicable",
     "reason.pending": "En cours",
     "reason.noNote": "Sans note",
@@ -1424,6 +1439,11 @@ const I18N = {
     "branchPipeline.buildsTitle": p => `Last ${p.count} successful pipelines: ${p.durations}`,
     "pipeline.title": p => `Pipeline #${p.id}: ${p.label}`,
     "pipeline.runningTitle": p => `Pipeline #${p.id}: ${p.label} — above, the result of the previous pipeline #${p.previous}`,
+    "progress.estimate": p => `About ${p.percent}%: ${p.elapsed} of a usual ${p.typical}, about ${p.remaining} left`,
+    "progress.overdue": p => `Longer than usual: ${p.elapsed} for a usual ${p.typical}`,
+    "progress.basis": p => `Estimate: median of the last ${p.count} successful ${p.kind} pipelines`,
+    "progress.kind.mr": "MR",
+    "progress.kind.branch": p => p.branch,
     "reason.notApplicable": "Not applicable",
     "reason.pending": "Running",
     "reason.noNote": "No note",
@@ -1813,12 +1833,14 @@ async function refresh() {
     await ensureConfig();
     snapshot.config = state.config;
     refreshBuildHistoryIfStale();
-    const [mrs, graphqlNodes, branchPipeline] = await Promise.all([
+    const [mrs, graphqlNodes, branchPipeline, mrPipelineDurations] = await Promise.all([
       gitlabAll(`${projectPath()}/merge_requests?state=opened`),
       loadGraphqlMergeRequests(report),
       loadBranchPipeline(),
+      loadMrPipelineDurations(report),
       loadSonarPullRequests(report),
     ]);
+    state.mrPipelineDurations = mrPipelineDurations;
     for (const mr of mrs) {
       mr.graphql = graphqlNodes.get(String(mr.iid));
       mr.diffStats = mr.graphql?.diffStatsSummary;
@@ -2278,6 +2300,12 @@ const GRAPHQL_BRANCH_PIPELINE = `
   pipelines(ref: $branch, first: 1) { ${GRAPHQL_PIPELINE_DETAIL} }
   lastSuccess: pipelines(ref: $branch, status: SUCCESS, first: 1) { ${GRAPHQL_PIPELINE_DETAIL} }
   lastFailure: pipelines(ref: $branch, status: FAILED, first: 1) { ${GRAPHQL_PIPELINE_DETAIL} }`;
+// Référence d'avancement des pipelines de MR, à part de ceux des branches : un pipeline de branche
+// (develop…) enchaîne plus d'étapes, sa durée fausserait l'estimation.
+const MR_PIPELINE_SOURCE = "merge_request_event";
+const MR_PIPELINES_SAMPLE = 10;
+const GRAPHQL_MR_PIPELINE_DURATIONS = `
+  pipelines(source: "${MR_PIPELINE_SOURCE}", status: SUCCESS, first: ${MR_PIPELINES_SAMPLE}) { nodes { duration } }`;
 
 async function loadGraphqlMergeRequests(report) {
   const nodes = new Map();
@@ -2323,6 +2351,20 @@ async function fetchBranchPipeline() {
   const { body } = await api(`/graphql?query=${encodeURIComponent(query)}&variables=${encodeURIComponent(variables)}`);
   if (body.errors?.length) throw new Error(body.errors.map(e => e.message).join(", "));
   return withBuildDurations(body.data.project);
+}
+
+// Sans référence, les pipelines en cours s'affichent simplement sans avancement.
+async function loadMrPipelineDurations(report) {
+  const query = `query($project: ID!) { project(fullPath: $project) { ${GRAPHQL_MR_PIPELINE_DURATIONS} } }`;
+  const variables = JSON.stringify({ project: state.config.gitlabProject });
+  try {
+    const { body } = await api(`/graphql?query=${encodeURIComponent(query)}&variables=${encodeURIComponent(variables)}`);
+    if (body.errors?.length) throw new Error(body.errors.map(e => e.message).join(", "));
+    return body.data.project.pipelines.nodes.map(node => node.duration).filter(Boolean);
+  } catch (error) {
+    report(t("error.graphql", { message: error.message }));
+    return [];
+  }
 }
 
 async function loadSonarPullRequests(report) {
@@ -2773,7 +2815,15 @@ function pipelineCell(mr) {
   const title = s.previousPipeline
     ? t("pipeline.runningTitle", { id, label, previous: s.previousPipeline.id })
     : t("pipeline.title", { id, label });
-  return `<div class="stack">${value}${runningNote(title, link)}</div>`;
+  // Un pipeline de MR se compare aux pipelines de MR ; un autre (push de branche) n'a pas de référence ici.
+  const progress = s.pipeline.source === MR_PIPELINE_SOURCE
+    ? pipelineProgress(
+      s.pipeline.started_at,
+      state.mrPipelineDurations,
+      t("progress.kind.mr")
+    )
+    : null;
+  return `<div class="stack">${value}${runningNote(title, link, progress)}</div>`;
 }
 
 function pipelinePill(pipeline) {
@@ -2787,9 +2837,38 @@ function pipelinePill(pipeline) {
 // Sous la dernière valeur connue : un job ou un pipeline tourne, la valeur va bientôt changer.
 function runningNote(
   title,
-  link
+  link,
+  progress = null
 ) {
-  return `<a class="running-note" href="${escapeHtml(link)}" target="_blank" rel="noopener" title="${escapeHtml(title)}">${escapeHtml(t("refreshing"))}</a>`;
+  const tooltip = progress ? `${title}\n${progress.title}` : title;
+  return `<a class="running-note${progress ? ` ${progress.className}` : ""}"${progress?.style ? ` style="${progress.style}"` : ""} href="${escapeHtml(link)}" target="_blank" rel="noopener" title="${escapeHtml(tooltip)}">${escapeHtml(t("refreshing"))}</a>`;
+}
+
+// Avancement estimé d'un pipeline en cours, d'après la médiane des durées réussies de même nature : null
+// sans début connu ou sans référence. Une estimation, pas une promesse : les jobs varient d'un pipeline à l'autre.
+function pipelineProgress(
+  startedAt,
+  durations,
+  kind
+) {
+  if (!startedAt || !durations?.length) return null;
+  const typical = median(durations);
+  const elapsed = (gitlabNow() - new Date(startedAt)) / 1000;
+  const ratio = elapsed / typical;
+  const values = { elapsed: minutesSeconds(elapsed), typical: minutesSeconds(typical) };
+  const basis = t("progress.basis", { count: durations.length, kind });
+  if (ratio >= 1) {
+    return { className: "progress-underline overdue", style: "", title: `${t("progress.overdue", values)}\n${basis}` };
+  }
+  const percent = Math.round(ratio * 100);
+  const estimate = t("progress.estimate", { ...values, percent, remaining: minutesSeconds(typical - elapsed) });
+  return { className: "progress-underline", style: `--progress: ${percent}%`, title: `${estimate}\n${basis}` };
+}
+
+function median(values) {
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
 }
 
 // head_pipeline porte detailed_status ; repli sur le statut brut s'il manquait.
@@ -5098,8 +5177,21 @@ function pipelineHead(
   const id = p.id.split("/").pop();
   const status = p.detailedStatus;
   let duration = null;
+  let progress = null;
   if (p.duration) duration = compactDuration(p.duration * 1000);
-  else if (p.startedAt) duration = t("branchPipeline.running", { duration: compactDuration(gitlabNow() - new Date(p.startedAt)) });
+  else if (p.startedAt) {
+    duration = t("branchPipeline.running", { duration: compactDuration(gitlabNow() - new Date(p.startedAt)) });
+    // Durées des pipelines réussis de cette même branche : seul le dernier pipeline les porte.
+    progress = pipelineProgress(
+      p.startedAt,
+      p.buildDurations,
+      t("progress.kind.branch", { branch: state.config.pipelineBranch })
+    );
+  }
+  const durationTitle = progress ? `${t("branchPipeline.durationTitle")}\n${progress.title}` : t("branchPipeline.durationTitle");
+  const durationAttributes = progress
+    ? ` class="muted ${progress.className}"${progress.style ? ` style="${progress.style}"` : ""}`
+    : ` class="muted"`;
   return [
     label,
     pill(PIPELINE_TONE[status.group] ?? "grey", status.text, t("pipeline.title", { id, label: status.label }), web(p.path)),
@@ -5107,7 +5199,7 @@ function pipelineHead(
     p.commit ? link(p.commit.webPath, escapeHtml(p.commit.title), "bp-commit") : "",
     `<code>${escapeHtml(p.sha)}</code>`,
     p.user ? `<span class="muted">${escapeHtml(p.user.name)}</span>` : "",
-    duration ? `<span class="muted" title="${escapeHtml(t("branchPipeline.durationTitle"))}">⏱ ${escapeHtml(duration)}</span>` : "",
+    duration ? `<span${durationAttributes} title="${escapeHtml(durationTitle)}">⏱ ${escapeHtml(duration)}</span>` : "",
     `<span class="muted" title="${escapeHtml(formatDate(p.createdAt))}">${escapeHtml(t("branchPipeline.ago", { age: compactDuration(gitlabNow() - new Date(p.createdAt)) }))}</span>`,
   ].filter(Boolean).join("");
 }
