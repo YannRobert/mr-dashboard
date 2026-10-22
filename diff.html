@@ -177,7 +177,9 @@
   }
   #commit-list li.push:first-child { border-top: 0; }
   #commit-list li.push:hover { color: var(--link); }
-  #commit-list li.new .n { color: var(--accent); font-weight: 700; }
+  #commit-list li.push.unpushed { color: var(--accent); }
+  #commit-list li.local { box-shadow: inset 3px 0 0 var(--accent); }
+#commit-list li.new .n { color: var(--accent); font-weight: 700; }
   #commit-list .n { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
   #commit-list .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #commit-list .a { color: var(--muted); font-size: 0.7rem; white-space: nowrap; }
@@ -411,6 +413,9 @@
       emptyRange: "Aucune différence dans cette plage de commits.",
       commitsFailed: p => `Commits indisponibles : ${p}`,
       mergeCommit: "Merge de la cible dans la branche",
+localCommit: "Commit local, pas encore poussé : GitLab ne le voit pas",
+unpushed: n => `Non poussé · ${n} commit${n > 1 ? "s" : ""}`,
+unpushedTitle: "Clic : les commits locaux, que GitLab ne voit pas encore",
       sinceSeen: n => `Nouveaux (${n})`,
       sinceSeenTitle: "Les commits arrivés depuis la dernière fois que ce diff a été lu dans ce navigateur",
       lastPush: "Dernier push",
@@ -499,6 +504,9 @@
       emptyRange: "No difference in this range of commits.",
       commitsFailed: p => `Commits unavailable: ${p}`,
       mergeCommit: "Merge of the target into the branch",
+localCommit: "Local commit, not pushed yet: GitLab does not see it",
+unpushed: n => `Not pushed · ${n} commit${n > 1 ? "s" : ""}`,
+unpushedTitle: "Click: the local commits, not yet seen by GitLab",
       sinceSeen: n => `New (${n})`,
       sinceSeenTitle: "The commits that came since this diff was last read in this browser",
       lastPush: "Last push",
@@ -1290,13 +1298,14 @@
     }
     if (!commits?.length) return;
     section.hidden = false;
+    const firstLocal = commits.findIndex(c => c.local);
     const selected = i => range && i >= range[0] && i <= range[1];
     const pushStarts = new Map(pushes.map((push, k) => [push.first, k]));
     const items = commits.map((c, i) => {
-      const classes = [selected(i) ? "selected" : "", c.merge ? "merge" : "", seenAtOpen >= 0 && i > seenAtOpen ? "new" : ""]
+      const classes = [selected(i) ? "selected" : "", c.merge ? "merge" : "", c.local ? "local" : "", seenAtOpen >= 0 && i > seenAtOpen ? "new" : ""]
         .filter(Boolean).join(" ");
       const author = Avatars.gitlabName(c.author, c.email ?? "");
-      const tooltip = `${c.sha.slice(0, 8)} · ${author} · ${formatDateTime(c.date)}\n${c.title}${c.merge ? `\n${texts.mergeCommit}` : ""}`;
+      const tooltip = `${c.sha.slice(0, 8)} · ${author} · ${formatDateTime(c.date)}\n${c.title}${c.merge ? `\n${texts.mergeCommit}` : ""}${c.local ? `\n${texts.localCommit}` : ""}`;
       const push = pushes[pushStarts.get(i)];
       const separator = push
         ? `<li class="push" data-push="${pushStarts.get(i)}" data-tip="${escapeHtml(texts.pushTitle)}">${escapeHtml(texts.push({
@@ -1304,7 +1313,10 @@
           count: push.last - push.first + 1,
         }))}</li>`
         : "";
-      return `${separator}<li data-index="${i}"${classes ? ` class="${classes}"` : ""} data-tip="${escapeHtml(tooltip)}">`
+      const unpushedSeparator = i === firstLocal
+        ? `<li class="push unpushed" data-unpushed data-tip="${escapeHtml(texts.unpushedTitle)}">${escapeHtml(texts.unpushed(commits.length - firstLocal))}</li>`
+        : "";
+      return `${separator}${unpushedSeparator}<li data-index="${i}"${classes ? ` class="${classes}"` : ""} data-tip="${escapeHtml(tooltip)}">`
         + `<span class="n">${i + 1}</span>`
         + `<span class="avatar" style="--avatar-color:${Avatars.color(author)}" aria-hidden="true">${escapeHtml(Avatars.initials(author))}</span>`
         + `<span class="t">${c.merge ? "⑂ " : ""}${escapeHtml(c.title)}</span>`
@@ -2009,12 +2021,14 @@
       latestVersion = versions.reduce((a, b) => (a && a.created_at > b.created_at ? a : b), null);
       let first = 0;
       const found = [];
+      // Les commits locaux ferment la liste et n'appartiennent à aucun push : GitLab ne les connaît pas.
+      const pushedCount = commits.filter(c => !c.local).length;
       commits.forEach((c, i) => {
         if (!heads.has(c.sha)) return;
         found.push({ first, last: i, date: heads.get(c.sha) });
         first = i + 1;
       });
-      if (found.length && first < commits.length) found.push({ first, last: commits.length - 1, date: commits.at(-1).date });
+      if (found.length && first < pushedCount) found.push({ first, last: pushedCount - 1, date: commits[pushedCount - 1].date });
       pushes = found;
     } catch (ignored) {
       pushes = [];
@@ -2276,6 +2290,12 @@
     if (e.target.closest("[data-range='all']")) {
       anchor = null;
       selectRange(null);
+      return;
+    }
+    if (e.target.closest("[data-unpushed]")) {
+      const first = commits.findIndex(c => c.local);
+      anchor = first;
+      selectRange([first, commits.length - 1]);
       return;
     }
     const push = e.target.closest("[data-push]");

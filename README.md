@@ -217,8 +217,11 @@ Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut
   GitLab), calculé sur le dépôt local : il reste disponible pendant une coupure de GitLab. Une MR
   mergée, même ancienne et sa branche supprimée, a le sien, retrouvé par ses commits
   (`git diff <merge commit>^1...<dernier commit>`) ; une tête absente du clone, après un squash, vient
-  de `refs/merge-requests/<iid>/head`. Ni worktree ni branche locale : un simple `git diff`. Au-dessus
-  des fichiers, les commits de la MR (sans ceux de la cible qu'elle a mergée) : un clic n'affiche que
+  de `refs/merge-requests/<iid>/head`. Ni worktree ni branche locale : un simple `git diff`. Quand la
+  branche locale est strictement devant `origin/<branche>`, le diff part d'elle et ses commits non poussés
+  forment un dernier groupe **Non poussé**, après les pushs (un clic le sélectionne) : de quoi les relire
+  pendant une coupure de GitLab. Une branche locale en retard ou divergée est ignorée, `origin` fait foi.
+  Au-dessus des fichiers, les commits de la MR (sans ceux de la cible qu'elle a mergée) : un clic n'affiche que
   ce commit, Maj+clic étend jusqu'à un autre (`git diff <premier>^1 <dernier>`), **Tout** revient au
   diff complet ; la plage est dans l'adresse. Les commits sont groupés par push, d'après les versions
   de la MR dans GitLab (sans GitLab, pas de groupes) : un clic sur un push, ou **Dernier push**, n'affiche

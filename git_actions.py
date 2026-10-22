@@ -174,7 +174,9 @@ class GitActions:
             branch,
             target
     ):
-        """Bornes d'une MR ouverte : sa cible et sa branche, telles que sur origin."""
+        """Bornes d'une MR ouverte : sa cible sur origin et sa branche, avec les commits qu'elle n'a pas encore
+        poussés quand le clone en a. Le troisième terme est la branche telle que sur origin, ou None quand
+        elle n'a pas de commit local à montrer."""
         self._check_branch_names(
             branch,
             target
@@ -183,7 +185,22 @@ class GitActions:
             branch,
             target
         )
-        return f"refs/remotes/origin/{target}", f"refs/remotes/origin/{branch}"
+        published = f"refs/remotes/origin/{branch}"
+        head = self._unpushed_head(branch)
+        return f"refs/remotes/origin/{target}", head or published, published if head else None
+
+    def _unpushed_head(self, branch):
+        """La branche locale quand elle est strictement devant origin/<branche>, sinon None : une branche
+        locale en retard ou divergée (rebase, force-push) montrerait un état faux, origin fait alors foi."""
+        local, published = f"refs/heads/{branch}", f"refs/remotes/origin/{branch}"
+        for ref in (local, published):
+            if self._git(["rev-parse", "--verify", "--quiet", ref]).returncode != 0:
+                return None
+        if self._git(["rev-parse", local]).stdout == self._git(["rev-parse", published]).stdout:
+            return None
+        if self._git(["merge-base", "--is-ancestor", published, local]).returncode != 0:
+            return None
+        return local
 
     def merged_revisions(
             self,
@@ -202,7 +219,7 @@ class GitActions:
             self._fetch(f"refs/merge-requests/{iid}/head")
         if not self._has_commit(merge_commit):
             self._fetch(target)
-        return f"{merge_commit}^1", head
+        return f"{merge_commit}^1", head, None
 
     def diff(
             self,
@@ -214,7 +231,7 @@ class GitActions:
         """Sans plage, le diff de la MR depuis le point où elle part de sa cible, celui de l'onglet
         Changes de GitLab ; avec, ce qu'ont apporté ensemble ses commits de first à last. Avec des
         chemins, le diff de ces seuls fichiers, chacun en entier : ses lignes inchangées en contexte."""
-        base, head = revisions
+        base, head, _ = revisions
         options = [f"--unified={WHOLE_FILE_CONTEXT}", "--", *paths] if paths else []
         if first is None and last is None:
             return self._diff_range(f"{base}...{head}", *options)
@@ -225,7 +242,7 @@ class GitActions:
 
     def commits(self, revisions):
         """Commits de la MR, du plus ancien au plus récent, sans ceux de la cible qu'elle a mergée."""
-        base, head = revisions
+        base, head, published = revisions
         completed = self._git(
             [
                 "log", "--first-parent", "--reverse", "--format=%H%x1f%P%x1f%an%x1f%ae%x1f%aI%x1f%s",
@@ -235,6 +252,11 @@ class GitActions:
         )
         if completed.returncode != 0:
             raise GitError(last_line(completed.stderr) or "git log en échec")
+        unpushed = set()
+        if published:
+            listed = self._git(["rev-list", "--first-parent", f"{published}..{head}"], timeout=DIFF_TIMEOUT_S)
+            if listed.returncode == 0:
+                unpushed = set(listed.stdout.split())
         commits = []
         for line in completed.stdout.splitlines():
             sha, parents, author, email, date, title = line.split("\x1f", 5)
@@ -245,6 +267,7 @@ class GitActions:
                 "email": email,
                 "date": date,
                 "title": title,
+                "local": sha in unpushed,
             })
         return commits
 
@@ -279,7 +302,11 @@ class GitActions:
             successor = next((s for s in successors if s[0].split()[0] == common), successors[0] if successors else None)
             if successor:
                 next_short, since = successor[1], successor[2]
+        unpushed = 0
+        if self._unpushed_head(branch):
+            unpushed = int(self._git_output(["rev-list", "--count", "--first-parent", f"{head}..refs/heads/{branch}"]))
         return {
+            "unpushed": unpushed,
             "count": count,
             "commitDate": commit_date,
             "authorDate": author_date,
