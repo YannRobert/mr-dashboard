@@ -42,10 +42,10 @@ Actions locales, en POST :
 
 Usage — d'ordinaire via scripts/mr-dashboard/start.sh, qui lit ces options dans un profil
 (scripts/mr-dashboard/profiles/<nom>.conf) :
-    python3 scripts/mr-dashboard/server.py --gitlab-project <groupe/projet> --pipeline-branch <branche> \
+    python3 mr-dashboard/server.py --gitlab-project <groupe/projet> --pipeline-branch <branche> \
         --sonar-project <clé> --sonar-job <job> --pit-job <job> --pit-marker <marqueur> \
         --repo-dir <clone local du projet> --git-fetch-interval 300 --port 8766
-    python3 scripts/mr-dashboard/server.py --gitlab-project <groupe/projet> --pipeline-branch main \
+    python3 mr-dashboard/server.py --gitlab-project <groupe/projet> --pipeline-branch main \
         --no-sonar --no-pit   # projet sans analyse Sonar ni mutation testing
 
 Aucun défaut ne désigne un projet : une option oubliée arrête le serveur au lieu de lui faire suivre
@@ -118,8 +118,8 @@ PAGES = {
 # Un JS ou CSS demandé avec ?v=<étiquette> ne change jamais sous cette URL : le navigateur le garde sans
 # revalider, et le reprend même quand le serveur ne répond pas.
 IMMUTABLE_CACHE_CONTROL = "max-age=31536000, immutable"
-SIGNALS_SCRIPT = STATIC_DIR.parent / "mr-ci-signals.py"
-REPO_ROOT = STATIC_DIR.parent.parent
+REPO_ROOT = STATIC_DIR.parent
+SIGNALS_SCRIPT = REPO_ROOT / "scripts" / "mr-ci-signals.py"
 # Exigé sur le POST : un en-tête non standard impose au navigateur un preflight CORS, que ce serveur
 # ne satisfait jamais — une page tierce ne peut donc pas déclencher l'action.
 ACTION_HEADER = "X-MR-Dashboard"
