@@ -1240,6 +1240,10 @@ const I18N = {
     "refreshing.title": p => `Job ${p.job} : ${p.status} — valeurs du run précédent (${p.date}), susceptibles de changer à la fin du job`,
     "conflicts": "Conflits",
     "conflicts.title": "La MR est en conflit avec sa branche cible",
+    "blockedBy": p => `Dépend de !${p.iid}`,
+    "blockedBy.title": p => `Ne peut être mergée avant !${p.iid} : ${p.title}`,
+    "blocks": p => `Bloque !${p.iid}`,
+    "blocks.title": p => `!${p.iid} attend que celle-ci soit mergée : ${p.title}`,
     "diff.files": p => `${p.n} fichier${plural(p.n)}`,
     "diff.title": p => `${p.files} fichier${plural(p.files)} modifié${plural(p.files)}, ${p.additions} ligne${plural(p.additions)} ajoutée${plural(p.additions)}, ${p.deletions} supprimée${plural(p.deletions)}`,
     "gitFetch.title": "Lancer tout de suite un git fetch du dépôt local",
@@ -1547,6 +1551,10 @@ const I18N = {
     "refreshing.title": p => `${p.job} job: ${p.status} — values from the previous run (${p.date}), may change when the job ends`,
     "conflicts": "Conflicts",
     "conflicts.title": "The MR conflicts with its target branch",
+    "blockedBy": p => `Depends on !${p.iid}`,
+    "blockedBy.title": p => `Cannot be merged before !${p.iid}: ${p.title}`,
+    "blocks": p => `Blocks !${p.iid}`,
+    "blocks.title": p => `!${p.iid} waits for this one to be merged: ${p.title}`,
     "diff.files": p => `${p.n} file${pluralEn(p.n)}`,
     "diff.title": p => `${p.files} file${pluralEn(p.files)} changed, ${p.additions} line${pluralEn(p.additions)} added, ${p.deletions} deleted`,
     "gitFetch.title": "Run a git fetch of the local repository now",
@@ -2532,8 +2540,32 @@ async function loadSignals(mr) {
     signals.error = error.message;
   }
   [signals.commits, signals.threads, signals.approvals] = await basics;
+  [signals.blockedBy, signals.blocks] = await Promise.all([loadBlockedBy(mr), loadBlocks(mr)]);
   if (signals.threads.unresolved > 0) signals.threads.oldestUnresolvedAt = await loadOldestUnresolvedAt(mr);
   return signals;
+}
+
+// Dépendances déclarées dans GitLab : seules celles pas encore mergées bloquent encore. Un échec n'affiche rien.
+function loadBlockedBy(mr) {
+  return loadDependencies(`merge_requests/${mr.iid}/blocks`, b => b.blocking_merge_request, other => other.state !== "merged");
+}
+
+// Sens inverse : une MR mergée ne bloque plus personne, une MR en attente close n'attend plus rien.
+function loadBlocks(mr) {
+  if (mr.state === "merged") return Promise.resolve([]);
+  return loadDependencies(`merge_requests/${mr.iid}/blockees`, b => b.blocked_merge_request, other => other.state === "opened");
+}
+
+async function loadDependencies(path, otherOf, stillBlocking) {
+  try {
+    const blocks = await gitlabAll(`${projectPath()}/${path}`);
+    return blocks
+      .map(otherOf)
+      .filter(other => other && stillBlocking(other))
+      .map(other => ({ iid: other.iid, title: other.title, web_url: other.web_url }));
+  } catch (ignored) {
+    return [];
+  }
 }
 
 // Les compteurs GraphQL ne datent pas les threads : les discussions ne sont lues que pour une MR qui en a
@@ -4443,7 +4475,7 @@ function mrCell(mr) {
     .map(l => `<button type="button" class="label" data-add-label="${escapeHtml(l)}" title="${escapeHtml(t("label.add"))}">${escapeHtml(l)}</button>`)
     .join("");
   const conflicts = mr.has_conflicts && mr.state !== "merged" ? " " + pill("red", t("conflicts"), t("conflicts.title"), mr.web_url) : "";
-  return `<div class="title"><a href="${escapeHtml(mr.web_url)}" target="_blank" rel="noopener" title="${escapeHtml(mr.title.replace(/^Draft:\s*/i, ""))}">${escapeHtml(mr.title.replace(/^Draft:\s*/i, ""))}</a>${mr.draft ? '<span class="draft">Draft</span>' : ""}${conflicts}${stalledPill(mr)}${staleSignalsPill(mr)}${changesRequestedPill(mr)}${approvalPill(mr)}</div>
+  return `<div class="title"><a href="${escapeHtml(mr.web_url)}" target="_blank" rel="noopener" title="${escapeHtml(mr.title.replace(/^Draft:\s*/i, ""))}">${escapeHtml(mr.title.replace(/^Draft:\s*/i, ""))}</a>${mr.draft ? '<span class="draft">Draft</span>' : ""}${conflicts}${blockedByPills(mr)}${stalledPill(mr)}${staleSignalsPill(mr)}${changesRequestedPill(mr)}${approvalPill(mr)}</div>
     <div class="sub" title="${escapeHtml(`${mr.source_branch} → ${mr.target_branch}`)}"><span class="iid">!${mr.iid}</span>${diffStat(mr)} · <code>${escapeHtml(mr.source_branch)}</code> → <code>${escapeHtml(mr.target_branch)}</code></div>
     ${labels ? `<div class="labels">${labels}</div>` : ""}`;
 }
@@ -4831,6 +4863,14 @@ function approvalPill(mr) {
 }
 
 // En rouge : un reviewer bloque la MR tant qu'il n'a pas relu les changements demandés.
+function blockedByPills(mr) {
+  const signals = signalsOf(mr);
+  const pills = (key, tone, others) => (others ?? [])
+    .map(other => " " + pill(tone, t(key, { iid: other.iid }), t(`${key}.title`, other), other.web_url))
+    .join("");
+  return pills("blockedBy", "orange", signals.blockedBy) + pills("blocks", "red", signals.blocks);
+}
+
 function changesRequestedPill(mr) {
   const names = signalsOf(mr).approvals?.changesRequested;
   if (!names?.length) return "";
