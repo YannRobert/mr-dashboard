@@ -4753,6 +4753,13 @@ function aiFixPrompt(mr) {
       (mr.has_conflicts ? ", et résous les conflits que GitLab signale avec la cible." : ".")
     );
   }
+  // Le titre et la description, écrits au début du développement, ne suivent pas seuls les changements
+  // de cap faits depuis, ni ceux de cette correction.
+  parts.push(
+    `Relis enfin le titre et la description de la MR (\`glab mr view ${mr.iid}\`) : s'ils ne décrivent plus ` +
+    `ce que fait la MR une fois tes corrections faites, mets-les à jour (\`glab mr update ${mr.iid}\`), ` +
+    "sans toucher à ce qui est encore juste."
+  );
   // Toute modification de la MR — mise à jour, correction, réponse à un thread — relance la CI et peut
   // dégrader un indicateur jusque-là parfait : la boucle de vérification vaut donc dans tous les cas.
   parts.push(
