@@ -1,18 +1,18 @@
-// Mode anonymisation, pour des captures d'écran montrables hors de l'équipe : à l'écran seulement, les noms
-// des personnes deviennent des noms fictifs, intitulés et messages du lorem ipsum, les branches des slugs
-// lorem, les labels des mots lorem, les numéros de MR décalés, le projet « demo/project », le corps
-// des commentaires du lorem ipsum, et l'adresse des liens, que le navigateur affiche au survol, une
-// adresse neutre. Les données de la page ne changent pas : actions, liens et filtres continuent d'agir
-// sur les vraies valeurs, et désactiver le mode rend l'affichage d'origine sans recharger. Partagé par
+// Anonymization mode, for screenshots that can be shown outside the team: on screen only, people's
+// names become fictitious names, titles and messages become lorem ipsum, branches lorem slugs,
+// labels lorem words, MR numbers are shifted, the project becomes « demo/project », comment
+// bodies become lorem ipsum, and link addresses, which the browser shows on hover, become a
+// neutral address. The page data does not change: actions, links and filters keep working on
+// the real values, and turning the mode off restores the original display without reloading. Shared by
 // index.html and comments.html.
 //
-// Chaque valeur fictive dépend d'un sel aléatoire gardé dans le navigateur : la même personne garde le
-// même faux nom d'un rafraîchissement et d'un onglet à l'autre, et aucun mot du texte d'origine n'est
-// repris, ce qui empêche de remonter à l'original depuis une capture.
+// Each fictitious value depends on a random salt kept in the browser: the same person keeps the
+// same fake name across refreshes and tabs, and no word of the original text is reused,
+// which prevents tracing back to the original from a screenshot.
 window.Anonymizer = (() => {
   const STORAGE_KEY = "mr-dashboard.anonymize";
-  // Prénoms et noms d'exemple de plusieurs pays (John Doe, Erika Mustermann, Ola Nordmann…) : ils se
-  // lisent comme fictifs.
+  // Sample first and last names from several countries (John Doe, Erika Mustermann, Ola Nordmann…): they
+  // read as fictitious.
   const FIRST_NAMES = [
     "Alice", "Bob", "Carol", "Dave", "Erin", "Frank", "Grace", "Heidi", "Ivan", "Judy", "Mallory", "Niaj",
     "Olivia", "Peggy", "Rupert", "Sybil", "Trent", "Victor", "Walter", "Wendy", "Jane", "John", "Max",
@@ -32,30 +32,30 @@ window.Anonymizer = (() => {
     "commodo consequat duis aute irure in reprehenderit voluptate velit esse cillum fugiat nulla pariatur " +
     "excepteur sint occaecat cupidatat non proident sunt culpa qui officia deserunt mollit anim id est laborum"
   ).split(" ");
-  // Type d'une branche (feature/…), gardé : il ne dit rien du sujet.
+  // Branch type (feature/…), kept: it says nothing about the subject.
   const BRANCH_TYPES = new Set(["feature", "feat", "fix", "bugfix", "hotfix", "release", "chore", "docs", "refactor", "test"]);
-  // Branches partagées, gardées : elles ne disent rien du sujet des MR.
+  // Shared branches, kept: they say nothing about the MRs' subject.
   const SHARED_BRANCHES = ["main", "master", "develop"];
   const TICKET = /^[A-Z][A-Z0-9]+-\d+$/;
   const LEADING_TICKET = /^\[?([A-Z][A-Z0-9]+-\d+)\]?\s*/;
   const LEADING_SYMBOLS = /^(Draft:\s*)?([\p{Extended_Pictographic}️‍\s]*)/iu;
   const ATTRIBUTES = ["title", "aria-label", "href"];
-  // Adresse affichée au survol d'un lien vers un autre site (GitLab, Sonar…) ; vers le dashboard, son
-  // chemin sans paramètres.
+  // Address shown on hover for a link to another site (GitLab, Sonar…); for the dashboard, its
+  // path without parameters.
   const STAND_IN_URL = "https://example.com/demo/project";
-  // Délai après lequel un lien révélé par un clic reprend son adresse neutre.
+  // Delay after which a link revealed by a click gets its neutral address back.
   const REVEAL_DELAY = 1000;
 
-  // Lecture des données : clés qui portent une personne, un texte libre, une branche.
+  // Reading the data: keys holding a person, free text, a branch.
   const PERSON_CONTEXT = /author|user|assignee|reviewer|approv|committer|merged_?by|closed_?by|participant/i;
   const PERSON_KEYS = new Set(["author", "author_name", "committer_name", "authorName"]);
   const NAME_LIST_KEYS = new Set(["names", "changesRequested"]);
   const LABEL_LIST_KEYS = new Set(["labels"]);
   const TEXT_KEYS = new Set(["title", "description", "message", "body"]);
   const BRANCH_KEYS = new Set(["source_branch", "sourceBranch", "target_branch", "targetBranch", "branch", "ref"]);
-  // Clés d'un tableau GraphQL ou d'un index : la personne se lit dans la clé au-dessus.
+  // Keys of a GraphQL array or an index: the person is read from the key above.
   const TRANSPARENT_KEYS = /^(\d+|nodes|edges|node)$/;
-  // En deçà, un nom ou un texte remplacerait aussi des mots de l'interface.
+  // Below this, a name or text would also replace words of the UI.
   const MIN_TOKEN_LENGTH = 3;
   const MIN_TEXT_LENGTH = 8;
 
@@ -64,24 +64,24 @@ window.Anonymizer = (() => {
   let observer = null;
   let pattern = null;
   let replacements = new Map();
-  // Faux prénom et faux nom par prénom et nom réels (normalisés), et valeurs fictives déjà prises.
+  // Fake first and last name per real (normalized) first and last name, and fictitious values already taken.
   const firstNames = new Map();
   const lastNames = new Map();
   const taken = { first: new Set(), last: new Set() };
-  // Valeur d'origine et valeur écrite de chaque nœud texte, attribut ou bloc opaque modifié ; un nœud
-  // dont la valeur a changé depuis a été réécrit par la page, il est retraité tel quel.
+  // Original value and written value of each modified text node, attribute or opaque block; a node
+  // whose value has changed since was rewritten by the page, and is processed again as is.
   const texts = new WeakMap();
   const attributes = new WeakMap();
   const blocks = new WeakMap();
   const touched = new Set();
-  // Liens qui portent leur vraie adresse le temps d'un clic, et l'échéance qui la leur retire.
+  // Links holding their real address for the duration of a click, and the timer that removes it.
   const revealed = new Map();
 
   function readSettings() {
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
       if (typeof saved?.salt === "string") return { on: saved.on === true, salt: saved.salt };
-    } catch (ignored) { /* stockage indisponible ou illisible : nouveau sel */ }
+    } catch (ignored) { /* storage unavailable or unreadable: new salt */ }
     const salt = [...crypto.getRandomValues(new Uint32Array(4))].map(n => n.toString(16)).join("");
     return { on: false, salt };
   }
@@ -89,10 +89,10 @@ window.Anonymizer = (() => {
   function saveSettings() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-    } catch (ignored) { /* stockage indisponible : le mode ne vaut que pour cette page */ }
+    } catch (ignored) { /* storage unavailable: the mode applies to this page only */ }
   }
 
-  // cyrb53 : hachage rapide, non cryptographique ; le sel inconnu suffit à rendre le lorem non inversible.
+  // cyrb53: fast, non-cryptographic hash; the unknown salt is enough to make the lorem non-invertible.
   function hash(
       kind,
       text
@@ -110,7 +110,7 @@ window.Anonymizer = (() => {
     return 4294967296 * (2097151 & h2) + (h1 >>> 0);
   }
 
-  // mulberry32, amorcé par le hachage du texte : la même entrée donne toujours le même lorem.
+  // mulberry32, seeded by the text hash: the same input always yields the same lorem.
   function generator(
       kind,
       text
@@ -146,7 +146,7 @@ window.Anonymizer = (() => {
 
   const fakeTicket = ticket => `DEMO-${100 + hash("ticket", ticket) % 900}`;
 
-  // Draft, emoji et ticket de tête gardés (le ticket fictif) ; le reste en lorem de même longueur.
+  // Leading Draft, emoji and ticket kept (the ticket made fictitious); the rest as lorem of the same length.
   function fakeLine(line) {
     const [prefix, draft = "", symbols = ""] = line.match(LEADING_SYMBOLS);
     let rest = line.slice(prefix.length);
@@ -175,8 +175,8 @@ window.Anonymizer = (() => {
     }).join("/");
   }
 
-  // Un faux nom par prénom (et par nom) réel, distinct de ceux des autres : deux personnes qui partagent
-  // un prénom le partagent aussi à l'écran, où prénom et nom s'affichent parfois séparément.
+  // One fake name per real first (and last) name, distinct from the others: two people sharing
+  // a first name share it on screen too, where first and last names are sometimes shown separately.
   function fakeName(
       real,
       catalog,
@@ -191,14 +191,14 @@ window.Anonymizer = (() => {
       known.set(key, catalog[index]);
     }
     const fake = known.get(key);
-    // « DOE » s'écrit en capitales : son faux nom aussi.
+    // « DOE » is written in capitals: so is its fake name.
     return real.length > 1 && real === real.toUpperCase() ? fake.toUpperCase() : fake;
   }
 
   function fakePerson(name) {
     const [first, ...others] = name.trim().split(/\s+/);
     const rest = others.join(" ");
-    // Un nom d'un seul mot (auteur git) : prénom et nom fictifs tirés de ce mot.
+    // A single-word name (git author): fictitious first and last names drawn from that word.
     const fakeFirst = fakeName(rest ? first : `${first}\u0000first`, FIRST_NAMES, firstNames, taken.first);
     const fakeLast = fakeName(rest || first, LAST_NAMES, lastNames, taken.last);
     return { first: fakeFirst, last: fakeLast, full: `${fakeFirst} ${fakeLast}`, rest };
@@ -214,14 +214,14 @@ window.Anonymizer = (() => {
     if (typeof real === "string" && real.length >= minLength && real !== fake) replacements.set(real, fake);
   }
 
-  // Numéros de MR décalés d'un même écart tiré du sel : ordre et écarts gardés, valeurs méconnaissables.
+  // MR numbers shifted by the same salt-derived offset: order and gaps kept, values unrecognizable.
   function addIid(iid) {
     const number = Number(iid);
     if (!Number.isInteger(number) || number <= 0) return;
     addReplacement(`!${number}`, `!${number + 100 + hash("iid", "") % 800}`, 2);
   }
 
-  // Label : un mot lorem par mot, la portée d'un label « portée::valeur » comprise.
+  // Label: one lorem word per word, including the scope of a « scope::value » label.
   function addLabel(label) {
     const fake = label.split("::").map(part => {
       const next = generator("label", part);
@@ -251,12 +251,12 @@ window.Anonymizer = (() => {
   function addText(text) {
     if (text.trim().length < MIN_TEXT_LENGTH || !/\s/.test(text.trim())) return;
     addReplacement(text, fakeText(text));
-    // Le tableau affiche les titres sans « Draft: », et un message de commit par sa première ligne.
+    // The table shows titles without « Draft: », and a commit message by its first line.
     const firstLine = text.split("\n")[0];
     addReplacement(firstLine, fakeLine(firstLine));
     const withoutDraft = firstLine.replace(/^Draft:\s*/i, "");
     addReplacement(withoutDraft, fakeLine(withoutDraft));
-    // Sans emoji ni ticket de tête, et le ticket seul : même lorem, même ticket fictif.
+    // Without leading emoji or ticket, and the ticket alone: same lorem, same fictitious ticket.
     const [prefix] = firstLine.match(LEADING_SYMBOLS);
     const rest = firstLine.slice(prefix.length);
     const leading = rest.match(LEADING_TICKET);
@@ -279,8 +279,8 @@ window.Anonymizer = (() => {
     branch.split("/").filter(segment => TICKET.test(segment)).forEach(addTicket);
   }
 
-  // Parcourt les données de la page et range chaque valeur selon sa clé ; ne descend que dans les objets
-  // simples, tableaux et Map (ni nœud du DOM, ni notification).
+  // Walks the page data and files each value by its key; only descends into plain
+  // objects, arrays and Maps (no DOM node, no notification).
   function harvest(
       value,
       key,
@@ -327,7 +327,7 @@ window.Anonymizer = (() => {
     harvest(page.data(), "", "", kept, new WeakSet());
     const keys = [...replacements.keys()].sort((a, b) => b.length - a.length)
       .map(key => key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-    // Jamais au milieu d'un mot : « Jean » ne touche pas « Jeanne ».
+    // Never mid-word: « Jean » does not touch « Jeanne ».
     pattern = keys.length ? new RegExp(`(?<![\\p{L}\\p{N}_])(?:${keys.join("|")})(?![\\p{L}\\p{N}_])`, "gu") : null;
   }
 
@@ -355,7 +355,7 @@ window.Anonymizer = (() => {
     write(texts, node, original, replace(original), value => { node.nodeValue = value; });
   }
 
-  // Lien http(s) : adresse neutre ; ancre, mailto: et autres schémas gardés.
+  // http(s) link: neutral address; anchors, mailto: and other schemes kept.
   function fakeHref(href) {
     try {
       const url = new URL(href, location.href);
@@ -383,7 +383,7 @@ window.Anonymizer = (() => {
     element.setAttribute(name, value);
   }
 
-  // Pastille d'une personne : initiales de son faux nom ; sa couleur, qui ne dit rien d'elle, reste.
+  // A person's badge: initials of their fake name; its color, which says nothing about them, stays.
   function anonymizeAvatar(element) {
     const node = element.firstChild;
     if (node?.nodeType !== Node.TEXT_NODE) return;
@@ -392,7 +392,7 @@ window.Anonymizer = (() => {
     write(texts, node, node.nodeValue, initials(fakePerson(element.dataset.name).full), value => { node.nodeValue = value; });
   }
 
-  // Bloc dont tout le contenu est remplacé, mise en forme comprise : le corps d'un commentaire.
+  // Block whose whole content is replaced, formatting included: a comment body.
   function anonymizeBlock(element) {
     const previous = blocks.get(element);
     if (previous && previous.value === element.innerHTML) return;
@@ -440,7 +440,7 @@ window.Anonymizer = (() => {
       else if (record.type === "characterData") anonymizeTree(record.target);
       else if (record.type === "attributes") anonymizeAttribute(record.target, record.attributeName);
     }
-    // Les nœuds retirés de la page n'ont plus rien à restaurer.
+    // Nodes removed from the page have nothing left to restore.
     if (touched.size > 5000) [...touched].filter(node => !node.isConnected).forEach(node => touched.delete(node));
   }
 
@@ -458,7 +458,7 @@ window.Anonymizer = (() => {
     });
   }
 
-  // Rend la valeur d'origine de ce qui n'a pas été réécrit par la page depuis.
+  // Restores the original value of whatever the page has not rewritten since.
   function disable() {
     if (!observer) return;
     observer.disconnect();
@@ -492,8 +492,8 @@ window.Anonymizer = (() => {
     apply();
   }
 
-  // Un lien suivi garde sa vraie adresse : elle lui est rendue le temps du clic, avant que la page
-  // (onglets de tabs.js) ou le navigateur ne la lisent, puis retirée.
+  // A followed link keeps its real address: it is restored for the duration of the click, before the page
+  // (tabs.js tabs) or the browser reads it, then removed.
   function reveal(event) {
     const link = event.target.closest?.("a[href]");
     const saved = link && attributes.get(link)?.href;
@@ -513,7 +513,7 @@ window.Anonymizer = (() => {
 
   for (const type of ["pointerdown", "click", "auxclick", "contextmenu"]) document.addEventListener(type, reveal, true);
 
-  // Bouton [data-anonymize] : active ou désactive le mode, pour tous les onglets du dashboard.
+  // [data-anonymize] button: turns the mode on or off, for all dashboard tabs.
   document.addEventListener("click", event => {
     if (event.target.closest("[data-anonymize]")) toggle();
   });
@@ -526,9 +526,9 @@ window.Anonymizer = (() => {
     apply();
   });
 
-  // La page fournit ses données, ses branches partagées en plus de main, master et develop, les paires
-  // vraie valeur → valeur fictive qu'elle seule connaît (le projet), et le sélecteur des blocs remplacés
-  // en entier.
+  // The page provides its data, its shared branches in addition to main, master and develop, the
+  // real value → fictitious value pairs only it knows (the project), and the selector of blocks replaced
+  // entirely.
   function attach(options) {
     page = {
       data: options.data,
@@ -539,7 +539,7 @@ window.Anonymizer = (() => {
     apply();
   }
 
-  // Texte affiché hors de la page (notification) : anonymisé tant que le mode est actif.
+  // Text shown outside the page (notification): anonymized while the mode is on.
   function text(value) {
     if (!settings.on || !page || typeof value !== "string") return value;
     rebuild();

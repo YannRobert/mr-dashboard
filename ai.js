@@ -1,6 +1,6 @@
-// Bouton AI d'une MR : un dialogue propose les actions du catalogue du projet suivi (cf. ai_actions.py),
-// et le prompt de l'action choisie, à copier dans Claude Code ou à lancer dans un onglet Orca.
-// Partagé par index.html (une ligne par MR) et diff.html (la MR du diff).
+// AI button of an MR: a dialog offers the actions of the tracked project's catalog (see ai_actions.py),
+// and the prompt of the chosen action, to copy into Claude Code or to launch in an Orca tab.
+// Shared by index.html (one row per MR) and diff.html (the diff's MR).
 window.MrAi = (() => {
   const TEXTS = {
     fr: {
@@ -86,10 +86,10 @@ window.MrAi = (() => {
       "dialog.orca.failed": p => `Failed: ${p.message}`,
     },
   };
-  // Prompt de correction de chaque MR ouverte, calculé par le dashboard à chaque mise à jour de ses
-  // données : seul lui charge les indicateurs CI et les threads dont il se nourrit. Le diff le relit.
+  // Fix prompt of each open MR, computed by the dashboard on every refresh of its data: only the
+  // dashboard loads the CI indicators and threads it is built from. The diff reads it back.
   const FIX_CONTEXTS_KEY = "mr-dashboard.aiFixContexts";
-  // Au-delà, plus aucun onglet du dashboard ne le tient à jour : la correction n'est plus proposée.
+  // Beyond that, no dashboard tab keeps it up to date anymore: the fix is no longer offered.
   const FIX_CONTEXT_MAX_AGE_MS = 30 * 60 * 1000;
   const ORCA_LOGO = `<svg class="orca-logo" viewBox="6.67 70.67 318.6 202.67" aria-hidden="true"><path fill="currentColor" d="m 177.81311,248.33334 c 23.82304,-41.29793 40.54045,-66.84626 49.51207,-75.66667 6.81685,-6.70196 10.07373,-8.7374 20.07265,-12.54475 34.57822,-13.16655 61.04674,-26.78733 72.37222,-37.24295 9.62924,-8.88966 9.34286,-9.01142 -23.43671,-9.964 -35.71756,-1.03796 -43.72989,0.42119 -62.17546,11.323 -16.72118,9.88265 -34.20103,30.11225 -42.74704,49.47157 -2.57353,5.82985 -14.81294,44.3056 -27.96399,87.90747 -2.86036,9.48343 -3.02466,11.71633 -0.86213,11.71633 0.44382,0 7.29659,-11.25 15.22839,-25 z m -65.14644,-8.32267 C 120,239.3326 130.5,237.50979 136,235.95998 c 5.5,-1.5498 12.25,-3.13783 15,-3.52895 2.75,-0.39111 5,-0.95485 5,-1.25275 0,-0.29789 2.15135,-7.58487 4.78078,-16.19328 8.49209,-27.80201 12.21334,-40.41629 21.13747,-71.65166 4.81891,-16.86667 11.23502,-39.185 14.25802,-49.596301 5.12803,-17.66103 5.74763,-23.07037 2.64253,-23.07037 -1.84887,0 -4.07048,6.908293 -16.72243,52.000001 -21.78975,77.65896 -20.80806,74.74393 -26.84794,79.72251 -7.5925,6.25838 -25.03916,14.82524 -36.10856,17.73044 -17.0947,4.48656 -33.410599,3.86724 -53.116765,-2.01622 -18.569242,-5.54403 -23.142662,-5.80284 -33.639754,-1.9037 -5.875424,2.18242 -9.864152,5.04363 -16.716684,11.99127 -4.95,5.0187 -9.0000001,10.02884 -9.0000001,11.13364 0,1.75174 5.9276921,2.00299 46.3333351,1.96383 25.483334,-0.0247 52.333338,-0.59969 59.666668,-1.27777 z M 252.69513,104.63708 c 12.18267,-3.48651 15.77304,-7.895503 9.63821,-11.835773 -10.19296,-6.546726 -36.19849,-1.77301 -41.19436,7.561863 -1.2556,2.3461 -0.98698,3.2037 1.68353,5.375 2.69471,2.19098 4.59991,2.47691 12.53928,1.88189 5.14899,-0.3859 12.94899,-1.72824 17.33334,-2.98298 z"/></svg>`;
 
@@ -97,10 +97,10 @@ window.MrAi = (() => {
   let orcaEnabled = () => false;
   let catalog = null;
   let dialog = null;
-  // MR du dialogue ouvert, et ce que ses actions demandent : { mr, toFix, fixContext }.
+  // MR of the open dialog, and what its actions need: { mr, toFix, fixContext }.
   let current = null;
-  // Prompts retouchés, modèles et niveaux d'effort choisis, par MR et par action, jusqu'au rechargement de la page : un
-  // dialogue fermé par mégarde, ou une autre action essayée, ne perd pas ce qu'on y a changé.
+  // Edited prompts, chosen models and effort levels, per MR and per action, until the page reloads: a
+  // dialog closed by mistake, or another action tried, does not lose what was changed in it.
   const drafts = new Map();
   const models = new Map();
   const efforts = new Map();
@@ -128,12 +128,12 @@ window.MrAi = (() => {
     let body = null;
     try {
       body = await response.json();
-    } catch (ignored) { /* corps non JSON */ }
+    } catch (ignored) { /* non-JSON body */ }
     if (!response.ok) throw new Error(`${response.status} ${body?.message || response.statusText}`);
     return body;
   }
 
-  // options.orcaEnabled : fonction, la configuration du serveur pouvant arriver après.
+  // options.orcaEnabled: a function, since the server configuration may arrive later.
   function init(options) {
     lang = options.lang;
     orcaEnabled = options.orcaEnabled;
@@ -162,8 +162,8 @@ window.MrAi = (() => {
       if (button) select(actionsFor(current.toFix).find(action => action.id === button.dataset.aiAction));
     });
     part("ai-close").addEventListener("click", () => dialog.close());
-    // Échap et un clic hors du dialogue le ferment aussi. Le clic doit commencer hors du dialogue : une
-    // sélection du prompt relâchée au-dehors ne ferme rien.
+    // Escape and a click outside the dialog close it too. The click must start outside the dialog: a
+    // prompt selection released outside closes nothing.
     dialog.addEventListener("keydown", event => {
       if (event.key !== "Escape") return;
       event.preventDefault();
@@ -189,8 +189,8 @@ window.MrAi = (() => {
 
   const part = id => dialog.querySelector(`#${id}`);
 
-  // Un clic sur le fond d'un dialogue modal lui est adressé, comme un clic sur ses marges intérieures :
-  // seule sa position les distingue.
+  // A click on the backdrop of a modal dialog targets the dialog itself, like a click on its padding:
+  // only its position tells them apart.
   function outside(event) {
     if (event.target !== dialog) return false;
     const box = dialog.getBoundingClientRect();
@@ -222,15 +222,15 @@ window.MrAi = (() => {
     part("ai-copy").textContent = t("dialog.copy");
   }
 
-  // Alias : la version qu'il désigne aujourd'hui, si Claude Code la donne (« Opus (5.5) »).
+  // Alias: the version it points to today, if Claude Code provides it (« Opus (5.5) »).
   function modelLabel(model) {
     if (!model.alias) return model.label;
     const version = model.version?.startsWith(model.label) ? model.version.slice(model.label.length).trim() : model.version;
     return version ? `${model.label} (${version})` : model.label;
   }
 
-  // Une valeur absente de la liste, modèle retiré par Anthropic ou niveau refusé par le modèle, laisse
-  // le choix par défaut.
+  // A value missing from the list, a model retired by Anthropic or a level the model refuses, keeps
+  // the default choice.
   function choose(
     select,
     value
@@ -241,8 +241,8 @@ window.MrAi = (() => {
 
   const chosenModel = () => (catalog?.models ?? []).find(model => model.id === part("ai-model").value);
 
-  // Niveaux d'effort du modèle choisi, son niveau recommandé signalé ; tous pour le modèle par défaut, que
-  // seule la configuration de Claude Code connaît. Un modèle sans effort grise la liste.
+  // Effort levels of the chosen model, its recommended level flagged; all of them for the default model,
+  // which only Claude Code's configuration knows. A model without effort greys out the list.
   function syncEfforts(wanted) {
     const model = chosenModel();
     const levels = model ? model.efforts : catalog?.efforts ?? [];
@@ -260,7 +260,7 @@ window.MrAi = (() => {
     if (dialog) applyTexts();
   }
 
-  // Relu à chaque ouverture du dialogue, pour essayer un prompt sans recharger la page.
+  // Re-read on each dialog opening, to try a prompt without reloading the page.
   async function loadCatalog() {
     try {
       catalog = await request("ai/actions");
@@ -270,17 +270,17 @@ window.MrAi = (() => {
     return catalog;
   }
 
-  // Les actions « to-fix » ne sont proposées qu'à une MR qui a quelque chose à corriger.
+  // « to-fix » actions are offered only to an MR that has something to fix.
   const actionsFor = toFix => (catalog?.actions ?? []).filter(action => action.when !== "to-fix" || toFix);
 
-  // Un catalogue illisible laisse le bouton : le dialogue dit pourquoi aucune action n'est proposée.
+  // An unreadable catalog keeps the button: the dialog says why no action is offered.
   const offered = toFix => !!catalog && (!!catalog.error || actionsFor(toFix).length > 0);
 
   const buttonTitle = toFix => t(toFix ? "ai.title.toFix" : "ai.title");
 
-  // mr : { iid, title, source_branch, target_branch, web_url }. Variables inconnues laissées telles
-  // quelles : le prompt affiché montre la faute de frappe. Il finit par une ligne vide : un clic sous le
-  // texte y place le curseur, prêt pour ce qu'on veut ajouter. Celui de l'action libre reste vide.
+  // mr: { iid, title, source_branch, target_branch, web_url }. Unknown variables are left as
+  // is: the displayed prompt shows the typo. It ends with an empty line: a click below the
+  // text puts the cursor there, ready for whatever is added. The free action's prompt stays empty.
   function prompt(action) {
     if (!action.prompt) return "";
     const { mr, fixContext } = current;
@@ -296,7 +296,7 @@ window.MrAi = (() => {
     return `${text.trimEnd()}\n\n`;
   }
 
-  // context : { toFix, fixContext }, ou une fonction qui le donne une fois le catalogue relu.
+  // context: { toFix, fixContext }, or a function returning it once the catalog is re-read.
   async function open(
     mr,
     context
@@ -322,7 +322,7 @@ window.MrAi = (() => {
 
   function select(action) {
     dialog.dataset.action = action?.id ?? "";
-    // Le prompt libre, rédigé par qui l'envoie, n'a pas d'autre mode d'emploi que de l'écrire.
+    // The free prompt, written by whoever sends it, needs no instructions beyond writing it.
     part("ai-hint").textContent = t(action?.id === "free" ? "dialog.hint.free" : "dialog.hint");
     for (const button of part("ai-actions").querySelectorAll("[data-ai-action]")) {
       button.setAttribute("aria-pressed", String(button.dataset.aiAction === action?.id));
@@ -336,8 +336,8 @@ window.MrAi = (() => {
     syncEfforts(efforts.get(draftKey()) ?? action?.effort ?? "");
     part("ai-copied").textContent = "";
     syncSendButtons();
-    // Curseur sur la ligne vide de la fin, rien de sélectionné, le début du prompt à l'écran : ce qu'on
-    // tape s'ajoute à la suite, sans rien remplacer.
+    // Cursor on the trailing empty line, nothing selected, the start of the prompt on screen: what is
+    // typed is appended, replacing nothing.
     text.focus();
     text.setSelectionRange(text.value.length, text.value.length);
     text.scrollTop = 0;
@@ -355,13 +355,13 @@ window.MrAi = (() => {
     syncSendButtons();
   }
 
-  // Rien à copier ni à lancer tant que le prompt est vide : celui de l'action libre, à son ouverture.
+  // Nothing to copy or launch while the prompt is empty: the free action's one, when opened.
   function syncSendButtons() {
     const empty = !dialog.dataset.action || !promptToSend();
     for (const id of ["ai-orca", "ai-copy"]) part(id).disabled = empty;
   }
 
-  // Modèle choisi pour l'action, gardé comme son prompt ; celui du catalogue n'a pas besoin de l'être.
+  // Model chosen for the action, kept like its prompt; the catalog's one need not be.
   function keepModel() {
     const action = actionsFor(current.toFix).find(candidate => candidate.id === dialog.dataset.action);
     const model = part("ai-model").value;
@@ -369,7 +369,7 @@ window.MrAi = (() => {
     else models.set(draftKey(), model);
   }
 
-  // Niveau d'effort choisi pour l'action, gardé comme son modèle.
+  // Effort level chosen for the action, kept like its model.
   function keepEffort() {
     const action = actionsFor(current.toFix).find(candidate => candidate.id === dialog.dataset.action);
     const effort = part("ai-effort").value;
@@ -382,8 +382,8 @@ window.MrAi = (() => {
     select(actionsFor(current.toFix).find(action => action.id === dialog.dataset.action));
   }
 
-  // Ce qui part, copié ou lancé dans Orca : sans la ligne vide laissée pour écrire à la suite, ni les
-  // blancs de fin, qui ne coûteraient que des tokens.
+  // What is sent, copied or launched in Orca: without the empty line left for appending, nor the
+  // trailing whitespace, which would only cost tokens.
   const promptToSend = () => part("ai-text").value.trimEnd();
 
   async function copy() {
@@ -391,7 +391,7 @@ window.MrAi = (() => {
     try {
       await navigator.clipboard.writeText(text);
     } catch (ignored) {
-      // Copie de secours, qui ne copie que la sélection : le curseur revient ensuite où il était.
+      // Fallback copy, which only copies the selection: the cursor then returns where it was.
       const box = part("ai-text");
       const { selectionStart, selectionEnd } = box;
       box.setSelectionRange(0, text.length);
@@ -401,12 +401,12 @@ window.MrAi = (() => {
     part("ai-copied").textContent = t("dialog.copied");
   }
 
-  // La session Claude Code supprime le fichier du prompt une fois démarrée (cf. orca_launcher.py) : seule
-  // preuve qu'elle est partie, l'onglet créé par Orca pouvant attendre son shell plus de dix secondes.
+  // The Claude Code session deletes the prompt file once started (see orca_launcher.py): the only
+  // proof it is running, since the tab Orca creates may wait for its shell more than ten seconds.
   const PROMPT_READ_TIMEOUT_S = 90;
   const PROMPT_READ_POLL_MS = 1000;
 
-  // {shell, claude} au démarrage de Claude Code, ou au dernier état connu une fois le délai passé.
+  // {shell, claude} once Claude Code starts, or the last known state once the delay has elapsed.
   async function sessionProgress(launch) {
     const deadline = Date.now() + PROMPT_READ_TIMEOUT_S * 1000;
     let progress = { shell: false, claude: false };
@@ -417,9 +417,9 @@ window.MrAi = (() => {
     return progress;
   }
 
-  // Étape du lancement Orca (ordered, launched, unreachable, lostContact, aborted), avec ce que la voix dit
-  // après sa réplique : celle de l'action à l'ordre, le titre de l'onglet ensuite. La page qui a des sons
-  // (index.html) la fait entendre ; les autres ignorent l'événement.
+  // Orca launch step (ordered, launched, unreachable, lostContact, aborted), with what the voice says
+  // after its line: the action's name on order, the tab title afterwards. The page that has sounds
+  // (index.html) plays it; the others ignore the event.
   function announce(
     step,
     subject = null
@@ -427,7 +427,7 @@ window.MrAi = (() => {
     document.dispatchEvent(new CustomEvent("mr-dashboard:orca", { detail: { step, subject } }));
   }
 
-  // Le serveur ouvre un onglet Orca sur le worktree principal, qui lance Claude Code avec le prompt affiché.
+  // The server opens an Orca tab on the main worktree, which starts Claude Code with the displayed prompt.
   async function openInOrca() {
     const status = part("ai-copied");
     part("ai-orca").disabled = true;
@@ -469,18 +469,18 @@ window.MrAi = (() => {
     }
   }
 
-  // contexts : { iid: { toFix, fixContext } }, pour toutes les MR ouvertes.
+  // contexts: { iid: { toFix, fixContext } }, for all open MRs.
   function saveFixContexts(contexts) {
     try {
       localStorage.setItem(FIX_CONTEXTS_KEY, JSON.stringify({ at: Date.now(), contexts }));
-    } catch (ignored) { /* stockage indisponible : le diff ne proposera pas la correction */ }
+    } catch (ignored) { /* storage unavailable: the diff will not offer the fix */ }
   }
 
   function readFixContext(iid) {
     try {
       const saved = JSON.parse(localStorage.getItem(FIX_CONTEXTS_KEY));
       if (saved && Date.now() - saved.at < FIX_CONTEXT_MAX_AGE_MS) return saved.contexts[iid] ?? { toFix: false };
-    } catch (ignored) { /* stockage indisponible ou illisible */ }
+    } catch (ignored) { /* storage unavailable or unreadable */ }
     return { toFix: false };
   }
 

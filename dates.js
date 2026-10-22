@@ -1,15 +1,15 @@
-// Date et heure affichées par toutes les pages du dashboard, quelle que soit la langue : jour, mois, année,
-// du plus utile au moins utile, mois sur deux chiffres. Jamais le format américain du navigateur.
+// Date and time shown by every dashboard page, whatever the language: day, month, year,
+// from most to least useful, two-digit month. Never the browser's US format.
 window.formatDateTime = iso => {
   const date = new Date(iso);
   const two = n => String(n).padStart(2, "0");
   return `${two(date.getDate())}/${two(date.getMonth() + 1)}/${date.getFullYear()} ${two(date.getHours())}:${two(date.getMinutes())}`;
 };
 
-// Heure de chargement de la page dans element, pour juger si ce qu'elle montre a pu changer depuis :
-// « chargée à 14:32 · il y a 5 min », remise à jour chaque minute, signalée (classe stale) au-delà de
-// STALE_MINUTES. at remplace l'heure d'ouverture de la page quand ce qu'elle montre date d'avant (sauvegarde)
-// ou d'après (mise à jour).
+// Page load time in element, to judge whether what it shows may have changed since:
+// « chargée à 14:32 · il y a 5 min », refreshed every minute, flagged (stale class) beyond
+// STALE_MINUTES. at replaces the page opening time when what it shows dates from before (saved copy)
+// or after (update).
 window.showLoadedAt = (() => {
   const STALE_MINUTES = 30;
   const TEXTS = {

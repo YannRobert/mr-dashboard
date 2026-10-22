@@ -1,7 +1,6 @@
-"""Couleur de la pastille de chaque personne, gardée par le serveur : le stockage d'un navigateur ne vaut
-que pour lui, et deux navigateurs, rencontrant les personnes dans un ordre différent, leur donnaient des
-couleurs différentes. Un seul fichier pour tous les profils : une personne garde sa couleur d'un projet
-à l'autre.
+"""Avatar color of each person, kept by the server: a browser's storage only applies to that browser, and
+two browsers meeting people in a different order gave them different colors. A single file for all
+profiles: a person keeps the same color from one project to another.
 """
 import json
 import os
@@ -37,7 +36,7 @@ class AvatarColors:
             names,
             count
     ):
-        """Donne à chaque nom encore sans couleur la moins utilisée des count couleurs, et la retient."""
+        """Gives each name without a color yet the least used of the count colors, and remembers it."""
         with self._lock:
             new = [name for name in dict.fromkeys(names) if name not in self._slots]
             if new:

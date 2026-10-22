@@ -1,6 +1,6 @@
-"""Requêtes envoyées par le serveur à GitLab (API et dépôt git) et à Sonar, comptées sur des fenêtres
-glissantes de 1, 5 et 15 min : de quoi vérifier que le dashboard ne surcharge pas GitLab. Le navigateur
-ne leur parle jamais en direct, tout passe par le serveur : le compte vaut pour tous les onglets.
+"""Requests sent by the server to GitLab (API and git repository) and to Sonar, counted over sliding
+windows of 1, 5 and 15 min: enough to check that the dashboard does not overload GitLab. The browser
+never talks to them directly, everything goes through the server: the count covers all tabs.
 """
 import threading
 import time
@@ -10,7 +10,7 @@ WINDOWS_S = (60, 300, 900)
 
 
 def http_error(status):
-    """Classe d'erreur d'une réponse HTTP, None si elle a abouti."""
+    """Error class of an HTTP response, None if it succeeded."""
     if status >= 500:
         return "5xx"
     return "4xx" if status >= 400 else None
@@ -19,15 +19,15 @@ def http_error(status):
 class RequestStats:
 
     def __init__(self, cache_seconds):
-        # Durée de vie des réponses gardées par le cache du relais, citée par la page.
+        # Lifetime of the responses kept by the relay cache, quoted by the page.
         self._cache_seconds = cache_seconds
         self._started_at = time.time()
-        # Depuis le démarrage du serveur, par catégorie.
+        # Since server start, by category.
         self._totals = {}
         self._lock = threading.Lock()
-        # (instant monotone, catégorie, erreur ou None), du plus ancien au plus récent. Erreurs :
-        # "connection" (aucune réponse), "4xx", "5xx", "git" (commande git en échec). Catégories
-        # "gitlab-cache" et "sonar-cache" : lectures servies par le cache, sans requête.
+        # (monotonic time, category, error or None), oldest first. Errors: "connection" (no
+        # response), "4xx", "5xx", "git" (failed git command). Categories "gitlab-cache" and
+        # "sonar-cache": reads served from the cache, without a request.
         self._events = deque()
 
     def record(
@@ -42,8 +42,8 @@ class RequestStats:
             self._forget(now)
 
     def snapshot(self):
-        """Pour chaque fenêtre, le nombre de requêtes et d'erreurs, par classe, de chaque catégorie ; et
-        le total par catégorie depuis le démarrage du serveur."""
+        """For each window, the number of requests and of errors, by class, of each category; and the
+        total by category since server start."""
         now = time.monotonic()
         with self._lock:
             self._forget(now)

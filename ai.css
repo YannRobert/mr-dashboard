@@ -1,4 +1,4 @@
-/* Dialogue du bouton AI (ai.js), partagé par index.html et diff.html : autonome, sur les couleurs de la page. */
+/* AI button dialog (ai.js), shared by index.html and diff.html: self-contained, using the page colors. */
 dialog.ai-prompt {
   width: min(1200px, calc(100vw - 32px)); padding: 1.2rem; border: 1px solid var(--border);
   border-radius: 0.8rem; background: var(--surface); color: var(--text); box-shadow: var(--shadow, 0 12px 32px rgba(16, 24, 40, .25));
@@ -18,7 +18,7 @@ dialog.ai-prompt button.primary {
   background: var(--accent);
 }
 dialog.ai-prompt button.primary:hover { filter: brightness(1.07); }
-/* Choix de l'action : boutons accolés, celui retenu en couleur. */
+/* Action choice: adjacent buttons, the selected one colored. */
 dialog.ai-prompt .ai-actions {
   display: inline-flex; margin: 0.3rem 0 0.7rem; border: 1px solid var(--border-strong); border-radius: 0.5rem; overflow: hidden;
 }
@@ -32,12 +32,12 @@ dialog.ai-prompt textarea {
 }
 dialog.ai-prompt .actions { display: flex; justify-content: flex-end; align-items: center; gap: 0.6rem; margin-top: 0.8rem; }
 dialog.ai-prompt .actions button[hidden] { display: none; }
-/* Fermer à gauche, à l'écart des actions sur le prompt, regroupées à droite. */
+/* Close on the left, away from the prompt actions, grouped on the right. */
 dialog.ai-prompt .actions .dismiss { margin-right: auto; }
 dialog.ai-prompt .muted { color: var(--muted); }
 dialog.ai-prompt button.with-icon { display: inline-flex; align-items: center; gap: 0.45em; }
 dialog.ai-prompt button.with-icon .orca-logo { height: 0.95em; width: auto; flex: none; }
-/* Modèle et niveau d'effort de la session Orca, juste avant le bouton qui la lance. */
+/* Model and effort level of the Orca session, just before the button that launches it. */
 dialog.ai-prompt .ai-model { display: inline-flex; align-items: center; gap: 0.4em; font-size: 0.9rem; color: var(--muted); }
 dialog.ai-prompt .ai-model[hidden] { display: none; }
 dialog.ai-prompt .ai-model select {

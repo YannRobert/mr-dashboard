@@ -1,59 +1,59 @@
 #!/usr/bin/env python3
-"""MisteR Dashboard : le dashboard des Merge Requests.
+"""MisteR Dashboard: the Merge Requests dashboard.
 
-Tableau de bord local des MR ouvertes, avec les signaux CI (pipeline, PIT, Sonar) en pastilles.
+Local dashboard of open MRs, with CI signals (pipeline, PIT, Sonar) as badges.
 
-La page (index.html) ne parle qu'à ce serveur, qui relaie deux préfixes :
-    /gitlab/<chemin>  →  <gitlab>/api/v4/<chemin>   (token glab, en-tête PRIVATE-TOKEN)
-    /sonar/<chemin>   →  <sonar>/api/<chemin>       (SONAR_TOKEN, en-tête Bearer)
-    /graphql?query=…  →  <gitlab>/api/graphql?…     (token glab ; en GET, GitLab refuse les mutations)
+The page (index.html) only talks to this server, which relays these prefixes:
+    /gitlab/<path>    →  <gitlab>/api/v4/<path>     (glab token, PRIVATE-TOKEN header)
+    /sonar/<path>     →  <sonar>/api/<path>         (SONAR_TOKEN, Bearer header)
+    /graphql?query=…  →  <gitlab>/api/graphql?…     (glab token; over GET, GitLab rejects mutations)
 
-Le relais est nécessaire pour Sonar, qui ne renvoie aucun en-tête CORS : un navigateur ne peut pas
-l'interroger directement. Il sert aussi à garder les deux tokens hors du navigateur. Seul GET est
-relayé, et le serveur n'écoute que sur 127.0.0.1 : les seules écritures dans GitLab sont les actions
-/gitlab/… ci-dessous, qui valident leur requête avant de la transmettre.
+The relay is required for Sonar, which returns no CORS header: a browser cannot query it directly. It
+also keeps both tokens out of the browser. Only GET is relayed, and the server only listens on
+127.0.0.1: the only writes to GitLab are the /gitlab/… actions below, which validate their request
+before forwarding it.
 
-Actions locales, en POST :
-    /orca/launch  ouvre dans Orca une session Claude Code avec le prompt d'une action du bouton AI
-                d'une MR : {"iid", "action", "prompt", "model", "effort"} (cf. orca_launcher.py), quand le serveur tourne
-                dans WSL et qu'Orca est installé ; GET /ai/actions en donne le catalogue (cf. ai_actions.py),
-                GET /orca/status?launch= dit si le shell, puis Claude Code, ont démarré dans l'onglet d'un lancement
-    /git/fetch  git fetch du clone local, qui tourne aussi tout seul toutes les --git-fetch-interval
-                secondes ; GET /git/status en donne le dernier résultat (cf. git_actions.py)
-    /git/auto   active ou suspend le fetch automatique : {"enabled": true|false}
-    /gitlab/discussion  ouvre une discussion sur une ou plusieurs lignes du diff d'une MR du projet
-                suivi : {"iid", "body", "position"}, position au format de l'API GitLab
-    /gitlab/reply       répond à un fil d'une MR du projet suivi : {"iid", "discussion", "body"}
-    /gitlab/resolve     résout un fil, ou le rouvre : {"iid", "discussion", "resolved": true|false}
-    /git/diff   GET ?branch=&target= : diff d'une MR depuis le point où elle part de sa cible, affiché
-                par diff.html ; ?iid=&head=&merge=&target= pour une MR mergée, retrouvée par ses commits ;
-                &first=&last= pour ce qu'ont apporté ensemble ses commits de first à last
-    /git/commits GET, mêmes paramètres : commits de la MR, du plus ancien au plus récent
-    /git/branch GET ?branch=&target= : nombre de commits, date du dernier et retard sur la cible d'une
-                MR ouverte, d'après le clone local, sans réseau — repli de la page quand GitLab ne répond pas
-    /avatars    couleur de la pastille de chaque personne, la même dans tous les navigateurs (cf.
-                avatar_colors.py) : GET en donne l'attribution, POST {"names", "count"} en donne une, parmi
-                count, à chaque nom qui n'en a pas encore
-    /version    GET : version des HTML, JS et CSS servis, que version.js compare à celle de la page
-                chargée pour la recharger (cf. front_version.py)
-    /stats      GET : requêtes envoyées à GitLab (API, git fetch) et à Sonar sur 1, 5 et 15 min, par
-                catégorie, erreurs de connexion, 4xx et 5xx comprises, et depuis le démarrage
-                (cf. request_stats.py)
+Local actions, over POST:
+    /orca/launch  opens in Orca a Claude Code session with the prompt of a MR's AI button action:
+                {"iid", "action", "prompt", "model", "effort"} (see orca_launcher.py), when the server runs
+                in WSL and Orca is installed; GET /ai/actions returns the catalog (see ai_actions.py),
+                GET /orca/status?launch= tells whether the shell, then Claude Code, started in a launch's tab
+    /git/fetch  git fetch of the local clone, which also runs by itself every --git-fetch-interval
+                seconds; GET /git/status returns the last result (see git_actions.py)
+    /git/auto   enables or suspends automatic fetch: {"enabled": true|false}
+    /gitlab/discussion  opens a discussion on one or more diff lines of a MR of the tracked project:
+                {"iid", "body", "position"}, position in the GitLab API format
+    /gitlab/reply       replies to a thread of a MR of the tracked project: {"iid", "discussion", "body"}
+    /gitlab/resolve     resolves a thread, or reopens it: {"iid", "discussion", "resolved": true|false}
+    /git/diff   GET ?branch=&target=: diff of a MR from the point where it leaves its target, displayed
+                by diff.html; ?iid=&head=&merge=&target= for a merged MR, found through its commits;
+                &first=&last= for what its commits from first to last brought together
+    /git/commits GET, same parameters: commits of the MR, oldest first
+    /git/branch GET ?branch=&target=: commit count, date of the last one and lag behind the target of
+                an open MR, from the local clone, without network — the page's fallback when GitLab is down
+    /avatars    avatar color of each person, the same in every browser (see avatar_colors.py): GET
+                returns the assignment, POST {"names", "count"} gives one, out of count, to each name
+                that has none yet
+    /version    GET: version of the served HTML, JS and CSS, which version.js compares with that of the
+                loaded page to reload it (see front_version.py)
+    /stats      GET: requests sent to GitLab (API, git fetch) and to Sonar over 1, 5 and 15 min, by
+                category, including connection errors, 4xx and 5xx, and since startup
+                (see request_stats.py)
 
-Usage — d'ordinaire via scripts/mr-dashboard/start.sh, qui lit ces options dans un profil
-(scripts/mr-dashboard/profiles/<nom>.conf) :
-    python3 mr-dashboard/server.py --gitlab-project <groupe/projet> --pipeline-branch <branche> \
-        --sonar-project <clé> --sonar-job <job> --pit-job <job> --pit-marker <marqueur> \
-        --repo-dir <clone local du projet> --git-fetch-interval 300 --port 8766
-    python3 mr-dashboard/server.py --gitlab-project <groupe/projet> --pipeline-branch main \
-        --no-sonar --no-pit   # projet sans analyse Sonar ni mutation testing
+Usage — usually through scripts/mr-dashboard/start.sh, which reads these options from a profile
+(scripts/mr-dashboard/profiles/<name>.conf):
+    python3 mr-dashboard/server.py --gitlab-project <group/project> --pipeline-branch <branch> \
+        --sonar-project <key> --sonar-job <job> --pit-job <job> --pit-marker <marker> \
+        --repo-dir <local clone of the project> --git-fetch-interval 300 --port 8766
+    python3 mr-dashboard/server.py --gitlab-project <group/project> --pipeline-branch main \
+        --no-sonar --no-pit   # project without Sonar analysis or mutation testing
 
-Aucun défaut ne désigne un projet : une option oubliée arrête le serveur au lieu de lui faire suivre
-un autre dépôt que prévu.
+No default points to a project: a forgotten option stops the server instead of making it track
+another repository than intended.
 
-Prérequis :
-    SONAR_TOKEN dans l'environnement — sans lui, les pastilles Sonar restent grises.
-    ~/.config/glab-cli/config.yml authentifié contre gitlab.example.com.
+Prerequisites:
+    SONAR_TOKEN in the environment — without it, Sonar badges stay grey.
+    ~/.config/glab-cli/config.yml authenticated against gitlab.example.com.
 """
 import argparse
 import base64
@@ -84,16 +84,16 @@ DEFAULT_SONAR_HOST = "https://sonarqube.example.com"
 DEFAULT_GITLAB_HOST = "https://gitlab.example.com"
 DEFAULT_GITLAB_TOKEN_HOST = "gitlab.example.com"
 DEFAULT_GLAB_CONFIG = os.path.expanduser("~/.config/glab-cli/config.yml")
-# Content-Encoding : les réponses gzip sont relayées telles quelles, le navigateur les décompresse.
+# Content-Encoding: gzip responses are relayed as is, the browser decompresses them.
 FORWARDED_RESPONSE_HEADERS = ("Content-Encoding", "X-Total", "X-Total-Pages", "X-Next-Page", "X-Page", "X-Per-Page")
 UPSTREAM_TIMEOUT_S = 30
-# Une connexion inactive plus longtemps est fermée plutôt que réutilisée : le proxy ou le serveur l'a
-# probablement déjà coupée, et l'essayer coûterait un aller-retour pour rien.
+# A connection idle for longer is closed rather than reused: the proxy or the server has probably
+# already cut it, and trying it would cost a round trip for nothing.
 UPSTREAM_IDLE_S = 30
-# La page charge 4 MR en parallèle, jusqu'à 3 requêtes chacune.
+# The page loads 4 MRs in parallel, up to 3 requests each.
 UPSTREAM_MAX_IDLE_PER_HOST = 12
 STATIC_DIR = Path(__file__).resolve().parent
-# Bibliothèques servies depuis le dépôt plutôt qu'un CDN : la page de diff marche aussi sans réseau.
+# Libraries served from the repository rather than a CDN: the diff page also works without network.
 STATIC_FILES = {
     "/vendor/diff2html/diff2html-ui-slim.min.js": "text/javascript; charset=utf-8",
     "/vendor/diff2html/diff2html.min.css": "text/css; charset=utf-8",
@@ -113,11 +113,11 @@ PAGES = {
     "/diff.html": "text/html; charset=utf-8",
     "/comments.html": "text/html; charset=utf-8",
 }
-# Un JS ou CSS demandé avec ?v=<étiquette> ne change jamais sous cette URL : le navigateur le garde sans
-# revalider, et le reprend même quand le serveur ne répond pas.
+# A JS or CSS requested with ?v=<tag> never changes under that URL: the browser keeps it without
+# revalidating, and reuses it even when the server does not respond.
 IMMUTABLE_CACHE_CONTROL = "max-age=31536000, immutable"
-# Exigé sur le POST : un en-tête non standard impose au navigateur un preflight CORS, que ce serveur
-# ne satisfait jamais — une page tierce ne peut donc pas déclencher l'action.
+# Required on POST: a non-standard header forces the browser into a CORS preflight, which this server
+# never satisfies — a third-party page therefore cannot trigger the action.
 ACTION_HEADER = "X-MR-Dashboard"
 MAX_POST_BYTES = 64 * 1024
 
@@ -131,15 +131,15 @@ def gitlab_token(config_path, target_host):
                 host = s[:-1]
             if s.startswith("token:") and host == target_host:
                 return s.split(":", 1)[1].strip()
-    raise RuntimeError(f"aucun token trouvé pour {target_host} dans {config_path}")
+    raise RuntimeError(f"no token found for {target_host} in {config_path}")
 
 
 class UpstreamPool:
-    """Connexions gardées ouvertes par hôte amont.
+    """Connections kept open per upstream host.
 
-    Via un proxy HTTPS, ouvrir une connexion (CONNECT + poignée de main TLS) coûte ~500 ms :
-    davantage que la requête elle-même. Une actualisation en enchaîne des dizaines ; les réutiliser
-    divise leur durée par ~4. Proxy lu dans l'environnement (https_proxy / no_proxy), comme urllib.
+    Through an HTTPS proxy, opening a connection (CONNECT + TLS handshake) costs ~500 ms: more
+    than the request itself. A refresh chains dozens of them; reusing them cuts their duration by ~4.
+    Proxy read from the environment (https_proxy / no_proxy), like urllib.
     """
 
     def __init__(self):
@@ -151,8 +151,8 @@ class UpstreamPool:
             url,
             headers
     ):
-        """GET, et renvoie (statut, corps, en-têtes) ; une connexion réutilisée que l'amont a fermée
-        entre-temps est remplacée une fois, la requête étant idempotente."""
+        """GET, returning (status, body, headers); a reused connection the upstream has closed meanwhile
+        is replaced once, the request being idempotent."""
         target = urlsplit(url)
         path = target.path + ("?" + target.query if target.query else "")
         connection, reused = self._acquire(target)
@@ -182,8 +182,8 @@ class UpstreamPool:
             headers,
             body
     ):
-        """Requête qui écrit (POST, PUT), et renvoie (statut, corps, en-têtes) ; toujours sur une
-        connexion neuve, sans nouvel essai : une requête qui écrit ne se rejoue pas à l'aveugle."""
+        """Writing request (POST, PUT), returning (status, body, headers); always on a fresh
+        connection, without retry: a writing request is not replayed blindly."""
         target = urlsplit(url)
         return self._send(
             target,
@@ -291,7 +291,7 @@ def make_handler(
 
     class Handler(BaseHTTPRequestHandler):
 
-        # Connexion gardée entre deux requêtes du navigateur ; chaque réponse porte son Content-Length.
+        # Connection kept between two browser requests; each response carries its Content-Length.
         protocol_version = "HTTP/1.1"
 
         def do_GET(self):
@@ -341,7 +341,7 @@ def make_handler(
                 )
             elif self.path.startswith("/sonar/"):
                 if not settings["sonar_token"]:
-                    self.send_json(503, {"message": "SONAR_TOKEN absent de l'environnement du serveur"})
+                    self.send_json(503, {"message": "SONAR_TOKEN missing from the server environment"})
                     return
                 self.relay(
                     "Sonar",
@@ -349,7 +349,7 @@ def make_handler(
                     {"Authorization": "Bearer " + settings["sonar_token"]}
                 )
             else:
-                self.send_json(404, {"message": "introuvable"})
+                self.send_json(404, {"message": "not found"})
 
         def do_POST(self):
             if not self.host_allowed():
@@ -366,22 +366,22 @@ def make_handler(
             action = actions.get(self.path)
             if not action:
                 self.close_connection = True
-                self.send_json(404, {"message": "introuvable"})
+                self.send_json(404, {"message": "not found"})
                 return
             origins = {f"http://{host}:{self.server.server_port}" for host in ("localhost", "127.0.0.1")}
             if self.headers.get(ACTION_HEADER) != "1" or self.headers.get("Origin") not in origins:
                 self.close_connection = True
-                self.send_json(403, {"message": "origine refusée"})
+                self.send_json(403, {"message": "origin rejected"})
                 return
             length = int(self.headers.get("Content-Length") or 0)
             if length > MAX_POST_BYTES:
                 self.close_connection = True
-                self.send_json(413, {"message": "requête trop volumineuse"})
+                self.send_json(413, {"message": "request too large"})
                 return
             try:
                 payload = json.loads(self.rfile.read(length) or b"{}")
             except ValueError:
-                self.send_json(400, {"message": "requête invalide"})
+                self.send_json(400, {"message": "invalid request"})
                 return
             action(payload)
 
@@ -393,18 +393,18 @@ def make_handler(
                 model = payload.get("model")
                 effort = payload.get("effort")
             except (ValueError, KeyError, TypeError):
-                self.send_json(400, {"message": "requête invalide"})
+                self.send_json(400, {"message": "invalid request"})
                 return
-            # Seuls un modèle et un niveau proposés passent : la commande lancée dans Orca passe par un shell.
+            # Only an offered model and level get through: the command launched in Orca goes through a shell.
             choice = claude_models.find(model) if model is not None else None
             if model is not None and choice is None:
-                self.send_json(400, {"message": f"modèle non proposé : {model}"})
+                self.send_json(400, {"message": f"model not offered: {model}"})
                 return
             if effort is not None and effort not in (choice["efforts"] if choice else claude_models.EFFORTS):
-                self.send_json(400, {"message": f"niveau d'effort non proposé pour ce modèle : {effort}"})
+                self.send_json(400, {"message": f"effort level not offered for this model: {effort}"})
                 return
             if not orca:
-                self.send_json(503, {"message": "Orca introuvable, ou serveur lancé hors WSL"})
+                self.send_json(503, {"message": "Orca not found, or server running outside WSL"})
                 return
             try:
                 title = ai_actions.tab_title(
@@ -442,7 +442,7 @@ def make_handler(
             elif isinstance(signature, str):
                 git.fetch_if_changed(signature)
             else:
-                self.send_json(400, {"message": "requête invalide"})
+                self.send_json(400, {"message": "invalid request"})
                 return
             self.send_json(200, git.status())
 
@@ -451,7 +451,7 @@ def make_handler(
             count = payload.get("count") if isinstance(payload, dict) else None
             if (not isinstance(names, list) or not all(isinstance(name, str) and name for name in names)
                     or not isinstance(count, int) or isinstance(count, bool) or count < 1):
-                self.send_json(400, {"message": "requête invalide"})
+                self.send_json(400, {"message": "invalid request"})
                 return
             self.send_json(200, avatar_colors.assign(
                 names,
@@ -461,7 +461,7 @@ def make_handler(
         def git_auto(self, payload):
             enabled = payload.get("enabled") if isinstance(payload, dict) else None
             if not isinstance(enabled, bool):
-                self.send_json(400, {"message": "requête invalide"})
+                self.send_json(400, {"message": "invalid request"})
                 return
             git.set_auto(enabled)
             self.send_json(200, git.status())
@@ -469,7 +469,7 @@ def make_handler(
         def gitlab_discussion(self, payload):
             request = discussion_request(payload)
             if not request:
-                self.send_json(400, {"message": "requête invalide"})
+                self.send_json(400, {"message": "invalid request"})
                 return
             iid, body = request
             self.gitlab_write(
@@ -481,7 +481,7 @@ def make_handler(
         def gitlab_reply(self, payload):
             request = reply_request(payload)
             if not request:
-                self.send_json(400, {"message": "requête invalide"})
+                self.send_json(400, {"message": "invalid request"})
                 return
             iid, discussion, body = request
             self.gitlab_write(
@@ -493,7 +493,7 @@ def make_handler(
         def gitlab_resolve(self, payload):
             request = resolve_request(payload)
             if not request:
-                self.send_json(400, {"message": "requête invalide"})
+                self.send_json(400, {"message": "invalid request"})
                 return
             iid, discussion, body = request
             self.gitlab_write(
@@ -508,7 +508,7 @@ def make_handler(
                 path,
                 body
         ):
-            """Transmet à GitLab, pour le projet suivi, une écriture déjà validée ; path relatif au projet."""
+            """Forwards to GitLab, for the tracked project, an already validated write; path relative to the project."""
             project = quote(settings["public"]["gitlabProject"], safe="")
             try:
                 status, content, upstream_headers = upstream.write(
@@ -522,7 +522,7 @@ def make_handler(
                     "gitlab-write",
                     "connection"
                 )
-                # Sans réponse, l'écriture a pu aboutir quand même.
+                # Without a response, the write may have succeeded anyway.
                 relay_cache.clear()
                 self.send_json(
                     502,
@@ -565,7 +565,7 @@ def make_handler(
         def git_branch(self, query):
             branch, target = (query.get(name, [""])[0] for name in ("branch", "target"))
             if not branch or not target:
-                self.send_json(400, {"message": "requête invalide"})
+                self.send_json(400, {"message": "invalid request"})
                 return
             try:
                 signals = git.branch_signals(
@@ -577,13 +577,13 @@ def make_handler(
                 return
             self.send_json(200, signals)
 
-        # MR ouverte par ses branches, mergée par ses commits.
+        # Open MR through its branches, merged MR through its commits.
         def mr_revisions(self, query):
             branch, target, iid, head, merge = (
                 query.get(name, [""])[0] for name in ("branch", "target", "iid", "head", "merge")
             )
             if not target or not (branch or (iid and head and merge)):
-                raise ValueError("requête invalide")
+                raise ValueError("invalid request")
             if branch:
                 return git.open_revisions(
                     branch,
@@ -597,12 +597,12 @@ def make_handler(
             )
 
         def host_allowed(self):
-            # Refuse tout autre nom d'hôte : une page tierce qui ferait pointer son domaine sur
-            # 127.0.0.1 (DNS rebinding) lirait sinon GitLab et Sonar avec les tokens du poste.
+            # Rejects any other host name: a third-party page pointing its domain to 127.0.0.1
+            # (DNS rebinding) would otherwise read GitLab and Sonar with the workstation's tokens.
             if self.headers.get("Host", "").split(":")[0] in ("localhost", "127.0.0.1"):
                 return True
             self.close_connection = True
-            self.send_json(403, {"message": "hôte refusé"})
+            self.send_json(403, {"message": "host rejected"})
             return False
 
         def relay(
@@ -625,7 +625,7 @@ def make_handler(
                         "connection"
                     )
                     raise
-                # Page de maintenance : relayée en 503, comptée comme telle.
+                # Maintenance page: relayed as a 503, counted as such.
                 stats.record(
                     kind,
                     "5xx" if is_html(response[2]) else http_error(response[0])
@@ -637,7 +637,7 @@ def make_handler(
                     url,
                     load,
                     lambda response: response[0] == 200 and not is_html(response[2]),
-                    # Envoyé par le bouton « Rafraîchir » : il veut l'état de GitLab, pas une réponse gardée.
+                    # Sent by the Refresh button: it wants GitLab's state, not a kept response.
                     self.headers.get("Cache-Control") == "no-cache"
                 )
             except (OSError, http.client.HTTPException) as error:
@@ -651,16 +651,16 @@ def make_handler(
                     kind + "-cache",
                     None
                 )
-                # L'heure de GitLab d'une réponse gardée a vieilli : la page en déduirait un faux écart
-                # d'horloge.
+                # GitLab's time in a kept response has aged: the page would infer a false clock
+                # skew from it.
                 upstream_headers = copy(upstream_headers)
                 del upstream_headers["Date"]
-            # Que la page ne saurait lire.
+            # Which the page could not read.
             if is_html(upstream_headers):
                 self.send_json(
                     503,
-                    {"message": f"{service} semble en maintenance : il renvoie une page web au lieu de "
-                                f"répondre à l'API (HTTP {status})"}
+                    {"message": f"{service} seems under maintenance: it returns a web page instead of "
+                                f"answering the API (HTTP {status})"}
                 )
                 return
             self.send_body(
@@ -680,8 +680,8 @@ def make_handler(
             for name in FORWARDED_RESPONSE_HEADERS:
                 if upstream_headers.get(name) is not None:
                     self.send_header(name, upstream_headers[name])
-            # Heure du serveur amont, sous un autre nom : send_response vient d'écrire le Date de ce
-            # serveur-ci, c'est-à-dire l'heure du PC, dont la page cherche justement l'écart.
+            # Upstream server time, under another name: send_response has just written this server's
+            # Date, i.e. the PC time, whose skew is precisely what the page looks for.
             if upstream_headers.get("Date") is not None:
                 self.send_header("X-Upstream-Date", upstream_headers["Date"])
             self.send_header("Content-Length", str(len(body)))
@@ -705,7 +705,7 @@ def make_handler(
                 body,
                 immutable
         ):
-            """Fichier de la page, avec son ETag : un navigateur qui a déjà ce contenu reçoit un 304 vide."""
+            """Page file, with its ETag: a browser that already has this content gets an empty 304."""
             etag = f'"{front_version_tag(body)}"'
             if self.headers.get("If-None-Match") == etag:
                 self.send_response(304)
@@ -734,16 +734,16 @@ def make_handler(
 
 
 def is_html(upstream_headers):
-    """Une API ne répond jamais en HTML : c'est la page de maintenance ou d'erreur d'un serveur
-    indisponible."""
+    """An API never answers in HTML: it is the maintenance or error page of an unavailable
+    server."""
     return upstream_headers.get("Content-Type", "").startswith("text/html")
 
 
 def discussion_request(payload):
-    """(iid, corps JSON pour GitLab) d'une demande de discussion sur le diff, None si elle est invalide.
+    """(iid, JSON body for GitLab) of a diff discussion request, None if it is invalid.
 
-    Seuls les champs attendus passent, au type attendu : la page ne peut rien faire écrire d'autre à
-    GitLab qu'un commentaire de ligne sur une MR du projet suivi.
+    Only the expected fields get through, with the expected type: the page cannot make GitLab write
+    anything other than a line comment on a MR of the tracked project.
     """
     if not isinstance(payload, dict):
         return None
@@ -776,7 +776,7 @@ def discussion_request(payload):
 
 
 def reply_request(payload):
-    """(iid, discussion, corps JSON pour GitLab) d'une réponse à un fil, None si elle est invalide."""
+    """(iid, discussion, JSON body for GitLab) of a reply to a thread, None if it is invalid."""
     target = discussion_target(payload)
     body = payload.get("body") if target else None
     if not isinstance(body, str) or not body.strip():
@@ -785,8 +785,8 @@ def reply_request(payload):
 
 
 def resolve_request(payload):
-    """(iid, discussion, corps JSON pour GitLab) d'une demande de résoudre ou rouvrir un fil, None si
-    elle est invalide."""
+    """(iid, discussion, JSON body for GitLab) of a request to resolve or reopen a thread, None if it
+    is invalid."""
     target = discussion_target(payload)
     resolved = payload.get("resolved") if target else None
     if not isinstance(resolved, bool):
@@ -795,8 +795,8 @@ def resolve_request(payload):
 
 
 def discussion_target(payload):
-    """(iid, discussion) d'un fil d'une MR, None si la demande ne le désigne pas sans ambiguïté :
-    l'identifiant d'un fil GitLab est un SHA, rien d'autre ne peut entrer dans le chemin de l'API."""
+    """(iid, discussion) of a MR thread, None if the request does not designate it unambiguously: a
+    GitLab thread id is a SHA, nothing else can get into the API path."""
     if not isinstance(payload, dict):
         return None
     iid, discussion = payload.get("iid"), payload.get("discussion")
@@ -814,7 +814,7 @@ def is_sha(value):
 
 
 def range_end(end):
-    """Une extrémité de line_range réduite à ses champs, None si elle est invalide."""
+    """An end of line_range reduced to its fields, None if it is invalid."""
     if not isinstance(end, dict) or end.get("type") not in ("old", "new"):
         return None
     line_code = end.get("line_code")
@@ -832,44 +832,44 @@ def require_unless_disabled(
         switch,
         names
 ):
-    """Un indicateur suivi exige toutes ses options ; --no-<indicateur> déclare qu'il n'existe pas."""
+    """A tracked indicator requires all its options; --no-<indicator> declares that it does not exist."""
     if getattr(args, switch):
         return
     missing = [name for name in names if not getattr(args, name)]
     if missing:
         options = ", ".join("--" + name.replace("_", "-") for name in missing)
-        parser.error(f"{options} requis, ou --{switch.replace('_', '-')} si le projet n'a pas cet indicateur")
+        parser.error(f"{options} required, or --{switch.replace('_', '-')} if the project does not have this indicator")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--sonar-host", default=DEFAULT_SONAR_HOST)
-    parser.add_argument("--sonar-project", help="clé du projet Sonar")
-    parser.add_argument("--no-sonar", action="store_true", help="projet sans analyse Sonar : colonnes et indicateurs masqués")
+    parser.add_argument("--sonar-project", help="Sonar project key")
+    parser.add_argument("--no-sonar", action="store_true", help="project without Sonar analysis: columns and indicators hidden")
     parser.add_argument("--gitlab-host", default=DEFAULT_GITLAB_HOST)
-    parser.add_argument("--gitlab-project", required=True, help="chemin du projet, non encodé")
+    parser.add_argument("--gitlab-project", required=True, help="project path, not encoded")
     parser.add_argument("--gitlab-token-host", default=DEFAULT_GITLAB_TOKEN_HOST)
     parser.add_argument("--glab-config", default=DEFAULT_GLAB_CONFIG)
-    parser.add_argument("--sonar-job", help="nom du job CI qui lance l'analyse Sonar")
-    parser.add_argument("--pit-job", help="nom du job CI qui publie la note de mutation")
-    parser.add_argument("--pit-marker", help="début de la note de mutation publiée sur la MR")
-    parser.add_argument("--no-pit", action="store_true", help="projet sans mutation testing : colonne et indicateurs masqués")
-    parser.add_argument("--pipeline-branch", required=True, help="branche dont le dernier pipeline s'affiche sous le tableau des MR")
-    parser.add_argument("--target-branch", help="branche cible filtrée à l'ouverture de la page (défaut : toutes)")
+    parser.add_argument("--sonar-job", help="name of the CI job that runs the Sonar analysis")
+    parser.add_argument("--pit-job", help="name of the CI job that posts the mutation note")
+    parser.add_argument("--pit-marker", help="beginning of the mutation note posted on the MR")
+    parser.add_argument("--no-pit", action="store_true", help="project without mutation testing: column and indicators hidden")
+    parser.add_argument("--pipeline-branch", required=True, help="branch whose latest pipeline is shown below the MR table")
+    parser.add_argument("--target-branch", help="target branch filtered when the page opens (default: all)")
     parser.add_argument(
         "--repo-dir",
         type=Path,
         required=True,
-        help="clone local du projet suivi, où Orca ouvre la session de correction et où tournent les actions git"
+        help="local clone of the tracked project, where Orca opens the fix session and where git actions run"
     )
     parser.add_argument(
         "--git-fetch-interval",
         type=int,
         default=DEFAULT_GIT_FETCH_INTERVAL_S,
-        help=f"secondes entre deux git fetch automatiques du clone local, 0 pour aucun (défaut : {DEFAULT_GIT_FETCH_INTERVAL_S})"
+        help=f"seconds between two automatic git fetches of the local clone, 0 for none (default: {DEFAULT_GIT_FETCH_INTERVAL_S})"
     )
-    parser.add_argument("--quiet", action="store_true", help="ne pas journaliser chaque requête")
+    parser.add_argument("--quiet", action="store_true", help="do not log each request")
     args = parser.parse_args()
     require_unless_disabled(
         parser,
@@ -893,7 +893,7 @@ def main():
         lambda failed: stats.record("git", "git" if failed else None)
     )
     if not sonar_token and not args.no_sonar:
-        print("⚠️  SONAR_TOKEN absent : les pastilles Sonar resteront grises.")
+        print("⚠️  SONAR_TOKEN missing: Sonar badges will stay grey.")
     settings = {
         "gitlab_host": args.gitlab_host,
         "gitlab_token": gitlab_token(args.glab_config, args.gitlab_token_host),
@@ -929,7 +929,7 @@ def main():
         )
     )
     git.start_periodic_fetch()
-    print(f"MisteR Dashboard, le dashboard des Merge Requests : http://localhost:{args.port}")
+    print(f"MisteR Dashboard, the Merge Requests dashboard: http://localhost:{args.port}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

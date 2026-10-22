@@ -1,11 +1,11 @@
-// Commentaires GitLab tels que GitLab les rend : son HTML, déjà nettoyé par GitLab, y gagne en plus des
-// liens absolus vers GitLab et perd tout ce qui pourrait s'exécuter dans la page.
-// Partagé par diff.html (diff notes) et comments.html (commentaires de la MR).
+// GitLab comments as GitLab renders them: its HTML, already sanitized by GitLab, additionally gets
+// absolute links to GitLab and loses anything that could run in the page.
+// Shared by diff.html (diff notes) and comments.html (MR comments).
 window.GitlabNotes = (() => {
   const DROPPED = "script, style, iframe, frame, object, embed, form, button, textarea, select, link, meta, base";
   const URL_ATTRIBUTES = ["href", "src"];
 
-  // GitLab, par la requête GraphQL relayée par le serveur ; en GET, GitLab refuse les mutations.
+  // GitLab, through the GraphQL query relayed by the server; over GET, GitLab rejects mutations.
   async function graphql(query) {
     const response = await fetch(`graphql?query=${encodeURIComponent(query)}`);
     if (!response.ok) {
@@ -17,7 +17,7 @@ window.GitlabNotes = (() => {
     return result.data;
   }
 
-  // Toutes les pages d'une connexion GraphQL ; page(after) renvoie la connexion, nodes et pageInfo.
+  // All pages of a GraphQL connection; page(after) returns the connection, nodes and pageInfo.
   async function allNodes(page) {
     const nodes = [];
     for (let after = null, more = true; more;) {
@@ -32,13 +32,13 @@ window.GitlabNotes = (() => {
   function render(html, gitlabWeb) {
     const doc = new DOMParser().parseFromString(`<body>${html ?? ""}</body>`, "text/html");
     doc.querySelectorAll(DROPPED).forEach(element => element.remove());
-    // Seules les cases des listes de tâches restent, en lecture seule.
+    // Only task list checkboxes remain, read-only.
     for (const input of doc.querySelectorAll("input")) {
       if (input.type === "checkbox") input.setAttribute("disabled", "");
       else input.remove();
     }
     for (const element of doc.body.querySelectorAll("*")) {
-      // Images chargées à l'affichage par le script de GitLab : leur adresse attend dans data-src.
+      // Images loaded on display by GitLab's script: their address waits in data-src.
       if (element.dataset.src) element.setAttribute("src", element.dataset.src);
       for (const attribute of [...element.attributes]) {
         if (/^on/i.test(attribute.name) || attribute.name === "style") element.removeAttribute(attribute.name);
@@ -67,8 +67,8 @@ window.GitlabNotes = (() => {
     return doc.body.innerHTML;
   }
 
-  // Identifiant d'une note ou d'un fil, d'après son identifiant GraphQL : « gid://gitlab/DiffNote/123 »
-  // donne 123, « gid://gitlab/Discussion/<sha> » le SHA du fil.
+  // Id of a note or thread, from its GraphQL id: « gid://gitlab/DiffNote/123 »
+  // gives 123, « gid://gitlab/Discussion/<sha> » the thread SHA.
   const noteId = gid => Number(String(gid).split("/").pop());
   const discussionId = gid => String(gid).split("/").pop();
 
@@ -96,7 +96,7 @@ window.GitlabNotes = (() => {
   };
   const escapeHtml = text => String(text).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
-  // Écriture dans GitLab par une action du serveur, qui ne transmet que ce qu'elle a validé.
+  // Write to GitLab through a server action, which forwards only what it has validated.
   async function write(action, payload) {
     const response = await fetch(`gitlab/${action}`, {
       method: "POST",
@@ -111,8 +111,8 @@ window.GitlabNotes = (() => {
     return result;
   }
 
-  // Bas d'un fil, à placer dans l'élément qui porte data-discussion : Répondre, et Résoudre ou Rouvrir
-  // pour un fil qui peut l'être.
+  // Thread footer, to place in the element holding data-discussion: Reply, and Resolve or Reopen
+  // for a thread that can be.
   function threadActionsHtml(discussion, lang) {
     const texts = TEXTS[lang] ?? TEXTS.en;
     const resolve = discussion.resolvable
@@ -122,8 +122,8 @@ window.GitlabNotes = (() => {
       + `<button type="button" data-thread-reply>${escapeHtml(texts.reply)}</button></div>`;
   }
 
-  // Répondre, résoudre, rouvrir, dans les fils de root ; refresh(discussion) réaffiche le fil après
-  // l'écriture et rend une promesse.
+  // Reply, resolve, reopen, in the threads of root; refresh(discussion) re-renders the thread after
+  // the write and returns a promise.
   function handleThreads(root, { iid, lang, refresh }) {
     const texts = TEXTS[lang] ?? TEXTS.en;
     const threadOf = element => element.closest("[data-discussion]");

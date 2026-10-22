@@ -1,11 +1,11 @@
-"""Ouvre dans Orca une session Claude Code chargée d'une action du bouton AI sur une MR.
+"""Opens in Orca a Claude Code session in charge of an AI button action on a MR.
 
-Orca tourne sous Windows, ce serveur dans WSL : on pilote Orca par sa CLI (orca.exe, joignable depuis
-WSL par l'interop Windows). Le terminal qu'Orca ouvre sur un worktree \\\\wsl.localhost\\… est un bash
-WSL placé dans ce worktree, qui y tape la commande de démarrage telle quelle.
+Orca runs on Windows, this server in WSL: Orca is driven through its CLI (orca.exe, reachable from WSL
+through Windows interop). The terminal Orca opens on a \\\\wsl.localhost\\… worktree is a WSL bash
+placed in that worktree, which types the startup command there as is.
 
-Le terminal s'ouvre toujours sur le dépôt suivi (--repo-dir) : c'est Claude qui, d'après le prompt,
-travaille dans le worktree de la MR. Tous les onglets restent ainsi au même endroit dans Orca.
+The terminal always opens on the tracked repository (--repo-dir): it is Claude that, following the prompt,
+works in the MR's worktree. All tabs thus stay in the same place in Orca.
 """
 import base64
 import json
@@ -20,22 +20,22 @@ from pathlib import Path
 
 PROMPT_MAX_CHARS = 20_000
 COMMAND_TIMEOUT_S = 60
-# Le prompt passe par un fichier : un long texte multiligne ne survivrait pas aux guillemets de la
-# ligne de commande Windows. Le terminal le lit, et la session Claude Code le supprime une fois démarrée,
-# par un hook SessionStart qu'apportent ses réglages propres (fichier voisin, passé par --settings) ;
-# un fichier jamais supprimé (shell ou claude en échec au démarrage) est purgé au lancement suivant,
-# passé ce délai. Un fichier témoin, que le shell du terminal supprime avant tout, distingue un shell
-# qui n'a jamais démarré (WSL injoignable) d'un claude qui n'a pas démarré.
+# The prompt goes through a file: a long multiline text would not survive the quoting of the Windows
+# command line. The terminal reads it, and the Claude Code session deletes it once started, through a
+# SessionStart hook brought by its own settings (sibling file, passed with --settings); a file never
+# deleted (shell or claude failing at startup) is purged on the next launch, once past this age. A marker
+# file, which the terminal shell deletes first, tells a shell that never started (WSL unreachable) from
+# a claude that did not start.
 PROMPT_DIR = Path.home() / ".cache" / "mr-dashboard"
 PROMPT_MAX_AGE_S = 24 * 3600
-# Identifiant d'un lancement : le nom de son fichier de prompt, sans extension.
+# Identifier of a launch: the name of its prompt file, without extension.
 LAUNCH_ID = re.compile(r"MR\d+-[0-9a-f]{8}")
-# Orca n'attend le terminal que quelques secondes, quand le shell WSL en met parfois plus de dix à
-# démarrer : il répond alors en échec alors que le terminal est bel et bien créé.
+# Orca waits only a few seconds for the terminal, while the WSL shell sometimes takes more than ten to
+# start: it then reports a failure although the terminal was indeed created.
 UNCONFIRMED_ERROR = "Timed out waiting for terminal handle"
-# Orca ne traite la création d'un onglet qu'une fois sa fenêtre au premier plan : on l'y ramène avant.
-# Windows refuse ce changement à un processus qui n'a pas reçu la dernière saisie, sauf juste après un
-# appui clavier : d'où la touche Alt simulée (sans effet visible). Au pire, l'utilisateur bascule à la main.
+# Orca only processes a tab creation once its window is in the foreground: bring it there first.
+# Windows refuses this switch to a process that did not receive the last input, except right after a
+# key press: hence the simulated Alt key (no visible effect). At worst, the user switches by hand.
 RAISE_ORCA_SCRIPT = r"""
 Add-Type @'
 using System;
@@ -81,7 +81,7 @@ class OrcaLauncher:
 
     @classmethod
     def detect(cls, repo_dir):
-        """Le lanceur, ou None hors WSL ou sans Orca installé : le bouton n'est alors pas proposé."""
+        """The launcher, or None outside WSL or without Orca installed: the button is then not offered."""
         orca = shutil.which("orca.exe")
         distro = os.environ.get("WSL_DISTRO_NAME")
         if not orca or not distro:
@@ -100,9 +100,9 @@ class OrcaLauncher:
             model=None,
             effort=None
     ):
-        """Ouvre le terminal et renvoie {worktree, confirmed, launch}. Sans model ni effort, claude prend ceux de sa configuration."""
+        """Opens the terminal and returns {worktree, confirmed, launch}. Without model or effort, claude uses those of its configuration."""
         if not prompt.strip() or len(prompt) > PROMPT_MAX_CHARS:
-            raise OrcaError("prompt vide ou trop long")
+            raise OrcaError("prompt empty or too long")
         prompt_file = self._write_prompt(
             iid,
             prompt
@@ -113,9 +113,9 @@ class OrcaLauncher:
         model_option = f"--model {shlex.quote(model)} " if model else ""
         effort_option = f"--effort {shlex.quote(effort)} " if effort else ""
         self._raise_orca()
-        # Les fichiers ne sont jamais supprimés ici sur erreur : le terminal a pu être créé quand même,
-        # et son shell les lirait alors trop tard. Sans le prompt, claude ne démarre pas du tout plutôt
-        # que de démarrer sans consigne.
+        # Files are never deleted here on error: the terminal may have been created anyway, and its
+        # shell would then read them too late. Without the prompt, claude does not start at all rather
+        # than start with no instructions.
         try:
             self._orca([
                 "terminal", "create",
@@ -133,11 +133,11 @@ class OrcaLauncher:
 
     @staticmethod
     def progress(launch):
-        """{shell, claude} : vrais quand le shell du terminal, puis la session Claude Code du lancement, ont
-        démarré, chacun supprimant son fichier (le témoin, puis le prompt par le hook SessionStart). La
-        création de l'onglet, que confirme Orca, ne garantit ni l'un ni l'autre."""
+        """{shell, claude}: true once the terminal shell, then the launch's Claude Code session, have started,
+        each deleting its file (the marker, then the prompt through the SessionStart hook). The tab
+        creation, which Orca confirms, guarantees neither."""
         if not LAUNCH_ID.fullmatch(launch):
-            raise OrcaError("lancement inconnu")
+            raise OrcaError("unknown launch")
         claude = not (PROMPT_DIR / f"{launch}.md").exists()
         return {"shell": claude or not (PROMPT_DIR / f"{launch}.shell").exists(), "claude": claude}
 
@@ -168,7 +168,7 @@ class OrcaLauncher:
         return f"\\\\wsl.localhost\\{self._distro}" + str(path).replace("/", "\\")
 
     def _raise_orca(self):
-        """Au mieux : un échec laisse la création se faire dès que l'utilisateur bascule sur Orca."""
+        """Best effort: on failure, the creation happens as soon as the user switches to Orca."""
         powershell = shutil.which("powershell.exe")
         if not powershell:
             return
@@ -193,7 +193,7 @@ class OrcaLauncher:
                 check=False
             )
         except (OSError, subprocess.TimeoutExpired) as error:
-            raise OrcaError(f"Orca injoignable : {error}") from error
+            raise OrcaError(f"Orca unreachable: {error}") from error
         output = result.stdout.replace("\r", "")
         try:
             reply = json.loads(output)
@@ -203,7 +203,7 @@ class OrcaLauncher:
             error = (reply or {}).get("error")
             message = (error.get("message") if isinstance(error, dict) else error) or result.stderr.strip() or output.strip()
             raise OrcaError(
-                f"Orca : {message}",
+                f"Orca: {message}",
                 unconfirmed=UNCONFIRMED_ERROR in str(message)
             )
         return reply

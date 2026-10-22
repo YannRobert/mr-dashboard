@@ -1,26 +1,26 @@
-"""Modèles proposés pour une session Claude Code lancée dans Orca, et niveaux d'effort de chacun.
+"""Models offered for a Claude Code session launched in Orca, and the effort levels of each.
 
-Claude Code garde en cache la liste des modèles du compte connecté, avec les niveaux d'effort que chacun
-accepte, et la retélécharge lui-même quand elle a plus d'une heure : la relire à chaque demande suffit
-pour que le dialogue suive les sorties de modèles, sans code ni configuration à changer. La liste la
-plus récente dit ce que désigne chaque alias ; les versions précises s'y ajoutent de toutes les listes
-du cache, une liste récente se réduisant parfois aux dernières versions, quand les plus anciennes
-restent très utilisées. Ce cache n'est pas documenté : absent, illisible ou d'un autre format, la liste
-se réduit aux alias, avec tous les niveaux.
+Claude Code caches the model list of the logged-in account, with the effort levels each accepts, and
+downloads it again by itself once it is more than an hour old: rereading it on every request is enough
+for the dialog to follow model releases, with no code or configuration to change. The most recent list
+says what each alias points to; specific versions are added from every list in the cache, since a
+recent list sometimes comes down to the latest versions while older ones remain widely used. This cache
+is undocumented: if it is missing, unreadable or in another format, the list comes down to the aliases,
+with all levels.
 """
 import json
 import os
 import re
 from pathlib import Path
 
-# Alias de `claude --model`, qui désignent toujours la dernière version de chaque modèle.
+# Aliases of `claude --model`, which always point to the latest version of each model.
 ALIASES = ("fable", "opus", "sonnet", "haiku")
-# Niveaux de `claude --effort`, du plus économe au plus poussé.
+# Levels of `claude --effort`, from the most frugal to the most thorough.
 EFFORTS = ("low", "medium", "high", "xhigh", "max")
-# Seuls noms admis, alias compris : la commande lancée dans Orca passe par un shell.
+# Only allowed names, besides aliases: the command launched in Orca goes through a shell.
 SAFE_ID = re.compile(r"^claude-[a-z0-9-]+$")
 FAMILY = re.compile(r"^claude-([a-z]+)-")
-# Suffixe de date d'un nom de version (claude-haiku-4-5-20251001), qui ne la distingue pas d'une autre.
+# Date suffix of a version name (claude-haiku-4-5-20251001), which does not distinguish it from another.
 DATE_SUFFIX = re.compile(r"-\d{8}$")
 RECOMMENDED_BADGE = "Recommended"
 
@@ -30,10 +30,9 @@ def cache_dir():
 
 
 def choices(directory=None):
-    """[{"id", "label", "alias", "version", "efforts", "recommended"}] : les alias d'abord, puis les
-    versions précises qu'aucun alias ne désigne, par famille et de la plus récente à la plus ancienne.
-    version : celle que désigne un alias, si le cache la donne. efforts vide : le modèle n'en accepte
-    aucun."""
+    """[{"id", "label", "alias", "version", "efforts", "recommended"}]: aliases first, then the specific
+    versions no alias points to, by family and from newest to oldest. version: the one an alias points
+    to, if the cache gives it. Empty efforts: the model accepts none."""
     lists = _lists(directory or cache_dir())
     current = lists[0] if lists else []
     latest = {}
@@ -42,7 +41,7 @@ def choices(directory=None):
     aliases = []
     for alias in ALIASES:
         version = latest.get(alias)
-        # Une famille absente de la liste la plus récente n'est plus proposée au compte.
+        # A family missing from the most recent list is no longer offered to the account.
         if current and version is None:
             continue
         aliases.append({
@@ -63,19 +62,19 @@ def choices(directory=None):
 
 
 def find(model_id):
-    """Le modèle proposé de ce nom, ou None."""
+    """The offered model with this name, or None."""
     return next((choice for choice in choices() if choice["id"] == model_id), None)
 
 
-# Clé de tri d'une version, la plus récente d'abord : claude-opus-4-8 avant claude-opus-4-6, et
-# claude-fable-5-1 avant claude-fable-5, lu 5.0.
+# Sort key of a version, newest first: claude-opus-4-8 before claude-opus-4-6, and
+# claude-fable-5-1 before claude-fable-5, read as 5.0.
 def _number(version):
     digits = [-int(digit) for digit in DATE_SUFFIX.sub("", version["id"]).split("-")[2:] if digit.isdigit()]
     return digits + [0] * (2 - len(digits))
 
 
 def _lists(directory):
-    """Les versions de chaque liste du cache, la plus récente d'abord ; une liste illisible est ignorée."""
+    """The versions of each list in the cache, most recent list first; an unreadable list is skipped."""
     try:
         files = sorted(directory.glob("*-cc.json"), key=lambda path: path.stat().st_mtime, reverse=True)
     except OSError:

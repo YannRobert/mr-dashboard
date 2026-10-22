@@ -1,7 +1,7 @@
-"""Réponses des lectures relayées vers GitLab et Sonar, gardées quelques secondes : des onglets ou des
-navigateurs qui demandent la même adresse dans ce délai n'envoient qu'une requête, et des demandes
-simultanées attendent la même réponse au lieu d'en envoyer chacune une. Toutes passent par le même
-jeton : la réponse à une adresse ne dépend pas de qui la demande.
+"""Responses of reads relayed to GitLab and Sonar, kept for a few seconds: tabs or browsers requesting
+the same URL within that delay send only one request, and simultaneous requests wait for the same
+response instead of each sending one. All go through the same token: the response for a URL does not
+depend on who asks for it.
 """
 import threading
 import time
@@ -14,11 +14,11 @@ class RelayCache:
     def __init__(self, ttl_s=TTL_S):
         self._ttl_s = ttl_s
         self._lock = threading.Lock()
-        # adresse -> (instant monotone d'expiration, réponse)
+        # url -> (monotonic expiry time, response)
         self._entries = {}
-        # adresse -> événement de la requête en cours, que les demandes simultanées attendent
+        # url -> event of the request in progress, which simultaneous requests wait for
         self._pending = {}
-        # Compte des écritures : une réponse demandée avant la dernière n'est pas gardée.
+        # Write counter: a response requested before the latest write is not kept.
         self._generation = 0
 
     def get(
@@ -28,9 +28,9 @@ class RelayCache:
             keep,
             fresh
     ):
-        """(réponse, servie par le cache) ; load() fait la requête, keep(réponse) dit si elle se garde.
-        Les demandes arrivées pendant la requête en reçoivent la réponse, gardée ou non, ou l'exception.
-        fresh : la réponse gardée est ignorée (bouton « Rafraîchir »), la nouvelle la remplace."""
+        """(response, served from cache); load() makes the request, keep(response) says whether it is kept.
+        Requests arriving during the request get its response, kept or not, or its exception.
+        fresh: the kept response is ignored (Refresh button), the new one replaces it."""
         with self._lock:
             entry = self._entries.get(url)
             if not fresh and entry and entry[0] > time.monotonic():
@@ -52,7 +52,7 @@ class RelayCache:
         finally:
             with self._lock:
                 del self._pending[url]
-                # Une écriture faite pendant la requête a pu rendre sa réponse périmée : pas gardée.
+                # A write made during the request may have made its response stale: not kept.
                 if pending.error is None and pending.generation == self._generation and keep(pending.response):
                     now = time.monotonic()
                     self._forget(now)
@@ -61,7 +61,7 @@ class RelayCache:
         return pending.response, False
 
     def clear(self):
-        """Après une écriture : la prochaine lecture repart de GitLab."""
+        """After a write: the next read goes back to GitLab."""
         with self._lock:
             self._entries.clear()
             self._generation += 1

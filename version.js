@@ -1,9 +1,9 @@
 "use strict";
 
-// Recharge la page quand le serveur sert d'autres HTML, JS ou CSS que ceux qu'elle a chargés : un onglet
-// ouvert le matin passe de lui-même au code du jour, sans F5. Seul un serveur qui répond avec une autre
-// version recharge : injoignable, la page reste telle quelle. Le rechargement attend qu'aucune saisie ne
-// soit en cours, pour ne rien perdre de ce qui est tapé.
+// Reloads the page when the server serves HTML, JS or CSS other than what it loaded: a tab
+// opened in the morning moves to the day's code by itself, without F5. Only a server answering with another
+// version triggers a reload: unreachable, the page stays as is. The reload waits until no input is
+// in progress, so nothing being typed is lost.
 (() => {
   const CHECK_MS = 30 * 1000;
   const loaded = document.querySelector('meta[name="mr-dashboard-version"]')?.content;

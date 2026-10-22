@@ -1,21 +1,21 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<!-- Icône d'onglet : la pastille « MR » de l'en-tête, en SVG embarqué (aucune route à servir). -->
+<!-- Tab icon: the header's "MR" badge, as an embedded SVG (no route to serve). -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%234f46e5'/%3E%3Cstop offset='1' stop-color='%237c3aed'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='15' fill='url(%23g)'/%3E%3Ctext x='32' y='43' text-anchor='middle' font-family='system-ui,Segoe UI,Arial,sans-serif' font-size='30' font-weight='800' fill='%23fff'%3EMR%3C/text%3E%3C/svg%3E">
-<title>MisteR Dashboard : le dashboard des Merge Requests</title>
+<title>MisteR Dashboard: the Merge Requests dashboard</title>
 <script>
-  // Thème et taille du texte posés avant le premier rendu, pour ne pas afficher la page en clair puis la basculer
-  // en sombre, ni à une taille puis à une autre.
+  // Theme and text size set before the first render, so the page is not shown light then switched
+  // to dark, nor at one size then another.
   try {
     const textScale = Number(localStorage.getItem("mr-dashboard.textScale"));
     if (textScale) document.documentElement.style.setProperty("--text-scale", textScale);
     const theme = localStorage.getItem("mr-dashboard.theme");
     document.documentElement.dataset.theme = theme === "light" || theme === "dark" ? theme
       : matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-  } catch (ignored) { /* stockage indisponible : le script principal applique le thème du système */ }
+  } catch (ignored) { /* storage unavailable: the main script applies the system theme */ }
 </script>
 <link rel="stylesheet" href="avatars.css">
 <link rel="stylesheet" href="ai.css">
@@ -42,7 +42,7 @@
     --focus: #4f46e5;
     color-scheme: light;
   }
-  /* data-theme vaut le choix enregistré ou, à défaut, le thème du système : posé par le script de l'en-tête. */
+  /* data-theme is the saved choice or, failing that, the system theme: set by the header script. */
   :root[data-theme="dark"] {
     color-scheme: dark;
     --bg: #111217;
@@ -65,11 +65,11 @@
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 28px -10px rgba(0, 0, 0, .6);
   }
   * { box-sizing: border-box; }
-  /* Toute la page est en rem, sur une base proportionnelle à la largeur de la fenêtre : ce qui tient à 100 %
-     sur un écran tient sur tous, et reste lisible sur un grand sans zoom (13 px jusqu'en 1730, ~14 px en 1920,
-     ~19 px en 2560). A− / A+ l'ajustent, sans le zoom du navigateur qui vaut pour tout le site. */
+  /* The whole page is in rem, on a base proportional to the window width: what fits at 100%
+     on one screen fits on all, and stays readable on a large one without zoom (13 px up to 1730, ~14 px at 1920,
+     ~19 px at 2560). A− / A+ adjust it, without the browser zoom that applies to the whole site. */
   html { font-size: calc(clamp(13px, 0.75vw, 28px) * var(--text-scale, 1)); }
-  /* Plus petite taille de la page (11 px à 13 px de base) : métadonnées, libellés, commandes de l'en-tête. */
+  /* Smallest size on the page (11 px at a 13 px base): metadata, labels, header controls. */
   :root { --fs-small: 0.85rem; }
   body {
     margin: 0;
@@ -79,14 +79,14 @@
     -webkit-font-smoothing: antialiased;
   }
   a { color: var(--link); text-decoration: none; }
-  /* Sélection et barres de défilement aux couleurs de la page, pas celles du navigateur. */
+  /* Selection and scrollbars in the page's colours, not the browser's. */
   ::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); }
   html { scrollbar-color: var(--border-strong) transparent; }
   a:hover { text-decoration: underline; }
   :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
-  /* Identité et préférences d'affichage en haut, commandes d'actualisation dessous, de gauche à droite. Une
-     bande unique ne tient pas : le texte suit la largeur de la fenêtre, les commandes aussi. */
+  /* Identity and display preferences on top, refresh controls below, left to right. A single
+     band does not fit: the text follows the window width, and so do the controls. */
   header {
     display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0.5rem 1.5rem;
     padding: 0.6rem 1.2rem;
@@ -106,12 +106,12 @@
   header .header-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1.1rem; }
   header .header-row.commands { grid-column: 1 / -1; grid-row: 2; }
   header .header-row.prefs { gap: 0.5rem 0.7rem; justify-content: flex-end; }
-  /* Commandes de l'en-tête à la taille du texte du tableau : elles ne doivent pas l'emporter sur les données. */
+  /* Header controls at the table's text size: they must not outweigh the data. */
   header button { font-size: var(--fs-small); }
-  /* Le slogan sous le nom, à hauteur de la pastille « MR » : moins de place en largeur. */
+  /* The tagline under the name, level with the "MR" badge: takes less width. */
   header h1 { margin: 0; display: flex; flex-direction: column; font-size: 1.4rem; font-weight: 700; letter-spacing: -0.01em; }
   header h1 .name { font-size: 1rem; line-height: 1.15; }
-  /* Le M et le R de « MisteR » reprennent la couleur des boutons principaux. */
+  /* The M and R of "MisteR" use the colour of the primary buttons. */
   header h1 .initial { font-weight: inherit; color: var(--accent); }
   header h1 .tagline { font-size: var(--fs-small); font-weight: 500; color: var(--muted); letter-spacing: 0; }
   .summary-bar .project {
@@ -119,22 +119,22 @@
     border: 1px solid var(--border); border-radius: 999px; padding: 0.1em 0.6em;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
-  /* Trois zones distinctes, séparées par un filet : état des données, commandes d'actualisation, langue. */
+  /* Three distinct zones, separated by a rule: data state, refresh controls, language. */
   header .divider { width: 1px; align-self: stretch; background: var(--border); }
   header .status { display: flex; align-items: center; gap: 0.6rem; }
-  /* Hauteur réservée pour trois lignes (heure, date, progression ou échec) : sans elle, la ligne de
-     progression apparue au rafraîchissement agrandissait l'en-tête et décalait toute la page. */
+  /* Height reserved for three lines (time, date, progress or failure): without it, the progress
+     line appearing on refresh grew the header and shifted the whole page. */
   header .meta { color: var(--muted); font-size: var(--fs-small); text-align: left; line-height: 1.35; min-height: calc(3 * 1.35em); min-width: 34ch; font-variant-numeric: tabular-nums; }
   header .meta > span { display: block; white-space: nowrap; }
   header .meta .progress { color: var(--accent); }
   header .meta .failed { color: var(--orange-fg); font-weight: 600; }
   header .git-fetch-control { display: inline-flex; align-items: center; gap: 0.7rem; }
   header .git-fetch-control[hidden] { display: none; }
-  /* Largeur réservée au plus long des états : le texte qui change ne décale pas les boutons voisins. */
+  /* Width reserved for the longest state: changing text does not shift the neighbouring buttons. */
   header .git-fetch-status { color: var(--muted); font-size: var(--fs-small); line-height: 1.35; white-space: nowrap; min-width: 26ch; font-variant-numeric: tabular-nums; }
   header .git-fetch-status.running { color: var(--accent); }
   header .git-fetch-status.failed { color: var(--red-fg); font-weight: 600; }
-  /* Charge mise sur GitLab, comme un load average : requêtes du serveur sur 1, 5 et 15 min. */
+  /* Load put on GitLab, like a load average: server requests over 1, 5 and 15 min. */
   header .request-stats { position: relative; }
   header .request-stats[hidden] { display: none; }
   .load-btn {
@@ -155,12 +155,12 @@
   .load-panel[hidden] { display: none; }
   header .sound-test { position: relative; display: inline-flex; }
   header .sound-test[hidden] { display: none; }
-  /* Une colonne par groupe de sons, côte à côte tant que la fenêtre les tient, sans dépasser l'écran. */
+  /* One column per sound group, side by side while the window fits them, without overflowing the screen. */
   .sound-panel {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 0.8rem 1rem; align-items: start;
     width: min(50rem, calc(100vw - 2rem)); max-height: calc(100vh - 6rem); overflow-y: auto;
   }
-  /* Fenêtre étroite : ancré au bouton, le panneau déborderait à gauche ; il se cale sur la fenêtre. */
+  /* Narrow window: anchored to the button, the panel would overflow on the left; it snaps to the window. */
   @media (max-width: 75rem) {
     .sound-panel { position: fixed; top: 6rem; left: 1rem; right: 1rem; width: auto; max-height: calc(100vh - 7rem); }
   }
@@ -195,9 +195,9 @@
     display: inline-flex; gap: 0.4em; align-items: center; color: var(--muted); font-size: var(--fs-small); cursor: pointer;
   }
   header label.auto input { accent-color: var(--accent); width: 0.8rem; height: 0.8rem; margin: 0; cursor: pointer; }
-  /* Fraîcheur des données : 5 segments, un par minute, qui s'éteignent jusqu'à la prochaine actualisation
-     auto ; vert jusqu'à 2 min, rouge à 4 min. Animation CSS pure, relancée à chaque actualisation : aucun
-     calcul pendant l'attente. */
+  /* Data freshness: 5 segments, one per minute, fading out until the next auto refresh;
+     green up to 2 min, red at 4 min. Pure CSS animation, restarted on each refresh: no
+     computation while waiting. */
   header .refresh-controls { position: relative; }
   .freshness { position: absolute; left: 0.6rem; right: 0.6rem; bottom: 2px; height: 3px; display: flex; gap: 3px; pointer-events: none; }
   .freshness[hidden], header label.auto[hidden] { display: none; }
@@ -256,8 +256,8 @@
   }
   .filters label.check:hover { background: var(--surface-2); }
   .filters input[type=checkbox] { accent-color: var(--accent); width: 1em; height: 1em; }
-  /* Filtres de personnes : un select natif n'affiche que du texte, la pastille y fait reconnaître chacun
-     d'un coup d'œil. */
+  /* People filters: a native select shows only text, the badge makes each person recognisable
+     at a glance. */
   .people-filter { position: relative; }
   .filters .people-button {
     display: inline-flex; align-items: center; gap: 0.45em; cursor: pointer; padding-right: 1.8em;
@@ -277,8 +277,8 @@
   .people-list li:hover, .people-list li:focus { outline: none; background: var(--surface-2); }
   .people-list li[aria-selected="true"] { font-weight: 600; }
   .people-filter .avatar { width: 1.6em; height: 1.6em; font-size: 0.62rem; }
-  /* Auteurs : toujours visibles. Un clic isole toujours l'auteur (re-cliquer l'auteur isolé revient à « Tous ») ;
-     Ctrl ou Maj + clic l'ajoute ou le retire. */
+  /* Authors: always visible. A click always isolates the author (clicking the isolated author again goes back to "All");
+     Ctrl or Shift + click adds or removes it. */
   .author-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem; }
   .author-chip {
     display: inline-flex; align-items: center; gap: 0.4em; font: inherit; font-size: 0.85rem; color: var(--muted);
@@ -292,11 +292,11 @@
     background: color-mix(in srgb, var(--accent) 14%, var(--surface));
     border-color: color-mix(in srgb, var(--accent) 45%, transparent);
   }
-  /* Le nom réserve sa largeur en gras : cocher une puce ne déplace pas ses voisines. */
+  /* The name reserves its bold width: checking a chip does not move its neighbours. */
   .author-chip .name { display: inline-flex; flex-direction: column; }
   .author-chip .name::after { content: attr(data-text); font-weight: 600; height: 0; overflow: hidden; visibility: hidden; }
   .author-chip .avatar { width: 1.6em; height: 1.6em; font-size: 0.62rem; }
-  /* Sélection partielle : les auteurs écartés s'effacent, sans disparaître. */
+  /* Partial selection: excluded authors fade out, without disappearing. */
   .author-chip[aria-pressed="false"] .avatar { opacity: 0.45; }
   .author-chip .count { font-variant-numeric: tabular-nums; font-weight: 400; color: var(--muted); font-size: 0.78rem; }
   .author-chip.all { padding-left: 0.6em; }
@@ -324,8 +324,8 @@
   .stat.alert b { color: var(--orange-fg); }
   .stat.loading { border-style: dashed; }
 
-  /* Pas d'overflow ici : il ferait du conteneur l'ancêtre de défilement des en-têtes collants, qui
-     défileraient alors avec la page. Sous 1366 px, où le tableau ne tient plus, voir la media query de fin. */
+  /* No overflow here: it would make the container the scroll ancestor of the sticky headers, which
+     would then scroll with the page. Below 1366 px, where the table no longer fits, see the final media query. */
   .table-wrap { padding: 0 1.2rem 1.2rem; }
   .merged-more { margin: -0.6rem 1.2rem 1.2rem; text-align: center; font-size: 0.9rem; }
   .merged-more[hidden] { display: none; }
@@ -338,13 +338,13 @@
     padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--border);
     text-align: center; vertical-align: middle;
   }
-  /* Valeurs centrées comme leurs en-têtes, sauf le titre de la MR : un texte long se lit à gauche. */
+  /* Values centred like their headers, except the MR title: long text reads from the left. */
   table.mrs td.mr-cell { text-align: left; }
   table.mrs tbody tr:last-child td { border-bottom: 0; }
   table.mrs tbody tr { transition: background .12s; }
   table.mrs tbody tr:hover td { background: var(--surface-2); }
   table.mrs tbody tr:hover td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
-  /* Alerte laissée en plan : toute la ligne en rouge. */
+  /* Alert left unattended: the whole row in red. */
   table.mrs tbody tr.stalled td { background: var(--red-bg); }
   table.mrs tbody tr.stalled td:first-child { box-shadow: inset 3px 0 0 var(--red-dot); }
   .commit-mood { margin-left: 0.3em; cursor: help; }
@@ -353,19 +353,19 @@
     position: sticky; z-index: 1; background: var(--surface);
     font-size: var(--fs-small); font-weight: 600; color: var(--muted); white-space: nowrap;
   }
-  /* Capitales pour les groupes seuls : les titres de colonnes, en minuscules, restent étroits et lisibles. */
+  /* Capitals for groups only: column titles, in lower case, stay narrow and readable. */
   table.mrs thead tr.groups th { text-transform: uppercase; }
-  /* Deux lignes d'en-tête collantes : la seconde se colle sous la première, de hauteur fixe. */
+  /* Two sticky header rows: the second sticks under the first, with a fixed height. */
   table.mrs thead tr.groups th { top: 0; height: 2rem; padding-top: 0.35rem; padding-bottom: 0.1rem; border-bottom: 0; }
-  /* Libellés centrés, sur deux lignes à coupure fixe (\n dans la traduction) pour les plus longs :
-     la colonne n'est plus élargie par son en-tête. Padding réduit pour que la ligne d'en-tête ne
-     grandisse que d'une demi-ligne. */
+  /* Centred labels, on two lines with a fixed break (\n in the translation) for the longest ones:
+     the column is no longer widened by its header. Reduced padding so the header row only
+     grows by half a line. */
   table.mrs thead tr.columns th { top: 2rem; text-align: center; padding-top: 0.4rem; padding-bottom: 0.4rem; line-height: 1.2; }
   table.mrs thead tr.columns th button { justify-content: center; }
-  /* Pendant de la place réservée à la flèche de tri, à droite : le libellé reste au centre exact. */
+  /* Counterpart of the space reserved for the sort arrow, on the right: the label stays exactly centred. */
   table.mrs thead tr.columns th button::before { content: ""; font-size: 0.8em; min-width: 0.8em; }
   table.mrs thead tr.columns th .col-label { text-align: center; }
-  /* Titre de la colonne MR aligné à gauche, comme les titres qu'elle contient. */
+  /* MR column title aligned left, like the titles it contains. */
   table.mrs thead tr.columns th:first-child { text-align: left; }
   table.mrs thead tr.columns th:first-child button { justify-content: flex-start; }
   table.mrs thead tr.groups th:first-child { border-top-left-radius: 0.8rem; }
@@ -392,10 +392,10 @@
   .running-note { font-size: var(--fs-small); color: var(--muted); text-decoration: none; }
   .running-note::before { content: "⟳ "; }
   .running-note:hover { color: var(--text); text-decoration: underline; }
-  /* « En cours » s'écrit une fois, dans la colonne Pipeline ; les autres colonnes n'en gardent que l'icône. */
+  /* "Running" is written once, in the Pipeline column; the other columns keep only the icon. */
   .running-note.icon-only::before { content: "⟳"; }
-  /* Issues et couverture Sonar viennent du même job : un seul ⟳, à cheval sur la jonction des deux
-     cellules, relié par un trait à chacune — les deux valeurs arriveront ensemble. */
+  /* Sonar issues and coverage come from the same job: a single ⟳, straddling the boundary of the two
+     cells, linked to each by a line — both values will arrive together. */
   table.mrs td.signal:has(.sonar-join) { position: relative; }
   .sonar-join { display: block; height: 1em; }
   .sonar-join::after {
@@ -407,23 +407,23 @@
   .sonar-join .running-note {
     position: absolute; right: 0; bottom: 0.35rem; transform: translateX(50%); z-index: 1; line-height: 1;
   }
-  /* Avancement estimé d'un pipeline en cours : un trait de 2 px sous « En cours », sans place en plus. */
+  /* Estimated progress of a running pipeline: a 2 px line under "Running", taking no extra space. */
   .progress-underline {
     padding-bottom: 2px;
     background:
       linear-gradient(var(--accent), var(--accent)) 0 100% / var(--progress) 2px no-repeat,
       linear-gradient(var(--progress-track), var(--progress-track)) 0 100% / 100% 2px no-repeat;
-    /* Dérivé du texte atténué, pas d'un fond : le reste à parcourir se voit dans les deux thèmes. */
+    /* Derived from the muted text, not a background: the remaining part shows in both themes. */
     --progress-track: color-mix(in srgb, var(--muted) 40%, transparent);
   }
   .progress-underline.overdue {
     background: linear-gradient(var(--orange-fg), var(--orange-fg)) 0 100% / 100% 2px no-repeat;
   }
 
-  /* Toute la largeur que les autres colonnes laissent : ses deux lignes y tiennent sans retour à la ligne. */
+  /* All the width the other columns leave: its two lines fit without wrapping. */
   .mr-cell { min-width: 22rem; width: 100%; }
-  /* Titre sur une seule ligne, sans peser sur la largeur de la colonne (contain) : réduit par fitTitles,
-     puis tronqué par « … » s'il ne tient toujours pas ; complet au survol. */
+  /* Title on a single line, without weighing on the column width (contain): shrunk by fitTitles,
+     then truncated with "…" if it still does not fit; full text on hover. */
   .mr-cell .title { display: flex; align-items: baseline; gap: 6px; contain: inline-size; font-weight: 600; font-size: 1.05rem; line-height: 1.35; }
   .mr-cell .title a { flex: 0 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--text); }
   .mr-cell .title > :not(a) { flex: none; }
@@ -433,7 +433,7 @@
     color: var(--grey-fg); background: var(--grey-bg); border: 1px dashed var(--border-strong);
     border-radius: 4px; padding: 1px 6px; vertical-align: 2px;
   }
-  /* Une seule ligne, tronquée en fin de branches : le diffstat passe avant elles pour rester visible. */
+  /* A single line, truncated at the end of the branches: the diffstat comes before them to stay visible. */
   .mr-cell .sub { color: var(--muted); font-size: 0.85rem; margin-top: 0.2rem; contain: inline-size; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .mr-cell .sub .iid { font-weight: 600; color: var(--accent); }
   .mr-cell .sub code {
@@ -445,21 +445,21 @@
   .mr-cell .sub .diffstat .del { color: var(--red-fg); font-weight: 600; }
   .mr-cell .labels { margin-top: 0.35rem; }
 
-  /* Bloc pleine largeur calé à gauche malgré le centrage des cellules : pastilles alignées d'une ligne à
-     l'autre, et noms alignés sur un même bord juste après elles. */
+  /* Full-width block aligned left despite the centred cells: badges aligned from one row to
+     the next, and names aligned on the same edge right after them. */
   .author { display: flex; align-items: center; gap: 0.5em; white-space: nowrap; text-align: left; }
-  /* Prénom et nom sur deux lignes, coupés au premier espace : la colonne n'a que la largeur du plus long. */
+  /* First and last name on two lines, split at the first space: the column is only as wide as the longest. */
   .author .author-name { display: flex; flex-direction: column; font-size: 0.85rem; line-height: 1.2; }
-  /* Nom en plus petit : le prénom suffit à reconnaître, le nom complet reste lisible sur une capture. */
+  /* Last name smaller: the first name is enough to recognise, the full name stays readable on a screenshot. */
   .author .author-name > span + span { color: var(--muted); }
 
   .ok { color: var(--muted); }
-  /* Valeur saine en texte ordinaire : la couleur est réservée aux écarts, qui ressortent sans concurrence. */
+  /* Healthy value in ordinary text: colour is reserved for deviations, which stand out without competition. */
   .ok.good { color: var(--text); }
   .muted { color: var(--muted); }
 .local { color: var(--muted); font-style: italic; }
   .late-orange { color: var(--orange-fg); font-weight: 600; }
-  /* Repère toujours affiché : à la plus petite taille de la page, pas en dessous. */
+  /* Marker always shown: at the page's smallest size, not below. */
   .behind-unit { color: var(--muted); font-size: var(--fs-small); line-height: 1.1; }
   .labels { display: flex; flex-wrap: wrap; gap: 4px; }
   .label {
@@ -467,24 +467,24 @@
     background: var(--blue-bg); color: var(--blue-fg); border: 0; cursor: pointer;
   }
   .label:hover { filter: brightness(0.96); }
-  /* Pastille d'état entière : seul le titre se raccourcit. */
+  /* Whole status badge: only the title gets shortened. */
   .mr-cell .title .pill { flex: none; font-size: var(--fs-small); font-weight: 600; }
   .actions-cell .actions { display: flex; flex-direction: column; align-items: stretch; gap: 0.2rem; }
-  /* Actions sur la MR (diff, commentaires, AI) : boutons discrets, les signaux restent ce qui attire l'œil. */
+  /* Actions on the MR (diff, comments, AI): discreet buttons, the signals remain what catches the eye. */
   .mr-action { flex: none; white-space: nowrap; font-size: 0.85rem; font-weight: 600; padding: 0.15em 0.7em; color: var(--muted); }
   .mr-action:hover { color: var(--text); border-color: var(--faint); }
-  /* Liseré rouge : sa seule présence signale une MR qui a quelque chose à corriger. */
+  /* Red border: its mere presence flags an MR that has something to fix. */
   .mr-action.ai.to-fix { color: var(--text); border: 1px solid var(--red-fg); }
   .mr-action.ai.to-fix:hover { border-color: var(--red-fg); background: var(--red-bg); }
   .mr-action.placeholder { visibility: hidden; }
   .actions-row { display: flex; gap: 0.2rem; }
-  /* Diff et commentaires : deux cases de même taille, pictogramme centré. */
+  /* Diff and comments: two boxes of the same size, icon centred. */
   .actions-row > .mr-action { flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center; min-height: 1.7em; padding: 0; }
   a.mr-action { text-decoration: none; border: 1px solid var(--border-strong); border-radius: 0.5rem; background: var(--surface); text-align: center; }
   button.icon-button { padding-inline: 0.55em; line-height: 1; }
   button.anonymize[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
-  /* Activité des commits, au survol du nombre de commits : courbe cumulée et commentaires. Volet ancré
-     dans le coin bas droit de la fenêtre, pour ne jamais recouvrir la ligne de la MR survolée. */
+  /* Commit activity, on hovering the commit count: cumulative curve and comments. Panel anchored
+     in the bottom-right corner of the window, so it never covers the hovered MR's row. */
   .commit-activity {
     position: fixed; z-index: 50; right: 1rem; bottom: calc(var(--dock-height, 0px) + 1rem); width: min(44rem, calc(100vw - 2rem)); max-height: 60vh; overflow: auto;
     padding: 0.8rem 1rem 1rem; background: var(--surface); color: var(--text);
@@ -540,11 +540,11 @@
     background: var(--red-bg); color: var(--red-fg); border: 1px solid color-mix(in srgb, var(--red-fg) 25%, transparent);
   }
   table.mrs td.empty { padding: 3rem 1.5rem; color: var(--muted); text-align: center; }
-  /* Sans ligne, la colonne MR garderait la largeur de son seul titre. */
+  /* Without a row, the MR column would keep the width of its title alone. */
   table.mrs:has(td.empty) thead tr.columns th:first-child { width: 30%; }
 
-  /* Dernier pipeline de la branche suivie, en barre ancrée au bas de la fenêtre : visible quel que soit
-     le nombre de MR. Repliée, une ligne ; dépliée, stages reliés comme dans GitLab, jobs listés sous chacun. */
+  /* Latest pipeline of the tracked branch, as a bar anchored at the bottom of the window: visible whatever
+     the number of MRs. Collapsed, one line; expanded, stages linked as in GitLab, jobs listed under each. */
   body { padding-bottom: var(--dock-height, 0px); }
   .branch-pipeline {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
@@ -552,7 +552,7 @@
     box-shadow: 0 -0.3rem 1.2rem rgb(0 0 0 / 0.12);
   }
   .branch-pipeline[hidden] { display: none; }
-  /* Pipeline en échec : la barre entière en rouge, pour qu'une branche cassée se voie sans la chercher. */
+  /* Failed pipeline: the whole bar in red, so a broken branch shows without looking for it. */
   .branch-pipeline.failed { border-top: 2px solid var(--red-dot); }
   .branch-pipeline.failed .bp-bar { background: var(--red-bg); }
   .bp-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 1.2rem; padding: 0.45rem 1.2rem; cursor: pointer; }
@@ -586,8 +586,8 @@
   .bp-head .bp-commit { font-weight: 600; color: var(--text); }
   .bp-head .muted, .bp-head code { color: var(--muted); }
   .bp-history { display: inline-flex; align-items: stretch; gap: 0.35rem; position: relative; }
-  /* Survol : le même SVG agrandi en surimpression (vectoriel, donc net), sans rien ajouter au DOM, vers le haut :
-     la barre est au bas de la fenêtre. */
+  /* Hover: the same SVG enlarged as an overlay (vector, hence sharp), adding nothing to the DOM, upwards:
+     the bar is at the bottom of the window. */
   .bp-history-bars {
     color: var(--accent); stroke: currentColor; stroke-width: 1; overflow: visible;
     background: var(--surface); border-radius: 2px;
@@ -607,7 +607,7 @@
   .bp-stages { display: flex; list-style: none; margin: 0.9rem 0 0; padding: 0; }
   .bp-stage { min-width: 8.5rem; padding-right: 1.2rem; }
   .bp-stage-head { display: flex; align-items: center; gap: 0.4em; font-weight: 600; margin-bottom: 0.4rem; }
-  /* Trait vers le stage suivant, à hauteur de l'icône du stage. */
+  /* Line to the next stage, level with the stage icon. */
   .bp-stage:not(:last-child) .bp-stage-head::after {
     content: ""; flex: 1; height: 2px; background: var(--border-strong); margin-right: -1.2rem;
   }
@@ -624,13 +624,13 @@
   .bp-icon.red { color: var(--red-dot); }
   .bp-icon.blue { color: var(--link); }
   .bp-icon.grey { color: var(--grey-dot); }
-  /* Le texte ne descend pas sous 13 px (cf. html) : sous 1730 px, les cellules se resserrent pour que le
-     tableau tienne jusqu'en 1366. */
+  /* Text does not go below 13 px (see html): below 1730 px, cells tighten so the
+     table fits down to 1366. */
   @media (max-width: 1729px) {
     table.mrs th, table.mrs td { padding-left: 0.3rem; padding-right: 0.3rem; }
   }
-  /* En deçà, le tableau défile dans son cadre plutôt que d'entraîner toute la page de côté ; ses en-têtes
-     cessent alors de coller en haut de la fenêtre. */
+  /* Below that, the table scrolls within its frame rather than dragging the whole page sideways; its headers
+     then stop sticking to the top of the window. */
   @media (max-width: 1365px) {
     .table-wrap { overflow-x: auto; }
   }
@@ -648,23 +648,23 @@
 <header>
   <div class="identity">
     <span class="brand" aria-hidden="true" title="MisteR = MR">MR</span>
-    <h1><span class="name"><b class="initial">M</b>iste<b class="initial">R</b> Dashboard</span> <span class="tagline" data-i18n="tagline">Le dashboard très rapide des Merge Requests</span></h1>
+    <h1><span class="name"><b class="initial">M</b>iste<b class="initial">R</b> Dashboard</span> <span class="tagline" data-i18n="tagline">Very Fast Merge Requests Dashboard</span></h1>
   </div>
   <div class="header-row commands">
     <div class="status" role="status" aria-live="polite">
       <span class="meta" id="refreshed"></span>
     </div>
     <span class="divider" aria-hidden="true"></span>
-    <div class="refresh-controls" role="group" aria-label="Actualisation" data-i18n-aria-label="refresh.group">
-      <label class="auto" id="autoRefresh-control" data-i18n-title="autoRefresh.title"><input type="checkbox" id="autoRefresh" checked autocomplete="off"> <span data-i18n="autoRefresh">Actualisation auto</span></label>
-      <button id="refresh" type="button" class="primary" data-i18n="refresh">Rafraîchir</button>
+    <div class="refresh-controls" role="group" aria-label="Refresh" data-i18n-aria-label="Refresh">
+      <label class="auto" id="autoRefresh-control" data-i18n-title="autoRefresh.title"><input type="checkbox" id="autoRefresh" checked autocomplete="off"> <span data-i18n="autoRefresh">Auto-refresh</span></label>
+      <button id="refresh" type="button" class="primary" data-i18n="refresh">Refresh</button>
       <div class="freshness" id="freshness" hidden aria-hidden="true"></div>
     </div>
     <span class="divider" aria-hidden="true"></span>
     <div class="git-fetch-control" id="git-fetch-control" hidden>
       <span class="git-fetch-status" id="git-fetch-status" role="status" aria-live="polite"></span>
-      <div class="refresh-controls" role="group" aria-label="Fetch du dépôt local" data-i18n-aria-label="gitFetch.group">
-        <label class="auto" data-i18n-title="gitFetch.autoTitle"><input type="checkbox" id="git-fetch-auto" checked autocomplete="off"> <span data-i18n="gitFetch.auto">Fetch auto</span></label>
+      <div class="refresh-controls" role="group" aria-label="Local repository fetch" data-i18n-aria-label="Local repository fetch">
+        <label class="auto" data-i18n-title="gitFetch.autoTitle"><input type="checkbox" id="git-fetch-auto" checked autocomplete="off"> <span data-i18n="gitFetch.auto">Auto-fetch</span></label>
         <button type="button" id="git-fetch" class="primary" data-i18n-title="gitFetch.title">git fetch</button>
         <div class="freshness" id="git-fetch-freshness" hidden aria-hidden="true"></div>
       </div>
@@ -676,23 +676,23 @@
     </div>
     <span class="divider" id="request-stats-divider" aria-hidden="true" hidden></span>
     <label class="auto" id="notify-control" data-i18n-title="notify.title"><input type="checkbox" id="notify" autocomplete="off"> <span data-i18n="notify">Notifications</span></label>
-    <label class="auto" id="sound-control" data-i18n-title="sound.title"><input type="checkbox" id="sound" autocomplete="off"> <span data-i18n="sound">Sons</span></label>
+    <label class="auto" id="sound-control" data-i18n-title="sound.title"><input type="checkbox" id="sound" autocomplete="off"> <span data-i18n="sound">Sounds</span></label>
     <div class="sound-test" id="sound-test">
-      <button type="button" id="sound-test-button" class="icon-button" aria-expanded="false" aria-controls="sound-panel" aria-label="Écouter les sons" data-i18n-aria-label="soundTest" data-i18n-title="soundTest"><span aria-hidden="true">🔊</span></button>
+      <button type="button" id="sound-test-button" class="icon-button" aria-expanded="false" aria-controls="sound-panel" aria-label="Listen to the sounds, to check you like them and they play on the right device" data-i18n-aria-label="Listen to the sounds, to check you like them and they play on the right device" data-i18n-title="soundTest"><span aria-hidden="true">🔊</span></button>
       <div class="load-panel sound-panel" id="sound-panel" hidden>
         <section class="sound-group">
-        <h4 data-i18n="soundTest.positive">Bonnes nouvelles</h4>
-        <button type="button" data-sound="merged"><span aria-hidden="true">🔀</span><b data-i18n="soundTest.merged">Arpège</b><small data-i18n="soundTest.mergedWhen"></small></button>
-        <button type="button" data-sound="bell"><span aria-hidden="true">🔔</span><b data-i18n="soundTest.bell">Cloche</b><small data-i18n="soundTest.bellWhen"></small></button>
+        <h4 data-i18n="soundTest.positive">Good news</h4>
+        <button type="button" data-sound="merged"><span aria-hidden="true">🔀</span><b data-i18n="soundTest.merged">Arpeggio</b><small data-i18n="soundTest.mergedWhen"></small></button>
+        <button type="button" data-sound="bell"><span aria-hidden="true">🔔</span><b data-i18n="soundTest.bell">Bar bell</b><small data-i18n="soundTest.bellWhen"></small></button>
         <button type="button" data-sound="ding"><span aria-hidden="true">🎵</span><b data-i18n="soundTest.ding">Ding</b><small data-i18n="soundTest.dingWhen"></small></button>
         </section>
         <section class="sound-group">
-        <h4 data-i18n="soundTest.negative">Mauvaises nouvelles</h4>
-        <button type="button" data-sound="broken"><span aria-hidden="true">🔴</span><b data-i18n="soundTest.broken">Sirène</b><small data-i18n="soundTest.brokenWhen"></small></button>
-        <button type="button" data-sound="alert"><span aria-hidden="true">⚠</span><b data-i18n="soundTest.alert">Alerte</b><small data-i18n="soundTest.alertWhen"></small></button>
+        <h4 data-i18n="soundTest.negative">Bad news</h4>
+        <button type="button" data-sound="broken"><span aria-hidden="true">🔴</span><b data-i18n="soundTest.broken">Siren</b><small data-i18n="soundTest.brokenWhen"></small></button>
+        <button type="button" data-sound="alert"><span aria-hidden="true">⚠</span><b data-i18n="soundTest.alert">Alert</b><small data-i18n="soundTest.alertWhen"></small></button>
         </section>
         <section class="sound-group">
-        <h4 data-i18n="soundTest.actions">Tes actions</h4>
+        <h4 data-i18n="soundTest.actions">Your actions</h4>
         <button type="button" data-sound="orcaOrdered"><span aria-hidden="true">📻</span><b data-i18n="soundTest.orcaOrdered"></b><small data-i18n="soundTest.orcaOrderedWhen"></small></button>
         <button type="button" data-sound="orcaLaunched"><span aria-hidden="true">🎖</span><b data-i18n="soundTest.orcaLaunched"></b><small data-i18n="soundTest.orcaLaunchedWhen"></small></button>
         <button type="button" data-sound="orcaUnreachable"><span aria-hidden="true">📵</span><b data-i18n="soundTest.orcaUnreachable"></b><small data-i18n="soundTest.orcaUnreachableWhen"></small></button>
@@ -704,54 +704,54 @@
     </div>
   </div>
   <div class="header-row prefs">
-    <div class="lang-switch" role="group" aria-label="Langue" data-i18n-aria-label="lang.group">
+    <div class="lang-switch" role="group" aria-label="Language" data-i18n-aria-label="Language">
       <button type="button" data-lang="fr" lang="fr" title="Français">FR</button>
       <button type="button" data-lang="en" lang="en" title="English">EN</button>
     </div>
-    <div class="lang-switch theme-switch" role="group" aria-label="Thème" data-i18n-aria-label="theme.group">
-      <button type="button" data-theme-choice="light" aria-label="Clair" data-i18n-aria-label="theme.light" data-i18n-title="theme.light"><span aria-hidden="true">☀</span></button>
-      <button type="button" data-theme-choice="dark" aria-label="Sombre" data-i18n-aria-label="theme.dark" data-i18n-title="theme.dark"><span aria-hidden="true">☾</span></button>
+    <div class="lang-switch theme-switch" role="group" aria-label="Theme" data-i18n-aria-label="Theme">
+      <button type="button" data-theme-choice="light" aria-label="Light theme" data-i18n-aria-label="Light theme" data-i18n-title="theme.light"><span aria-hidden="true">☀</span></button>
+      <button type="button" data-theme-choice="dark" aria-label="Dark theme" data-i18n-aria-label="Dark theme" data-i18n-title="theme.dark"><span aria-hidden="true">☾</span></button>
     </div>
-    <div class="lang-switch text-size" role="group" aria-label="Taille du texte" data-i18n-aria-label="textSize.group" data-i18n-title="textSize.title">
-      <button type="button" data-text-step="-1" aria-label="Texte plus petit" data-i18n-aria-label="textSize.smaller">A−</button>
+    <div class="lang-switch text-size" role="group" aria-label="Text size" data-i18n-aria-label="Text size" data-i18n-title="textSize.title">
+      <button type="button" data-text-step="-1" aria-label="Smaller text" data-i18n-aria-label="Smaller text">A−</button>
       <output id="text-scale"></output>
-      <button type="button" data-text-step="1" aria-label="Texte plus grand" data-i18n-aria-label="textSize.larger">A+</button>
+      <button type="button" data-text-step="1" aria-label="Larger text" data-i18n-aria-label="Larger text">A+</button>
     </div>
     <span class="divider" aria-hidden="true"></span>
-    <button type="button" class="icon-button anonymize" data-anonymize aria-pressed="false" aria-label="Anonymiser" data-i18n-aria-label="anonymize" data-i18n-title="anonymize.title"><span aria-hidden="true">🕶</span></button>
-    <button type="button" id="clear-storage" class="icon-button" aria-label="Effacer les données locales" data-i18n-aria-label="clearStorage" data-i18n-title="clearStorage.title"><span aria-hidden="true">🧹</span></button>
+    <button type="button" class="icon-button anonymize" data-anonymize aria-pressed="false" aria-label="Anonymize" data-i18n-aria-label="Anonymize" data-i18n-title="anonymize.title"><span aria-hidden="true">🕶</span></button>
+    <button type="button" id="clear-storage" class="icon-button" aria-label="Clear local data" data-i18n-aria-label="Clear local data" data-i18n-title="clearStorage.title"><span aria-hidden="true">🧹</span></button>
   </div>
 </header>
 
 <div class="filters">
-  <input type="search" id="q" placeholder="Rechercher : titre, !iid, branche, ticket…" aria-label="Recherche"
-         data-i18n-placeholder="search.placeholder" data-i18n-aria-label="search.aria">
-  <select id="period" aria-label="Période de merge" data-i18n-aria-label="filter.period" hidden>
-    <option value="7" data-i18n="period.7">Mergées ces 7 derniers jours</option>
-    <option value="30" data-i18n="period.30">Mergées ces 30 derniers jours</option>
-    <option value="90" data-i18n="period.90">Mergées ces 90 derniers jours</option>
-    <option value="all" data-i18n="period.all">Toutes les MR mergées</option>
+  <input type="search" id="q" placeholder="Search: title, !iid, branch, ticket… (comma = or)" aria-label="Search"
+         data-i18n-placeholder="Search: title, !iid, branch, ticket… (comma = or)" data-i18n-aria-label="Search">
+  <select id="period" aria-label="Merge period" data-i18n-aria-label="Merge period" hidden>
+    <option value="7" data-i18n="period.7">Merged in the last 7 days</option>
+    <option value="30" data-i18n="period.30">Merged in the last 30 days</option>
+    <option value="90" data-i18n="period.90">Merged in the last 90 days</option>
+    <option value="all" data-i18n="period.all">All merged MRs</option>
   </select>
-  <!-- Rangés du plus utile au moins utile. -->
-  <div class="author-chips" id="author-chips" role="group" aria-label="Auteur" data-i18n-aria-label="filter.author"></div>
-  <select id="target" aria-label="Branche cible" data-i18n-aria-label="filter.target"></select>
-  <select id="draft" aria-label="Draft" data-i18n-aria-label="filter.draft">
-    <option value="" data-i18n="filter.draftAll">Draft : toutes</option>
-    <option value="no" data-i18n="filter.draftNo">Hors Draft</option>
-    <option value="yes" data-i18n="filter.draftYes">Draft seules</option>
+  <!-- Ordered from most to least useful. -->
+  <div class="author-chips" id="author-chips" role="group" aria-label="Author" data-i18n-aria-label="Author"></div>
+  <select id="target" aria-label="Target branch" data-i18n-aria-label="Target branch"></select>
+  <select id="draft" aria-label="Draft" data-i18n-aria-label="Draft">
+    <option value="" data-i18n="filter.draftAll">Draft: all</option>
+    <option value="no" data-i18n="filter.draftNo">Non-draft</option>
+    <option value="yes" data-i18n="filter.draftYes">Draft only</option>
   </select>
-  <label class="check" id="alerts-control"><input type="checkbox" id="alerts"> <span data-i18n="filter.alerts">Avec alertes seulement</span></label>
+  <label class="check" id="alerts-control"><input type="checkbox" id="alerts"> <span data-i18n="filter.alerts">With alerts only</span></label>
   <div class="people-filter" data-people="reviewer">
-    <button type="button" class="people-button" aria-haspopup="listbox" aria-expanded="false" aria-label="Reviewer" data-i18n-aria-label="filter.reviewer"></button>
-    <ul class="people-list" role="listbox" aria-label="Reviewer" data-i18n-aria-label="filter.reviewer" hidden></ul>
+    <button type="button" class="people-button" aria-haspopup="listbox" aria-expanded="false" aria-label="Reviewer" data-i18n-aria-label="Reviewer"></button>
+    <ul class="people-list" role="listbox" aria-label="Reviewer" data-i18n-aria-label="Reviewer" hidden></ul>
   </div>
   <div class="people-filter" data-people="assignee">
-    <button type="button" class="people-button" aria-haspopup="listbox" aria-expanded="false" aria-label="Assignee" data-i18n-aria-label="filter.assignee"></button>
-    <ul class="people-list" role="listbox" aria-label="Assignee" data-i18n-aria-label="filter.assignee" hidden></ul>
+    <button type="button" class="people-button" aria-haspopup="listbox" aria-expanded="false" aria-label="Assignee" data-i18n-aria-label="Assignee"></button>
+    <ul class="people-list" role="listbox" aria-label="Assignee" data-i18n-aria-label="Assignee" hidden></ul>
   </div>
-  <select id="label" aria-label="Ajouter un label au filtre" data-i18n-aria-label="filter.label"></select>
+  <select id="label" aria-label="Add a label to the filter" data-i18n-aria-label="Add a label to the filter"></select>
   <div class="active-labels" id="activeLabels"></div>
-  <button type="button" class="reset-filters" id="reset-filters" data-i18n="filter.reset">Réinitialiser les filtres</button>
+  <button type="button" class="reset-filters" id="reset-filters" data-i18n="filter.reset">Reset filters</button>
 </div>
 
 
@@ -761,9 +761,9 @@
 
 <div id="errors"></div>
 <div class="summary-bar">
-  <div class="view-switch" role="group" aria-label="Vue" data-i18n-aria-label="view.group">
-    <button type="button" data-view="open" data-i18n="view.open">Ouvertes</button>
-    <button type="button" data-view="merged" data-i18n="view.merged">Mergées</button>
+  <div class="view-switch" role="group" aria-label="View" data-i18n-aria-label="View">
+    <button type="button" data-view="open" data-i18n="view.open">Open</button>
+    <button type="button" data-view="merged" data-i18n="view.merged">Merged</button>
   </div>
   <div class="summary" id="summary"></div>
   <span class="project" id="project"></span>
@@ -790,11 +790,11 @@ const PENDING_JOB_STATUSES = new Set(["created", "pending", "running", "waiting_
 const MAX_PARALLEL_MRS = 4;
 const RETENTION_SETTING = "sonar.dbcleaner.daysBeforeDeletingInactiveBranchesAndPRs";
 const DEFAULT_SONAR_RETENTION_DAYS = 5;
-// Clés = detailed_status.group de GitLab ; un groupe absent reste gris.
+// Keys = GitLab detailed_status.group; a missing group stays grey.
 const PIPELINE_TONE = { success: "green", "success-with-warnings": "orange", failed: "red" };
-// Pipeline de la branche suivie : icône et teinte de chaque job ou stage, par groupe de statut GitLab.
-// En cours : un disque à demi plein, comme GitLab — une flèche circulaire se lisait comme un bouton
-// « relancer ». Fixe : une animation continue coûte trop pour un onglet laissé ouvert.
+// Pipeline of the tracked branch: icon and tint of each job or stage, by GitLab status group.
+// Running: a half-filled disc, like GitLab — a circular arrow read like a "retry"
+// button. Static: a continuous animation costs too much for a tab left open.
 const STAGE_ICONS = {
   success: ["✓", "green"], "success-with-warnings": ["!", "orange"], failed: ["✕", "red"],
   running: ["◐", "blue"], canceled: ["⊘", "grey"], skipped: ["»", "grey"], manual: ["⚙", "grey"],
@@ -802,77 +802,77 @@ const STAGE_ICONS = {
 };
 const STAGE_ICON_DEFAULT = ["…", "grey"];
 
-// Retard sur la cible au-delà duquel la durée passe en orange. Jamais en rouge, réservé aux problèmes
-// bloquants : seul le développeur sait si sa MR doit suivre la cible (par exemple, une migration à renuméroter).
+// Lag behind the target beyond which the duration turns orange. Never red, reserved for blocking
+// problems: only the developer knows whether their MR must follow the target (for example, a migration to renumber).
 const BEHIND_ORANGE_HOURS = 12;
 
-// Âge du dernier commit : actif en deçà, endormi au-delà ; une alerte laissée sans commit au-delà de
-// STALLED_ALERT_HOURS met la ligne en rouge.
+// Age of the last commit: active below, dormant above; an alert left without a commit beyond
+// STALLED_ALERT_HOURS turns the row red.
 const ACTIVE_COMMIT_HOURS = 2;
 const IDLE_COMMIT_HOURS = 24;
 const STALLED_ALERT_HOURS = 8;
 
-// Âge du commit affiché sous celui du push quand le push le flatte : écart d'au moins COMMIT_GAP_ALWAYS_MINUTES,
-// ou d'au moins COMMIT_GAP_MIN_MINUTES s'il pèse COMMIT_GAP_MIN_RATIO de l'âge du push. En deçà du plancher,
-// c'est le temps ordinaire entre commit et push (tests, rebase).
+// Commit age shown under the push age when the push flatters it: a gap of at least COMMIT_GAP_ALWAYS_MINUTES,
+// or of at least COMMIT_GAP_MIN_MINUTES if it weighs COMMIT_GAP_MIN_RATIO of the push age. Below the floor,
+// it is the ordinary time between commit and push (tests, rebase).
 const COMMIT_GAP_MIN_MINUTES = 15;
 const COMMIT_GAP_MIN_RATIO = 0.2;
 const COMMIT_GAP_ALWAYS_MINUTES = 60;
 
-// Actualisation automatique, tant que la case est cochée.
+// Automatic refresh, while the box is checked.
 const AUTO_REFRESH_MS = 5 * 60 * 1000;
 const AUTO_REFRESH_KEY = "mr-dashboard.autoRefresh";
 const BRANCH_PIPELINE_EXPANDED_KEY = "mr-dashboard.branchPipelineExpanded";
 const FRESHNESS_SEGMENTS = 5;
 
-// Dernière mise à jour affichée, rejouée au chargement suivant avant de se rafraîchir en tâche de fond.
-// Changer SNAPSHOT_VERSION dès que la forme de mrs / signals change : une sauvegarde d'une autre version
-// est ignorée.
+// Last update displayed, replayed on the next load before refreshing in the background.
+// Change SNAPSHOT_VERSION as soon as the shape of mrs / signals changes: a snapshot from another version
+// is ignored.
 const SNAPSHOT_KEY = "mr-dashboard.snapshot";
 const SNAPSHOT_VERSION = 2;
-// Historique des durées des builds réussis de la branche suivie, un pixel par build : rechargé au plus
-// toutes les BUILD_HISTORY_TTL_MS, à part de la mise à jour des MR qu'il ne retarde pas.
+// History of the durations of the tracked branch's successful builds, one pixel per build: reloaded at most
+// every BUILD_HISTORY_TTL_MS, separately from the MR update, which it does not delay.
 const BUILD_HISTORY_KEY = "mr-dashboard.build-history";
 const BUILD_HISTORY_SIZE = 200;
 const BUILD_HISTORY_TTL_MS = 12 * 3600_000;
 const BUILD_HISTORY_HEIGHT = 32;
-// Pipeline de la branche en cours ⇒ relu seul à ce rythme, plus serré que la mise à jour des MR.
+// Branch pipeline running ⇒ reread alone at this pace, tighter than the MR update.
 const BRANCH_PIPELINE_POLL_MS = 60_000;
-// Verrou partagé entre onglets : une seule mise à jour automatique à la fois pour tout le navigateur.
+// Lock shared across tabs: a single automatic update at a time for the whole browser.
 const REFRESH_LOCK = "mr-dashboard.refresh";
-// Commentaires des MR, gardés à chaque ouverture du volet d'activité des commits : GitLab injoignable,
-// le volet les reprend, ses commits venant du clone local. Seules les plus récemment lues sont gardées.
+// MR comments, kept each time the commit activity panel opens: with GitLab unreachable,
+// the panel reuses them, its commits coming from the local clone. Only the most recently read are kept.
 const ACTIVITY_COMMENTS_KEY = "mr-dashboard.activity-comments";
 const ACTIVITY_COMMENTS_SIZE = 100;
 
-// Notifications système. Un problème nouveau (ou qui s'aggrave) est notifié une fois ; sur une MR dont on
-// est l'auteur, la notification reste affichée et revient toutes les OWN_REMINDER_MS tant que le problème
-// n'est pas traité. Un seul onglet notifie : celui qui détient NOTIFIER_LOCK.
+// System notifications. A new (or worsening) problem is notified once; on an MR you
+// authored, the notification stays displayed and comes back every OWN_REMINDER_MS as long as the problem
+// is not handled. A single tab notifies: the one holding NOTIFIER_LOCK.
 const NOTIFY_KEY = "mr-dashboard.notify";
 const ME_KEY = "mr-dashboard.me";
 const NOTIFIED_KEY = "mr-dashboard.notified";
-// Sons, indépendants des notifications : décidés par le même onglet, d'après la même détection.
+// Sounds, independent of notifications: decided by the same tab, from the same detection.
 const SOUND_KEY = "mr-dashboard.sound";
-// Onglet du dernier clic ou de la dernière touche : le navigateur ne laisse jouer un son qu'à un onglet
-// où l'on a cliqué, l'onglet notifiant, souvent en arrière-plan, lui passe donc le son par SOUND_CHANNEL.
+// Tab of the last click or key press: the browser only lets a tab play a sound once it has been
+// clicked, so the notifying tab, often in the background, passes the sound to it through SOUND_CHANNEL.
 const SOUND_TAB_KEY = "mr-dashboard.soundTab";
 const SOUND_CHANNEL = "mr-dashboard.sound";
 const TAB_ID = crypto.randomUUID?.() ?? String(Math.random());
-// Approbateurs déjà vus, par MR : un nom qui s'y ajoute est une approbation à annoncer.
+// Approvers already seen, per MR: a name added to it is an approval to announce.
 const APPROVALS_SEEN_KEY = "mr-dashboard.approvalsSeen";
-// MR ouvertes vues au passage précédent et MR déjà annoncées mergées : une MR qui quitte les ouvertes et
-// que GitLab dit mergée fait jouer son son, une fois.
+// Open MRs seen on the previous pass and MRs already announced as merged: an MR that leaves the open ones and
+// that GitLab reports as merged plays its sound, once.
 const MERGES_SEEN_KEY = "mr-dashboard.mergesSeen";
 const MERGES_ANNOUNCED_MAX = 50;
-// Dernier pipeline abouti de la branche suivie, et s'il était en échec : son passage en échec est annoncé.
+// Latest completed pipeline of the tracked branch, and whether it failed: its switch to failure is announced.
 const BRANCH_PIPELINE_SEEN_KEY = "mr-dashboard.branchPipelineSeen";
 const THEME_KEY = "mr-dashboard.theme";
 const TEXT_SCALE_KEY = "mr-dashboard.textScale";
-// Langue choisie au bouton FR / EN, ou fixée à la première visite.
+// Language chosen with the FR / EN button, or set on the first visit.
 const LANG_KEY = "mr-dashboard.lang";
 const TEXT_SCALES = [0.7, 0.8, 0.9, 1, 1.1, 1.25, 1.5];
 const TITLE_MIN_SCALE = 0.8;
-// Préfixe commun à toutes les clés ci-dessus : le bouton balai efface tout ce qui le porte, et seulement ça.
+// Prefix common to all the keys above: the broom button clears everything carrying it, and only that.
 const STORAGE_PREFIX = "mr-dashboard.";
 const NOTIFIER_LOCK = "mr-dashboard.notifier";
 const OWN_REMINDER_MS = 15 * 60 * 1000;
@@ -881,7 +881,7 @@ const REMINDER_CHECK_MS = 60 * 1000;
 const LANGS = ["fr", "en"];
 const LOCALES = { fr: "fr-FR", en: "en-GB" };
 
-// Gravité par detailed_status.group, pour le tri ; un groupe absent compte comme « en cours ».
+// Severity by detailed_status.group, for sorting; a missing group counts as "running".
 const PIPELINE_RANK = {
   failed: 5,
   canceled: 4,
@@ -894,13 +894,13 @@ const PIPELINE_RANK = {
   success: 0,
 };
 
-// Ordre des colonnes, et pour chacune : valeur de tri (null = inconnue) et sens du premier clic.
-// Les signaux trient par gravité décroissante au premier clic, pour faire remonter les alertes.
-// Libellé et aide de chaque colonne viennent des traductions : col.<clé> et help.<clé>.
+// Column order, and for each: sort value (null = unknown) and direction of the first click.
+// Signals sort by decreasing severity on the first click, to bring alerts to the top.
+// Label and help of each column come from the translations: col.<key> and help.<key>.
 const COLUMNS = [
   { key: "title", firstDir: "asc", cellClass: "mr-cell", value: mr => mr.title.replace(/^Draft:\s*/i, ""), render: mrCell },
   { key: "author", firstDir: "asc", cellClass: "nowrap", value: mr => mr.author?.name ?? null, render: authorCell },
-  // Actions dans leur colonne, empilées : sous le titre, elles ajoutaient une troisième ligne à chaque MR.
+  // Actions in their own column, stacked: under the title, they added a third line to each MR.
   { key: "actions", sortable: false, cellClass: "actions-cell", render: mr => `<div class="actions"><div class="actions-row">${gitDiffButton(mr)}${commentsLink(mr)}</div>${mr.state === "merged" ? "" : aiButton(mr) || aiPlaceholder()}</div>` },
   { key: "commits", firstDir: "desc", num: true, cellClass: "num", value: commitsCount, render: commitsCell },
   { key: "comments", firstDir: "desc", num: true, cellClass: "num", value: mr => mr.user_notes_count, render: mr => String(mr.user_notes_count) },
@@ -926,7 +926,7 @@ const COLUMNS = [
   { key: "activity", firstDir: "desc", cellClass: "nowrap",
     value: mr => mr.updated_at, render: mr => dateCell(mr.updated_at, "date.activity") },
   { key: "created", firstDir: "desc", cellClass: "nowrap", value: mr => mr.created_at, render: mr => dateCell(mr.created_at, "date.created") },
-  // Vue des MR mergées : durées calendaires, nuits et week-ends compris.
+  // Merged MRs view: calendar durations, nights and weekends included.
   { key: "merged", firstDir: "desc", cellClass: "nowrap", value: mr => mr.merged_at, render: mr => dateCell(mr.merged_at, "date.merged") },
   { key: "duration", firstDir: "desc", cellClass: "num nowrap",
     value: mr => elapsed(mr.created_at, mr.merged_at), render: mr => durationCell(mr.created_at, mr.merged_at) },
@@ -935,13 +935,13 @@ const COLUMNS = [
   { key: "stabilisation", firstDir: "desc", cellClass: "num nowrap",
     value: mr => elapsed(lastCommitDate(mr), mr.merged_at), render: mr => durationCell(lastCommitDate(mr), mr.merged_at) },
 ];
-// Deux vues : les MR ouvertes, suivies en continu, et les MR mergées, relues pour comprendre après coup
-// pourquoi certaines ont duré. Une MR mergée n'a plus rien à corriger : ni pipeline, ni qualité, ni
-// retard sur la cible, seulement l'histoire de son développement.
+// Two views: open MRs, followed continuously, and merged MRs, reviewed to understand afterwards
+// why some took long. A merged MR has nothing left to fix: no pipeline, no quality, no
+// lag behind the target, only the history of its development.
 const VIEWS = ["open", "merged"];
 const DEFAULT_SORTS = { open: { key: "activity", dir: "desc" }, merged: { key: "merged", dir: "desc" } };
-// Regroupement visuel des colonnes : l'identité de la MR à gauche, les indicateurs qualité au centre,
-// le retard sur la branche cible, puis les durées à droite.
+// Visual grouping of the columns: the MR's identity on the left, quality indicators in the centre,
+// the lag behind the target branch, then the durations on the right.
 const COLUMN_GROUPS = {
   open: [
     { key: "mr", columns: ["title", "author", "actions"] },
@@ -956,16 +956,16 @@ const COLUMN_GROUPS = {
     { key: "lifecycle", columns: ["merged", "duration", "build", "stabilisation"] },
   ],
 };
-// Période de la vue des MR mergées, en jours de merge ; « all » : toutes.
+// Period of the merged MRs view, in days since merge; "all": all of them.
 const MERGED_PERIODS = ["7", "30", "90", "all"];
 const DEFAULT_MERGED_PERIOD = "30";
 const MERGED_PAGE_SIZE = 50;
-// Le paquet suivant part quand le bas du tableau arrive à cette distance de la fenêtre, en pixels.
+// The next batch is fetched when the bottom of the table gets this close to the window, in pixels.
 const MERGED_PREFETCH_PX = 600;
-// Ce que Page suiv. garde visible de l'écran précédent, pour ne pas perdre le fil de la lecture.
+// What Page Down keeps visible from the previous screen, so the reader does not lose their place.
 const PAGE_SCROLL_OVERLAP_PX = 40;
-// Sonar et PIT ne sont suivis que si le profil les déclare : un projet qui n'en a pas n'en voit pas les
-// colonnes. Config pas encore lue, ou servie par un serveur antérieur à ces options : tout est suivi.
+// Sonar and PIT are tracked only if the profile declares them: a project without them does not see their
+// columns. Config not read yet, or served by a server older than these options: everything is tracked.
 const sonarTracked = () => state.config?.sonarTracked !== false;
 const pitTracked = () => state.config?.pitTracked !== false;
 const UNTRACKED_COLUMNS = { issues: () => !sonarTracked(), coverage: () => !sonarTracked(), pit: () => !pitTracked() };
@@ -987,23 +987,23 @@ const state = {
   buildHistoryLoading: false,
   branchPipelineTimer: null,
   configLoaded: false,
-  // Dernier état du fetch local rapporté par le serveur, et MR + cible vues au dernier fetch déclenché.
+  // Last local fetch state reported by the server, and MR + target seen at the last triggered fetch.
   gitFetch: { status: null, running: false, seen: null, nextTimer: null },
   mrs: [],
-  // undefined tant que rien n'est chargé, null si la branche n'a aucun pipeline.
+  // undefined until anything is loaded, null if the branch has no pipeline.
   branchPipeline: undefined,
-  // Dépliage choisi à la main, par pipeline et par statut : un changement de statut rend la main au défaut.
+  // Expansion chosen by hand, per pipeline and per status: a status change gives control back to the default.
   branchPipelineOpen: new Map(),
   branchPipelineExpanded: readBranchPipelineExpanded(),
   signals: new Map(),
-  // Vue des MR mergées : chargée à la demande, jamais sauvegardée ni actualisée automatiquement.
-  // seq écarte le résultat d'un chargement dépassé par un autre (période changée entre-temps).
+  // Merged MRs view: loaded on demand, never saved nor refreshed automatically.
+  // seq discards the result of a load overtaken by another one (period changed in the meantime).
   merged: { mrs: [], signals: new Map(), period: null, cursor: null, hasMore: false, total: null, error: null, loading: false, loadedAt: null, seq: 0 },
   sonarPullRequests: new Map(),
   sonarRetentionDays: DEFAULT_SONAR_RETENTION_DAYS,
   sonarRetentionRead: false,
   filters: readFiltersFromUrl(),
-  // Cible choisie dans la liste (ou venue de l'adresse) : gardée au rechargement, même égale au défaut.
+  // Target chosen in the list (or coming from the address): kept on reload, even when equal to the default.
   targetChosen: new URLSearchParams(location.search).has("target"),
   lang: readLang(),
   refreshedAt: null,
@@ -1019,17 +1019,17 @@ const state = {
   notifier: false,
   me: null,
   notifications: new Map(),
-  // Encadrement de l'écart entre l'horloge de GitLab et celle du PC, en ms (cf. observeGitlabClock).
+  // Bounds of the offset between GitLab's clock and the PC's, in ms (see observeGitlabClock).
   gitlabClock: { min: -Infinity, max: Infinity },
 };
 
 const $ = id => document.getElementById(id);
 
-// ---------- Langues ----------
+// ---------- Languages ----------
 
-// Anglais à la première visite, la langue du navigateur pour qui utilisait déjà le dashboard, puis
-// le choix du bouton FR / EN ; ?lang= l'emporte pour la page sans changer ce choix. Le prompt
-// « Correct with IA » reste en français quelle que soit la langue : il ne passe pas par t().
+// English on the first visit, the browser language for those who already used the dashboard, then
+// the choice of the FR / EN button; ?lang= wins for the page without changing that choice. The
+// "Correct with IA" prompt stays in French whatever the language: it does not go through t().
 const pluralEn = n => (n === 1 ? "" : "s");
 
 const I18N = {
@@ -1692,7 +1692,7 @@ function preferredLang() {
 function saveLang(lang) {
   try {
     localStorage.setItem(LANG_KEY, lang);
-  } catch (ignored) { /* stockage indisponible : le choix vaut pour la session */ }
+  } catch (ignored) { /* storage unavailable: the choice holds for the session */ }
 }
 
 function applyStaticTexts() {
@@ -1705,20 +1705,20 @@ function applyStaticTexts() {
   for (const el of document.querySelectorAll("[data-lang]")) el.setAttribute("aria-pressed", String(el.dataset.lang === state.lang));
 }
 
-// Âge des données, progression d'une mise à jour en cours, dernier échec, et bouton d'affichage
-// d'une mise à jour terminée pendant que la page était affichée.
+// Data age, progress of an update in flight, last failure, and the button to display
+// an update completed while the page was displayed.
 function renderStatus() {
   const time = date => date.toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
   const parts = [];
   const at = mergedView() ? state.merged.loadedAt : state.refreshedAt;
   if (at) {
-    // Deux lignes à coupure fixe : laissé au retour à la ligne automatique, le texte se coupait à un
-    // endroit différent selon la largeur de l'en-tête.
+    // Two lines with a fixed break: left to automatic wrapping, the text broke at a
+    // different place depending on the header width.
     parts.push(`<span>${escapeHtml(t("refreshed.time", { time: time(at) }))}</span>`);
     parts.push(`<span title="${escapeHtml(clockTitle())}">${escapeHtml(t("refreshed.date", { date: at.toLocaleDateString(locale()), age: compactDuration(Date.now() - at) }))}</span>`);
   }
-  // Progression et échec partagent la troisième ligne : l'échec précédent est remplacé par la
-  // progression le temps de la nouvelle tentative, qui dira s'il persiste.
+  // Progress and failure share the third line: the previous failure is replaced by the
+  // progress for the duration of the new attempt, which will tell whether it persists.
   if (mergedView()) {
     if (state.merged.loading) parts.push(`<span class="progress">${escapeHtml(t("summary.mergedLoading"))}</span>`);
   } else if (state.progress) parts.push(`<span class="progress">${escapeHtml(t("progress", state.progress))}</span>`);
@@ -1728,10 +1728,10 @@ function renderStatus() {
   $("refreshed").innerHTML = parts.join("");
 }
 
-// Les signaux gardent une raison et ses paramètres, pas un texte : changer de langue re-rend tout
-// sans recharger.
+// Signals keep a reason and its parameters, not a text: switching language re-renders everything
+// without reloading.
 function setLang(lang) {
-  // Le bouton de la langue affichée retient lui aussi le choix, venu sinon d'un ?lang= de passage.
+  // The button of the displayed language also remembers the choice, otherwise coming from a passing ?lang=.
   saveLang(lang);
   if (lang === state.lang) {
     writeFiltersToUrl();
@@ -1754,7 +1754,7 @@ function readFiltersFromUrl() {
     view,
     period: MERGED_PERIODS.includes(p.get("period")) ? p.get("period") : DEFAULT_MERGED_PERIOD,
     q: p.get("q") || "",
-    // null : branche cible par défaut du profil, connue une fois la config lue (cf. applyDefaultTarget).
+    // null: the profile's default target branch, known once the config is read (see applyDefaultTarget).
     target: p.has("target") ? p.get("target") : null,
     authors: (p.get("author") || "").split(",").filter(Boolean),
     reviewer: p.get("reviewer") || "",
@@ -1767,7 +1767,7 @@ function readFiltersFromUrl() {
   };
 }
 
-// "" : toutes les branches cibles, sauf si le profil en fixe une.
+// "": all target branches, unless the profile fixes one.
 const defaultTarget = () => state.config ? state.config.targetBranch ?? "" : null;
 
 function applyDefaultTarget() {
@@ -1800,8 +1800,8 @@ async function api(
   path,
   init
 ) {
-  // Le serveur garde ses lectures de GitLab et de Sonar quelques secondes ; le bouton « Rafraîchir » veut
-  // l'état du moment.
+  // The server keeps its GitLab and Sonar reads for a few seconds; the "Refresh" button wants
+  // the current state.
   if (state.bypassCache && !init?.method) init = { ...init, headers: { ...init?.headers, "Cache-Control": "no-cache" } };
   const sentAt = Date.now();
   const response = await fetch(
@@ -1820,7 +1820,7 @@ async function api(
     try {
       const body = await response.json();
       message = body.message || body.errors?.map(e => e.msg).join(", ") || message;
-    } catch (ignored) { /* corps non JSON */ }
+    } catch (ignored) { /* non-JSON body */ }
     const error = new Error(`${response.status} ${message}`);
     error.status = response.status;
     throw error;
@@ -1828,11 +1828,11 @@ async function api(
   return { body: await response.json(), headers: response.headers };
 }
 
-// Les dates de GitLab (commits, pipelines…) sont à son heure : comparées à l'horloge du PC, un écart
-// entre les deux vieillirait ou rajeunirait chaque âge affiché — jusqu'à un commit « dans le futur ».
-// GitLab a daté sa réponse entre l'envoi et la réception de la requête, à la seconde près (en-tête
-// Date tronqué) : chaque réponse encadre donc l'écart, et l'intersection des encadrements le cerne
-// bien mieux que la seconde au fil des requêtes d'une actualisation.
+// GitLab dates (commits, pipelines…) are on its clock: compared with the PC clock, an offset
+// between the two would age or rejuvenate every displayed age — up to a commit "in the future".
+// GitLab dated its response between sending and receiving the request, to the second (truncated
+// Date header): each response therefore bounds the offset, and the intersection of the bounds narrows it
+// far below a second over the requests of a refresh.
 function observeGitlabClock(
   sentAt,
   receivedAt,
@@ -1843,8 +1843,8 @@ function observeGitlabClock(
   const low = date - receivedAt;
   const high = date + 1000 - sentAt;
   const clock = state.gitlabClock;
-  // Encadrements disjoints : l'horloge du PC a sauté (veille, resynchronisation) — seule la dernière
-  // mesure vaut encore.
+  // Disjoint bounds: the PC clock jumped (sleep, resynchronisation) — only the latest
+  // measurement still holds.
   if (Math.max(clock.min, low) > Math.min(clock.max, high)) {
     clock.min = low;
     clock.max = high;
@@ -1854,7 +1854,7 @@ function observeGitlabClock(
   }
 }
 
-// 0 tant qu'aucune réponse de GitLab n'est arrivée : l'heure du PC, faute de mieux.
+// 0 until a GitLab response has arrived: the PC time, for lack of better.
 function gitlabClockOffset() {
   const clock = state.gitlabClock;
   return Number.isFinite(clock.min) ? (clock.min + clock.max) / 2 : 0;
@@ -1871,9 +1871,9 @@ function clockTitle() {
   });
 }
 
-// Heure de GitLab, à laquelle comparer toute date qu'il fournit. Les minuteries propres à la page
-// (cycle d'actualisation, caches, notifications) restent sur Date.now() : elles ne comparent l'heure
-// du PC qu'à elle-même.
+// GitLab time, to compare against any date it provides. The page's own timers
+// (refresh cycle, caches, notifications) stay on Date.now(): they only compare the PC time
+// with itself.
 const gitlabNow = () => Date.now() + gitlabClockOffset();
 
 async function gitlabAll(path) {
@@ -1890,12 +1890,12 @@ async function gitlabAll(path) {
 
 const projectPath = () => `projects/${encodeURIComponent(state.config.gitlabProject)}`;
 
-// ---------- Chargement ----------
+// ---------- Loading ----------
 
-// Le tableau suit le chargement au fil de l'eau : la liste dès que GitLab la donne, puis les signaux de
-// chaque MR dès qu'ils arrivent, pour qu'une MR lente ne retienne pas les autres. Une MR déjà affichée
-// garde ses signaux précédents jusque-là. Ce qui porte sur l'ensemble (notifications, sauvegarde,
-// erreurs, heure de mise à jour) attend l'instantané complet, substitué d'un bloc à la fin.
+// The table follows the loading as it goes: the list as soon as GitLab gives it, then each MR's
+// signals as soon as they arrive, so a slow MR does not hold the others back. An MR already displayed
+// keeps its previous signals until then. What concerns the whole (notifications, snapshot,
+// errors, update time) waits for the complete snapshot, swapped in one block at the end.
 async function refresh() {
   if (state.refreshing) return;
   const initial = !state.refreshedAt;
@@ -1973,11 +1973,11 @@ async function refresh() {
   }
 }
 
-// Relue une fois par page, même si la sauvegarde en a fourni une : le serveur a pu être relancé avec un
-// autre profil.
+// Read once per page, even if the snapshot provided one: the server may have been restarted with another
+// profile.
 async function ensureConfig() {
   if (!state.configLoaded) {
-    // Cible par défaut de la sauvegarde, prise avant la config du serveur : remplacée par la sienne.
+    // Default target from the snapshot, taken before the server config: replaced by the server's.
     const savedDefault = defaultTarget();
     state.config = (await api("/config")).body;
     state.configLoaded = true;
@@ -1996,15 +1996,15 @@ async function ensureConfig() {
   $("project").textContent = state.config.gitlabProject;
 }
 
-// Chaque vue a son chargement : le bouton suit celui de la vue affichée.
+// Each view has its own loading: the button follows the one of the displayed view.
 function syncRefreshButton() {
   $("refresh").disabled = mergedView() ? state.merged.loading : state.refreshing;
 }
 
-// Par paquets de MERGED_PAGE_SIZE, du merge le plus récent au plus ancien, au fil du défilement : la
-// page GraphQL (commits, dernier push, approbations, threads, et le total de la période), puis le
-// détail REST de ses MR en une requête. Rien par MR : l'activité détaillée n'est lue qu'au survol du
-// nombre de commits.
+// In batches of MERGED_PAGE_SIZE, from the most recent merge to the oldest, as the user scrolls: the
+// GraphQL page (commits, last push, approvals, threads, and the period total), then the
+// REST detail of its MRs in one request. Nothing per MR: the detailed activity is only read on hovering the
+// commit count.
 async function loadMerged({ force = false } = {}) {
   const merged = state.merged;
   const period = state.filters.period;
@@ -2054,7 +2054,7 @@ async function loadMergedPage() {
     merged.loadedAt ??= new Date();
   } catch (error) {
     if (seq !== merged.seq) return;
-    // Plus de chargement automatique jusqu'au prochain « Rafraîchir » : il échouerait en boucle.
+    // No more automatic loading until the next "Refresh": it would fail in a loop.
     merged.error = error.message;
     showError(t("error.merged", { message: error.message }));
   } finally {
@@ -2088,10 +2088,10 @@ async function fetchMergedPage(
   return body.data.project.mergeRequests;
 }
 
-// Paquet suivant quand le bas du tableau approche. Un tri autre que le merge le plus récent d'abord
-// porte sur toute la période : la suite se charge alors d'elle-même jusqu'au bout. Un filtre, lui,
-// n'en a pas besoin — appliqué à des MR arrivées par date de merge, il donne déjà les premières qui
-// lui correspondent.
+// Next batch when the bottom of the table gets close. A sort other than most recent merge first
+// spans the whole period: the rest then loads by itself to the end. A filter, on the other hand,
+// does not need it — applied to MRs arriving by merge date, it already yields the first ones that
+// match it.
 function maybeLoadMoreMerged() {
   const merged = state.merged;
   if (!mergedView() || merged.loading || !merged.hasMore || merged.error || merged.period === null) return;
@@ -2114,8 +2114,8 @@ function mergedSignals(node) {
 }
 
 function applySnapshot(snapshot) {
-  // Config de la sauvegarde tant que celle du serveur n'est pas lue : le pipeline de la branche en a
-  // besoin pour s'afficher dès le chargement.
+  // Snapshot config until the server's is read: the branch pipeline needs it
+  // to display as soon as the page loads.
   if (!state.configLoaded && snapshot.config) {
     state.config = snapshot.config;
     $("project").textContent = state.config.gitlabProject;
@@ -2139,8 +2139,8 @@ function applySnapshot(snapshot) {
   fetchIfRepoChanged();
 }
 
-// Sauvegarde best effort : stockage plein ou bloqué ⇒ on retire l'ancienne plutôt que de rejouer plus tard
-// des données plus vieilles que nécessaire.
+// Best-effort snapshot: storage full or blocked ⇒ remove the old one rather than replay, later,
+// data older than necessary.
 function saveSnapshot(snapshot) {
   try {
     localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({
@@ -2179,13 +2179,13 @@ function readSnapshot() {
 function forgetSnapshot() {
   try {
     localStorage.removeItem(SNAPSHOT_KEY);
-  } catch (ignored) { /* stockage indisponible : rien à retirer */ }
+  } catch (ignored) { /* storage unavailable: nothing to remove */ }
 }
 
-// Mise à jour mutualisée entre onglets : sous le verrou, un onglet qui trouve une sauvegarde plus récente
-// que ce qu'il affiche (faite par un autre onglet pendant qu'il attendait) la reprend au lieu d'interroger
-// GitLab ; une échéance automatique que la mise à jour d'un autre onglet a repoussée est replanifiée.
-// Le bouton « Rafraîchir » n'y passe pas : il interroge toujours.
+// Update shared across tabs: under the lock, a tab that finds a snapshot more recent
+// than what it displays (made by another tab while it was waiting) takes it over instead of querying
+// GitLab; an automatic deadline pushed back by another tab's update is rescheduled.
+// The "Refresh" button does not go through it: it always queries.
 async function sharedRefresh({ onlyIfDue = false } = {}) {
   const run = async () => {
     if (adoptNewerSnapshot()) return;
@@ -2199,13 +2199,13 @@ async function sharedRefresh({ onlyIfDue = false } = {}) {
   else await run();
 }
 
-// Marge d'une seconde : un minuteur peut se déclencher un rien avant l'échéance calculée.
+// One-second margin: a timer may fire a little before the computed deadline.
 function refreshDue() {
   return !state.cycleStart || Date.now() >= state.cycleStart.getTime() + AUTO_REFRESH_MS - 1000;
 }
 
-// Reprend la sauvegarde si elle est plus récente que les données affichées, et recale le cycle
-// d'actualisation dessus : tous les onglets suivent ainsi la dernière mise à jour, d'où qu'elle vienne.
+// Takes over the snapshot if it is more recent than the displayed data, and realigns the refresh
+// cycle on it: all tabs thus follow the latest update, wherever it comes from.
 function adoptNewerSnapshot() {
   const saved = readSnapshot();
   if (!saved || (state.refreshedAt && saved.at <= state.refreshedAt)) return false;
@@ -2226,7 +2226,7 @@ function readAutoRefresh() {
 function saveAutoRefresh(enabled) {
   try {
     localStorage.setItem(AUTO_REFRESH_KEY, String(enabled));
-  } catch (ignored) { /* stockage indisponible : la préférence vaut pour la session */ }
+  } catch (ignored) { /* storage unavailable: the preference holds for the session */ }
 }
 
 function readBranchPipelineExpanded() {
@@ -2240,24 +2240,24 @@ function readBranchPipelineExpanded() {
 function saveBranchPipelineExpanded(expanded) {
   try {
     localStorage.setItem(BRANCH_PIPELINE_EXPANDED_KEY, String(expanded));
-  } catch (ignored) { /* stockage indisponible : la préférence vaut pour la session */ }
+  } catch (ignored) { /* storage unavailable: the preference holds for the session */ }
 }
 
-// Thème "light" ou "dark", au choix de l'utilisateur ; tant qu'il n'a rien choisi, celui du système.
+// "light" or "dark" theme, as chosen by the user; until they choose, the system's.
 const systemDark = matchMedia("(prefers-color-scheme: dark)");
 
 function readTheme() {
   try {
     const theme = localStorage.getItem(THEME_KEY);
     if (theme === "light" || theme === "dark") return theme;
-  } catch (ignored) { /* stockage indisponible : thème du système */ }
+  } catch (ignored) { /* storage unavailable: system theme */ }
   return matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
 function saveTheme(theme) {
   try {
     localStorage.setItem(THEME_KEY, theme);
-  } catch (ignored) { /* stockage indisponible : le choix vaut pour la session */ }
+  } catch (ignored) { /* storage unavailable: the choice holds for the session */ }
 }
 
 function applyTheme() {
@@ -2290,11 +2290,11 @@ function changeTextScale(step) {
   try {
     if (scale === 1) localStorage.removeItem(TEXT_SCALE_KEY);
     else localStorage.setItem(TEXT_SCALE_KEY, String(scale));
-  } catch (ignored) { /* stockage indisponible : la taille reste celle par défaut */ }
+  } catch (ignored) { /* storage unavailable: the size stays the default one */ }
   applyTextScale();
 }
 
-// Prochaine actualisation auto = début de la dernière + AUTO_REFRESH_MS : un « Rafraîchir » manuel relance le cycle.
+// Next auto refresh = start of the last one + AUTO_REFRESH_MS: a manual "Refresh" restarts the cycle.
 function scheduleAutoRefresh() {
   clearTimeout(state.autoRefreshTimer);
   state.autoRefreshTimer = state.autoRefresh && state.cycleStart
@@ -2303,8 +2303,8 @@ function scheduleAutoRefresh() {
   renderFreshness();
 }
 
-// Recréer les segments relance leurs animations ; le délai négatif les place au temps déjà écoulé.
-// Le segment le plus à droite s'éteint au bout d'une minute, le plus à gauche à l'actualisation.
+// Recreating the segments restarts their animations; the negative delay puts them at the time already elapsed.
+// The rightmost segment goes out after one minute, the leftmost at the refresh.
 function renderFreshness() {
   const bar = $("freshness");
   bar.hidden = !state.autoRefresh || !state.cycleStart || mergedView();
@@ -2330,9 +2330,9 @@ function drawFreshness(
   ).join("");
 }
 
-// Une seule requête GraphQL, par page de 100, pour toutes les MR ouvertes : la taille (l'API REST ne
-// donne que le nombre de fichiers), les commits, le dernier push, les approbations, les compteurs de
-// threads et les jobs du pipeline de tête — autant de requêtes REST en moins pour chaque MR.
+// A single GraphQL query, in pages of 100, for all open MRs: the size (the REST API only
+// gives the number of files), the commits, the last push, the approvals, the thread
+// counters and the head pipeline's jobs — that many fewer REST requests for each MR.
 const GRAPHQL_MR_FIELDS = `
   iid
   diffStatsSummary { additions deletions fileCount }
@@ -2345,15 +2345,15 @@ const GRAPHQL_MR_FIELDS = `
   resolvedDiscussionsCount`;
 const GRAPHQL_OPEN_MR_FIELDS = `${GRAPHQL_MR_FIELDS}
   headPipeline { id jobs(retried: false) { nodes { id name status startedAt finishedAt webPath } } }`;
-// Une MR mergée n'a plus de pipeline à suivre ; son plus ancien commit date le début du développement.
+// A merged MR has no pipeline left to follow; its oldest commit dates the start of development.
 const GRAPHQL_MERGED_MR_FIELDS = `${GRAPHQL_MR_FIELDS}
   firstCommit: commits(last: 1) { nodes { authoredDate } }`;
-// Dernier pipeline de la branche suivie, et durées de ses derniers pipelines réussis (les échecs,
-// interrompus en cours de route, fausseraient la fourchette). Requête à part de celle des MR : GitLab
-// plafonne la complexité d'une requête à 250, et ses trois pipelines détaillés en pèsent une bonne part.
+// Latest pipeline of the tracked branch, and durations of its latest successful pipelines (failures,
+// interrupted midway, would skew the range). Separate query from the MRs one: GitLab
+// caps a query's complexity at 250, and its three detailed pipelines weigh a good share of it.
 const SUCCESSFUL_BUILDS_SAMPLE = 5;
-// Pipeline en cours ⇒ le précédent abouti (réussi ou en échec) s'affiche aussi. Demandé par statut
-// plutôt qu'en lisant les N derniers : une rafale de pushes annule autant de pipelines qu'elle veut.
+// Running pipeline ⇒ the previous completed one (successful or failed) is shown too. Requested by status
+// rather than by reading the last N: a burst of pushes cancels as many pipelines as it likes.
 const ACTIVE_PIPELINE_GROUPS = new Set([
   "running", "pending", "created", "preparing", "waiting-for-resource", "waiting-for-callback", "scheduled",
 ]);
@@ -2379,12 +2379,12 @@ const GRAPHQL_BRANCH_PIPELINE = `
   pipelines(ref: $branch, first: 1) { ${GRAPHQL_PIPELINE_DETAIL} }
   lastSuccess: pipelines(ref: $branch, status: SUCCESS, first: 1) { ${GRAPHQL_PIPELINE_DETAIL} }
   lastFailure: pipelines(ref: $branch, status: FAILED, first: 1) { ${GRAPHQL_PIPELINE_DETAIL} }`;
-// Référence d'avancement des pipelines de MR, à part de ceux des branches : un pipeline de branche
-// (develop…) enchaîne plus d'étapes, sa durée fausserait l'estimation.
+// Progress reference for MR pipelines, separate from branch ones: a branch pipeline
+// (develop…) chains more steps, its duration would skew the estimate.
 const MR_PIPELINE_SOURCE = "merge_request_event";
 const MR_PIPELINES_SAMPLE = 10;
-// Un push rapproché annule les jobs du pipeline en cours : GitLab le dit réussi quand ces jobs avaient le
-// droit d'échouer, mais sa durée, écourtée, fausserait la médiane. Lus en surnombre, puis écartés.
+// A push in quick succession cancels the running pipeline's jobs: GitLab reports it successful when those jobs were
+// allowed to fail, but its shortened duration would skew the median. Read in excess, then discarded.
 const INTERRUPTED_PIPELINES_MARGIN = 10;
 const GRAPHQL_MR_PIPELINE_DURATIONS = `
   pipelines(source: "${MR_PIPELINE_SOURCE}", status: SUCCESS, first: ${MR_PIPELINES_SAMPLE + INTERRUPTED_PIPELINES_MARGIN}) {
@@ -2417,7 +2417,7 @@ async function loadGraphqlMergeRequests(report) {
   return nodes;
 }
 
-// null sans branche suivie ; l'erreur est rendue plutôt que levée, pour s'afficher à la place du pipeline.
+// null without a tracked branch; the error is returned rather than thrown, to display in place of the pipeline.
 async function loadBranchPipeline() {
   if (!state.config.pipelineBranch) return null;
   try {
@@ -2437,7 +2437,7 @@ async function fetchBranchPipeline() {
   return withBuildDurations(body.data.project);
 }
 
-// Sans référence, les pipelines en cours s'affichent simplement sans avancement.
+// Without a reference, running pipelines are simply displayed without progress.
 async function loadMrPipelineDurations(report) {
   const query = `query($project: ID!) { project(fullPath: $project) { ${GRAPHQL_MR_PIPELINE_DURATIONS} } }`;
   const variables = JSON.stringify({ project: state.config.gitlabProject });
@@ -2461,7 +2461,7 @@ async function loadSonarPullRequests(report) {
   try {
     const { body } = await api(`/sonar/project_pull_requests/list?project=${encodeURIComponent(state.config.sonarProject)}`);
     for (const pr of body.pullRequests) state.sonarPullRequests.set(pr.key, pr);
-    // Réglage du serveur Sonar, qui ne bouge pas d'une actualisation à l'autre : lu une fois par page.
+    // Sonar server setting, which does not change from one refresh to the next: read once per page.
     if (!state.sonarRetentionRead) {
       const retention = await api(`/sonar/settings/values?keys=${RETENTION_SETTING}&component=${encodeURIComponent(state.config.sonarProject)}`);
       state.sonarRetentionDays = Number(retention.body.settings[0]?.value) || DEFAULT_SONAR_RETENTION_DAYS;
@@ -2472,7 +2472,7 @@ async function loadSonarPullRequests(report) {
   }
 }
 
-// next choisit dans la file l'élément à traiter, au moment où un emplacement se libère.
+// next picks from the queue the item to process, when a slot frees up.
 async function runLimited(
   items,
   limit,
@@ -2490,20 +2490,20 @@ async function runLimited(
   await Promise.all(workers);
 }
 
-// Les MR affichées d'abord, de haut en bas du tableau, pour que l'attente porte sur celles qu'on regarde.
-// Réévalué à chaque prise : un filtre ou un tri changé pendant l'actualisation est suivi aussitôt.
+// Displayed MRs first, from top to bottom of the table, so the wait falls on those being looked at.
+// Re-evaluated on every pick: a filter or sort changed during the refresh is followed at once.
 function shownFirst(queue) {
   return queue.filter(matches).sort(tableComparator())[0] ?? queue[0];
 }
 
-// Tout part en parallèle : le détail de la MR n'attend ni la note PIT ni les commits, et la chaîne
-// détail → retard sur la cible → Sonar fixe seule la durée. Sans données GraphQL (requête en échec),
-// commits, approbations et jobs retombent sur l'API REST ; les threads, eux, sont indisponibles.
+// Everything runs in parallel: the MR detail waits neither for the PIT score nor the commits, and the chain
+// detail → lag behind target → Sonar alone sets the duration. Without GraphQL data (failed query),
+// commits, approvals and jobs fall back on the REST API; threads, however, are unavailable.
 async function loadSignals(mr) {
   const signals = {};
   const graphql = mr.graphql;
   const pitNoteLoading = pitTracked() ? loadPitNote(mr) : Promise.resolve(undefined);
-  // Attendue plus bas : évite un rejet non traité si le détail échoue avant.
+  // Awaited further down: avoids an unhandled rejection if the detail fails first.
   pitNoteLoading.catch(() => {});
   const basics = Promise.all([
     graphql ? graphqlCommits(graphql) : loadCommits(mr),
@@ -2513,7 +2513,7 @@ async function loadSignals(mr) {
   try {
     const detail = (await api(`/gitlab/${projectPath()}/merge_requests/${mr.iid}?include_diverged_commits_count=true`)).body;
     signals.pipeline = detail.head_pipeline;
-    // Jobs GraphQL retenus seulement s'ils sont bien ceux du pipeline de tête lu à l'instant.
+    // GraphQL jobs kept only if they really belong to the head pipeline just read.
     const graphqlJobs = signals.pipeline && graphql?.headPipeline?.id === `gid://gitlab/Ci::Pipeline/${signals.pipeline.id}`
       ? graphql.headPipeline.jobs.nodes.map(restJob)
       : null;
@@ -2545,12 +2545,12 @@ async function loadSignals(mr) {
   return signals;
 }
 
-// Dépendances déclarées dans GitLab : seules celles pas encore mergées bloquent encore. Un échec n'affiche rien.
+// Dependencies declared in GitLab: only those not yet merged still block. A failure displays nothing.
 function loadBlockedBy(mr) {
   return loadDependencies(`merge_requests/${mr.iid}/blocks`, b => b.blocking_merge_request, other => other.state !== "merged");
 }
 
-// Sens inverse : une MR mergée ne bloque plus personne, une MR en attente close n'attend plus rien.
+// Reverse direction: a merged MR no longer blocks anyone, a closed waiting MR no longer waits for anything.
 function loadBlocks(mr) {
   if (mr.state === "merged") return Promise.resolve([]);
   return loadDependencies(`merge_requests/${mr.iid}/blockees`, b => b.blocked_merge_request, other => other.state === "opened");
@@ -2568,8 +2568,8 @@ async function loadDependencies(path, otherOf, stillBlocking) {
   }
 }
 
-// Les compteurs GraphQL ne datent pas les threads : les discussions ne sont lues que pour une MR qui en a
-// de non résolus. Un échec laisse le compte seul, sans ancienneté.
+// GraphQL counters do not date threads: discussions are only read for an MR that has
+// unresolved ones. A failure leaves the count alone, without age.
 async function loadOldestUnresolvedAt(mr) {
   try {
     const discussions = await gitlabAll(`${projectPath()}/merge_requests/${mr.iid}/discussions`);
@@ -2582,9 +2582,9 @@ async function loadOldestUnresolvedAt(mr) {
   }
 }
 
-// Une MR dont la mise à jour échoue garde, à l'écran comme dans la sauvegarde, ses derniers bons signaux,
-// datés, plus ceux que la mise à jour a malgré tout rapportés (GraphQL peut répondre quand l'API REST
-// échoue).
+// An MR whose update fails keeps, on screen as in the snapshot, its last good signals,
+// dated, plus those the update reported anyway (GraphQL may answer when the REST API
+// fails).
 function keepPrevious(
   previous,
   failed,
@@ -2601,8 +2601,8 @@ function keepPrevious(
   };
 }
 
-// GitLab injoignable : nombre de commits, date du dernier et retard sur la cible repris du clone local,
-// à jour du dernier fetch, quand GitLab n'en a rien donné ou que ce fetch est plus récent que ses données.
+// GitLab unreachable: commit count, date of the last one and lag behind the target taken from the local clone,
+// as of the last fetch, when GitLab gave nothing or that fetch is more recent than its data.
 async function withLocalGit(
   mr,
   signals,
@@ -2632,7 +2632,7 @@ async function withLocalGit(
   };
 }
 
-// Le clone local ne connaît pas la date du push : celle de GitLab vaut tant que la tête de branche est la même.
+// The local clone does not know the push date: GitLab's holds as long as the branch head is the same.
 function sameDate(
   first,
   second
@@ -2643,12 +2643,12 @@ function sameDate(
 const localNote = signal => (signal?.localAt === undefined ? ""
   : "\n" + t("local.title", { date: signal.localAt ? formatDate(signal.localAt) : "—" }));
 
-// Pipeline de tête en cours : le dernier pipeline terminé de la MR reste sa dernière valeur connue. Un
-// pipeline annulé ou sauté ne dit rien du code : on remonte au précédent.
+// Head pipeline running: the MR's last finished pipeline remains its last known value. A
+// canceled or skipped pipeline says nothing about the code: go back to the previous one.
 //
-// Tant que le pipeline de tête reste le même, ce précédent est repris sans relire GitLab : seul un pipeline
-// plus ancien encore en cours, qui finirait après, le laisserait périmé jusqu'au prochain pipeline de tête.
-// Une rafale de pushes interrompt autant de pipelines : au-delà, on renonce plutôt que tout parcourir.
+// As long as the head pipeline stays the same, that previous one is reused without rereading GitLab: only an
+// older pipeline still running, finishing later, would leave it stale until the next head pipeline.
+// A burst of pushes interrupts as many pipelines: beyond a limit, give up rather than walk through them all.
 const PREVIOUS_PIPELINE_CANDIDATES = 5;
 
 async function loadPreviousPipeline(
@@ -2664,8 +2664,8 @@ async function loadPreviousPipeline(
     const candidates = pipelines
       .filter(p => p.id !== headId && ["success", "failed"].includes(p.status))
       .slice(0, PREVIOUS_PIPELINE_CANDIDATES);
-    // Un pipeline interrompu par un push plus récent n'a pas de résultat à montrer : son « Warning » ou son
-    // échec ne vient que des jobs annulés. Le précédent est le dernier allé à son terme.
+    // A pipeline interrupted by a more recent push has no result to show: its "Warning" or its
+    // failure only comes from the canceled jobs. The previous one is the last that ran to completion.
     for (const candidate of candidates) {
       const canceled = (await api(`/gitlab/${projectPath()}/pipelines/${candidate.id}/jobs?scope[]=canceled&per_page=1`)).body;
       if (!canceled.length) return (await api(`/gitlab/${projectPath()}/pipelines/${candidate.id}`)).body;
@@ -2676,15 +2676,15 @@ async function loadPreviousPipeline(
   }
 }
 
-// Un thread = une discussion résoluble (commentaire de revue, diff note) : les compteurs de GitLab,
-// qui ignorent notes système et commentaires simples, sans charger les discussions.
+// A thread = a resolvable discussion (review comment, diff note): GitLab's counters,
+// which ignore system notes and plain comments, without loading the discussions.
 function graphqlThreads(node) {
   if (!node) return { error: t("error.graphql", { message: "—" }) };
   return { total: node.resolvableDiscussionsCount, unresolved: node.resolvableDiscussionsCount - node.resolvedDiscussionsCount };
 }
 
-// Note PIT sans charger toutes les discussions : notes les plus récemment mises à jour d'abord, lues
-// page par page jusqu'à la première qui porte le marqueur.
+// PIT score without loading all discussions: most recently updated notes first, read
+// page by page until the first one carrying the marker.
 async function loadPitNote(mr) {
   let page = "1";
   while (page) {
@@ -2698,13 +2698,13 @@ async function loadPitNote(mr) {
   return undefined;
 }
 
-// Le retard court depuis que la cible a bougé après le dernier commit commun : c'est la date de son
-// successeur sur l'historique first-parent de la cible (le commit de merge, pour une MR mergée), et non
-// celle du plus ancien commit manquant — un commit de feature mergé plus tard garde sa date d'origine.
+// The lag runs since the target moved after the last common commit: that is the date of its
+// successor in the target's first-parent history (the merge commit, for a merged MR), and not
+// that of the oldest missing commit — a feature commit merged later keeps its original date.
 //
-// Ce successeur ne change pas tant que la MR garde son dernier commit et sa cible : la cible ne fait qu'avancer,
-// le dernier commit commun reste le même. Un rebase ou un push change le commit, une MR empilée dont la parente
-// est mergée change de cible : la date est alors relue. Seul un push forcé sur la cible la laisse périmée.
+// That successor does not change while the MR keeps its last commit and its target: the target only moves forward,
+// the last common commit stays the same. A rebase or a push changes the commit, a stacked MR whose parent
+// is merged changes target: the date is then reread. Only a force push on the target leaves it stale.
 async function loadBehind(mr, count) {
   if (count == null) return { error: t("error.behindCount") };
   if (count === 0) return { count, since: null };
@@ -2733,8 +2733,8 @@ async function loadBehind(mr, count) {
   }
 }
 
-// Aucune approbation n'est exigée sur le projet : GitLab répond alors « approved: true » pour toute MR,
-// même sans approbateur. Seule la liste des approbateurs dit si quelqu'un a réellement approuvé.
+// No approval is required on the project: GitLab then answers "approved: true" for any MR,
+// even without an approver. Only the approvers list tells whether someone actually approved.
 async function loadApprovals(mr) {
   try {
     const [approvals, reviewers] = await Promise.all([
@@ -2751,9 +2751,9 @@ async function loadApprovals(mr) {
   }
 }
 
-// Dates du dernier commit et du dernier push, et non l'updated_at de la MR, que GitLab bouge aussi sur
-// un commentaire, un label ou une approbation. Le premier commit renvoyé par GraphQL est la tête de la
-// branche, la première version de diff le dernier push.
+// Dates of the last commit and the last push, not the MR's updated_at, which GitLab also bumps on
+// a comment, a label or an approval. The first commit returned by GraphQL is the branch head,
+// the first diff version the last push.
 function graphqlCommits(node) {
   return {
     count: node.commitCount,
@@ -2763,8 +2763,8 @@ function graphqlCommits(node) {
   };
 }
 
-// changesRequested : reviewers dont la revue en cours demande des changements, état que GitLab garde
-// jusqu'à leur prochaine revue (approbation ou nouvelle revue).
+// changesRequested: reviewers whose current review requests changes, a state GitLab keeps
+// until their next review (approval or new review).
 function graphqlApprovals(node) {
   return {
     names: node.approvedBy.nodes.map(a => a.name),
@@ -2775,7 +2775,7 @@ function graphqlApprovals(node) {
   };
 }
 
-// Job GraphQL remis dans la forme de l'API REST, que lisent pitSignal et sonarSignal.
+// GraphQL job reshaped into the REST API form, read by pitSignal and sonarSignal.
 function restJob(job) {
   return {
     id: Number(job.id.split("/").pop()),
@@ -2808,13 +2808,13 @@ function pitSignal(job, note, mr) {
   const noteLink = note ? `${mr.web_url}#note_${note.id}` : mr.web_url;
   if (!job) return { state: "absent", reason: "notApplicable", link: mr.web_url };
   const running = PENDING_JOB_STATUSES.has(job.status);
-  // Job en cours : la note du run précédent reste la dernière valeur connue — l'afficher, marquée
-  // « en cours », plutôt que de la masquer. Sans note, il n'y a rien à montrer.
+  // Running job: the previous run's score remains the last known value — show it, marked
+  // "running", rather than hiding it. Without a score, there is nothing to show.
   if (running && !note) return { state: "pending", reason: "pending", info: { status: job.status }, link: job.web_url };
   if (!note) return { state: "absent", reason: "noNote", info: { status: job.status, marker: state.config.pitMarker }, link: job.web_url };
-  // Seul un job en échec rend la note suspecte. Un job réussi republie la note, mais GitLab ne
-  // bouge pas son updated_at si le contenu est identique : comparer les dates donnerait un faux
-  // « périmé » à chaque résultat inchangé.
+  // Only a failed job makes the score suspect. A successful job republishes the score, but GitLab does not
+  // bump its updated_at if the content is identical: comparing dates would give a false
+  // "stale" on every unchanged result.
   if (job.status === "failed" && job.started_at && new Date(note.updated_at) < new Date(job.started_at)) {
     return { state: "stale", reason: "failed", link: job.web_url };
   }
@@ -2840,9 +2840,9 @@ function parsePitNote(body) {
   return { total, killed, survived, noCoverage, errors, strength };
 }
 
-// Sans analyse Sonar, trois situations très différentes : le pipeline n'a pas de job sonar (non
-// applicable), l'analyse a été purgée par le serveur faute de push récent (expirée — relancer le
-// pipeline), ou le job n'a rien produit (introuvable — à investiguer).
+// Without a Sonar analysis, three very different situations: the pipeline has no sonar job (not
+// applicable), the analysis was purged by the server for lack of a recent push (expired — rerun the
+// pipeline), or the job produced nothing (not found — to investigate).
 function missingSonarAnalysis(job, mr) {
   if (!job) return { state: "absent", reason: "notApplicable", link: mr.web_url };
   if (PENDING_JOB_STATUSES.has(job.status)) {
@@ -2855,9 +2855,9 @@ function missingSonarAnalysis(job, mr) {
   return { state: "absent", reason: "notFound", info: { status: job.status }, link: job.web_url };
 }
 
-// Issues et couverture ne changent qu'avec une nouvelle analyse : tant que la date d'analyse reste celle
-// des valeurs déjà lues, elles sont reprises sans interroger Sonar. Une issue acceptée ou marquée faux
-// positif dans Sonar, sans nouvelle analyse, n'apparaît qu'au bouton « Rafraîchir ».
+// Issues and coverage only change with a new analysis: as long as the analysis date stays that
+// of the values already read, they are reused without querying Sonar. An issue accepted or marked false
+// positive in Sonar, without a new analysis, only shows up with the "Refresh" button.
 async function sonarValues(
   mr,
   analysisDate
@@ -2897,8 +2897,8 @@ async function sonarSignal(job, mr) {
   };
   const pr = state.sonarPullRequests.get(String(mr.iid));
   if (!pr) return missingSonarAnalysis(job, mr);
-  // Job en cours : l'analyse précédente reste la dernière valeur connue, affichée et marquée
-  // « en cours ». Elle est forcément antérieure au job : ce n'est pas un « périmé ».
+  // Running job: the previous analysis remains the last known value, displayed and marked
+  // "running". It necessarily predates the job: it is not "stale".
   const running = job && PENDING_JOB_STATUSES.has(job.status);
   const stale = !running && job?.started_at && new Date(pr.analysisDate) < new Date(job.started_at);
   return {
@@ -2919,13 +2919,13 @@ function refreshingOf(job, valuesDate) {
   return { job: job.name, status: job.status, link: job.web_url, valuesDate };
 }
 
-// ---------- Cellules de signaux ----------
+// ---------- Signal cells ----------
 
-// Une cellule n'affiche une pastille que s'il y a quelque chose à voir (alerte, ou signal absent /
-// en cours) ; un signal propre reste en texte discret, pour que les alertes ressortent d'un coup d'œil.
+// A cell shows a badge only if there is something to see (an alert, or a missing /
+// running signal); a clean signal stays as discreet text, so alerts stand out at a glance.
 
-// Par l'état de la MR, et non par la vue affichée : les notifications lisent les MR ouvertes quelle
-// que soit la vue.
+// By the MR's state, not by the displayed view: notifications read the open MRs whatever
+// the view.
 function signalsOf(mr) {
   return (mr.state === "merged" ? state.merged.signals : state.signals).get(mr.iid) || {};
 }
@@ -2936,15 +2936,15 @@ function loadingOrError(s) {
   return null;
 }
 
-// Libellé du badge GitLab tel quel (« Passed », « Warning », « Failed », « Blocked »…) plutôt qu'un
-// vocabulaire propre au tableau de bord : c'est ce que l'on retrouve en ouvrant le pipeline.
+// GitLab badge label as is ("Passed", "Warning", "Failed", "Blocked"…) rather than a
+// vocabulary specific to the dashboard: it is what one finds when opening the pipeline.
 function pipelineCell(mr) {
   const s = signalsOf(mr);
   const pending = loadingOrError(s);
   if (pending) return pending;
   if (!s.pipeline) return pill("grey", t("pipeline.none"));
   if (!PENDING_JOB_STATUSES.has(s.pipeline.status)) return pipelinePill(s.pipeline);
-  // En cours : le résultat du pipeline précédent, puis « En cours » en petit.
+  // Running: the previous pipeline's result, then "Running" in small print.
   const { id, web_url: link } = s.pipeline;
   const { label } = pipelineStatus(s.pipeline);
   const value = s.previousPipeline
@@ -2953,7 +2953,7 @@ function pipelineCell(mr) {
   const title = s.previousPipeline
     ? t("pipeline.runningTitle", { id, label, previous: s.previousPipeline.id })
     : t("pipeline.title", { id, label });
-  // Un pipeline de MR se compare aux pipelines de MR ; un autre (push de branche) n'a pas de référence ici.
+  // An MR pipeline is compared with MR pipelines; another one (branch push) has no reference here.
   const progress = s.pipeline.source === MR_PIPELINE_SOURCE
     ? pipelineProgress(
       s.pipeline.started_at,
@@ -2972,7 +2972,7 @@ function pipelinePill(pipeline) {
   return pill(PIPELINE_TONE[group] ?? "grey", text, title, link);
 }
 
-// Sous la dernière valeur connue : un job ou un pipeline tourne, la valeur va bientôt changer.
+// Under the last known value: a job or pipeline is running, the value will change soon.
 function runningNote(
   title,
   link,
@@ -2981,8 +2981,8 @@ function runningNote(
   return `<a${progressAttributes("running-note", title, progress)} href="${escapeHtml(link)}" target="_blank" rel="noopener">${escapeHtml(t("refreshing"))}</a>`;
 }
 
-// Classe, style et info-bulle d'un élément souligné par l'avancement ; ses données d'estimation l'accompagnent
-// pour que tickProgress le fasse avancer entre deux actualisations sans redessiner le tableau.
+// Class, style and tooltip of an element underlined by progress; its estimate data comes along
+// so tickProgress can advance it between two refreshes without redrawing the table.
 function progressAttributes(
   className,
   title,
@@ -3000,7 +3000,7 @@ function progressAttributes(
 
 const PROGRESS_TICK_MS = 5 * 1000;
 
-// L'info-bulle native déjà ouverte garde son texte : la nouvelle valeur s'affiche au survol suivant.
+// An already open native tooltip keeps its text: the new value shows on the next hover.
 function tickProgress() {
   for (const element of document.querySelectorAll("[data-progress]")) {
     const { className, title, ...progress } = JSON.parse(element.dataset.progress);
@@ -3015,8 +3015,8 @@ function tickProgress() {
   }
 }
 
-// Avancement estimé d'un pipeline en cours, d'après la médiane des durées réussies de même nature : null
-// sans début connu ou sans référence. Une estimation, pas une promesse : les jobs varient d'un pipeline à l'autre.
+// Estimated progress of a running pipeline, from the median of successful durations of the same kind: null
+// without a known start or without a reference. An estimate, not a promise: jobs vary from one pipeline to the next.
 function pipelineProgress(
   startedAt,
   durations,
@@ -3026,7 +3026,7 @@ function pipelineProgress(
   return { startedAt, typical: median(durations), count: durations.length, kind };
 }
 
-// Rendu de l'avancement à l'instant : recalculé à chaque tick, l'estimation suit l'horloge.
+// Rendering of the progress at this instant: recomputed on each tick, the estimate follows the clock.
 function progressView(
   progress,
   className,
@@ -3058,7 +3058,7 @@ function median(values) {
   return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
 }
 
-// head_pipeline porte detailed_status ; repli sur le statut brut s'il manquait.
+// head_pipeline carries detailed_status; falls back on the raw status if it was missing.
 function pipelineStatus(pipeline) {
   const detailed = pipeline.detailed_status;
   return detailed
@@ -3082,7 +3082,7 @@ function pitCell(mr) {
   return signalStack(pit, out, `<a class="ok good" href="${escapeHtml(pit.link)}" target="_blank" rel="noopener" title="${escapeHtml(detail)}">0</a>`);
 }
 
-// Signal inexploitable (absent, en cours, non configuré…) : sa raison, en pastille grise.
+// Unusable signal (missing, running, not configured…): its reason, as a grey badge.
 function reasonPill(
   kind,
   signal,
@@ -3164,15 +3164,15 @@ function commitsCount(mr) {
   return commits && !commits.error ? commits.count : null;
 }
 
-// Date du dernier push, et non celle du commit : GitLab date une version de la MR à sa réception,
-// alors que la date de commit vient du poste du développeur, qui peut l'avoir réglée à sa guise
-// (horloge fausse, rebase, commit --date). La date de commit reste lisible dans l'infobulle.
+// Date of the last push, not of the commit: GitLab dates an MR version when it receives it,
+// whereas the commit date comes from the developer's machine, which may have set it at will
+// (wrong clock, rebase, commit --date). The commit date remains readable in the tooltip.
 function lastCommitDate(mr) {
   const commits = signalsOf(mr).commits;
   return commits?.pushDate ?? commits?.commitDate ?? null;
 }
 
-// Date d'auteur du plus ancien commit : conservée au rebase, elle date le début du développement.
+// Author date of the oldest commit: preserved on rebase, it dates the start of development.
 function firstCommitDate(mr) {
   return signalsOf(mr).commits?.firstDate ?? null;
 }
@@ -3227,7 +3227,7 @@ function isCommitGapWorthShowing(commits) {
     || (gapMinutes >= COMMIT_GAP_MIN_MINUTES && gapMinutes >= COMMIT_GAP_MIN_RATIO * pushAgeMinutes);
 }
 
-// Une action simple est attendue (correction, rebase) et personne n'a poussé depuis STALLED_ALERT_HOURS.
+// A simple action is expected (fix, rebase) and nobody has pushed for STALLED_ALERT_HOURS.
 function isStalled(mr) {
   if (mr.state === "merged") return false;
   const hours = commitAgeHours(mr);
@@ -3250,8 +3250,8 @@ function dateCell(iso, key) {
   return `<span title="${escapeHtml(t(key, { date: formatDate(iso) }))}">${relative(iso)}</span>`;
 }
 
-// Valeurs d'un run précédent pendant qu'un nouveau job tourne : suivies d'un « En cours » en petit, et
-// jamais affichées en vert — un signal propre peut encore se dégrader à la fin du job.
+// Values from a previous run while a new job runs: followed by a small "Running", and
+// never shown in green — a clean signal may still degrade at the end of the job.
 function refreshingNote(
   signal,
   join
@@ -3265,7 +3265,7 @@ function refreshingNote(
   );
 }
 
-// join : "start" (cellule issues Sonar, porte le ⟳) ou "end" (couverture, le trait seul) ; sinon l'icône seule.
+// join: "start" (Sonar issues cell, carries the ⟳) or "end" (coverage, the line alone); otherwise the icon alone.
 function compactRunningNote(
   title,
   link,
@@ -3313,15 +3313,15 @@ function alertScore(mr) {
 
 // ---------- Notifications ----------
 
-// Problèmes d'une MR, chacun avec une gravité : il est « nouveau » s'il n'était pas notifié ou si sa gravité
-// a augmenté. Un signal inconnu (en erreur, pas encore analysé) garde les problèmes déjà notifiés pour sa
-// catégorie, pour ne pas les renotifier quand il redevient lisible.
+// Problems of an MR, each with a severity: it is "new" if it was not notified or if its severity
+// increased. An unknown signal (in error, not yet analysed) keeps the problems already notified for its
+// category, so they are not notified again when it becomes readable again.
 function problemsOf(mr) {
   const s = signalsOf(mr);
   const problems = [];
   const unknown = new Set();
-  // blocking : problème en rouge dans le tableau, qui empêche le merge ou le rend risqué ; les autres
-  // sont en orange, à traiter sans urgence.
+  // blocking: a problem shown in red in the table, which prevents the merge or makes it risky; the others
+  // are orange, to handle without urgency.
   const add = (
     key,
     severity,
@@ -3350,7 +3350,7 @@ function problemsOf(mr) {
   }
   if (!s.threads || s.threads.error) unknown.add("threads");
   else if (s.threads.unresolved > 0) add("threads", s.threads.unresolved, t("problem.threads", { n: s.threads.unresolved }));
-  // Retard signalé comme dans la colonne : dès qu'il passe en orange.
+  // Lag flagged as in the column: as soon as it turns orange.
   const behind = s.behind;
   if (behind?.count == null) {
     unknown.add("behind");
@@ -3367,14 +3367,14 @@ function problemsOf(mr) {
   return { problems, unknown };
 }
 
-// Appelée à chaque nouvelles données et toutes les REMINDER_CHECK_MS, pour les rappels sur ses propres MR.
-// Le premier passage (rien de notifié jusque-là) notifie ses propres MR une par une et résume celles des
-// autres en une seule notification, plutôt qu'une rafale. Les sons suivent la même détection, notifications
-// cochées ou non, et un seul par passage : le plus important.
+// Called on each new data and every REMINDER_CHECK_MS, for reminders on one's own MRs.
+// The first pass (nothing notified so far) notifies one's own MRs one by one and summarises the
+// others' in a single notification, rather than a burst. Sounds follow the same detection, notifications
+// checked or not, and only one per pass: the most important.
 function notifyProblems() {
   const notifying = state.notify && "Notification" in window && Notification.permission === "granted";
   if (!(notifying || state.sound) || !state.notifier || !state.me) return;
-  // Pas de données complètes encore : l'état notifié serait réécrit à vide, et tout renotifié ensuite.
+  // No complete data yet: the notified state would be rewritten empty, and everything renotified afterwards.
   if (!state.refreshedAt) return;
   const notified = readNotified();
   const first = notified == null;
@@ -3425,9 +3425,9 @@ function notifyProblems() {
   announceMerges(sound);
 }
 
-// Pipeline abouti le plus récent de la branche suivie : le dernier, ou le précédent tant que le dernier
-// tourne. Son passage en échec est notifié et rend le son à jouer ; son retour au vert ferme la
-// notification, sans rien jouer. Le premier passage ne fait que relever l'état en place.
+// Most recent completed pipeline of the tracked branch: the latest, or the previous one while the latest
+// runs. Its switch to failure is notified and returns the sound to play; its return to green closes the
+// notification, without playing anything. The first pass only records the current state.
 function notifyBranchPipeline(notifying) {
   const p = state.branchPipeline;
   const conclusive = p && !p.error ? (isActive(p) ? p.previous : p) : null;
@@ -3461,9 +3461,9 @@ function showBranchBroken(p) {
   state.branchNotification = notification;
 }
 
-// MR sorties des ouvertes depuis le passage précédent : GitLab dit lesquelles sont mergées (les autres
-// sont fermées), et une mergée fait jouer un son bref, sans notification, si le passage n'en a pas joué
-// d'autre. Le premier passage ne fait que relever les MR ouvertes.
+// MRs that left the open ones since the previous pass: GitLab says which are merged (the others
+// are closed), and a merged one plays a short sound, without notification, if the pass has not played
+// another. The first pass only records the open MRs.
 async function announceMerges(passSound) {
   const seen = readStored(MERGES_SEEN_KEY);
   const open = state.mrs.map(mr => mr.iid);
@@ -3484,7 +3484,7 @@ async function announceMerges(passSound) {
     );
     if (!passSound && state.sound) ringSound("merged");
   } catch (error) {
-    console.error("MR mergées introuvables :", error);
+    console.error("Merged MRs not found:", error);
   }
 }
 
@@ -3502,13 +3502,13 @@ function saveStored(
 ) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
-  } catch (ignored) { /* stockage indisponible : l'état sera relevé au prochain chargement */ }
+  } catch (ignored) { /* storage unavailable: the state will be recorded on the next load */ }
 }
 
-// Approbateurs apparus depuis le passage précédent : notification de succès, hors soi-même, et le son à
-// jouer (cloche sur ses propres MR et quand on approuve celle d'un autre, un tintement sinon). Le premier passage ne fait que
-// relever les approbations en place. Une MR dont les approbations sont en cours de chargement ou en
-// erreur garde ce qui en était vu.
+// Approvers that appeared since the previous pass: success notification, excluding oneself, and the sound to
+// play (bell on one's own MRs and when approving someone else's, a chime otherwise). The first pass only
+// records the current approvals. An MR whose approvals are loading or in
+// error keeps what was seen of them.
 function notifyApprovals(notifying) {
   const seen = readApprovalsSeen();
   const next = {};
@@ -3524,7 +3524,7 @@ function notifyApprovals(notifying) {
     if (!seen) continue;
     const added = approvals.usernames.flatMap((username, i) => ((before ?? []).includes(username) ? [] : [{ username, name: approvals.names[i] }]));
     const own = mr.author?.username === state.me;
-    // Approuver la MR d'un autre, c'est payer la tournée : la cloche, sans notification.
+    // Approving someone else's MR means buying the round: the bell, without notification.
     if (!own && added.some(a => a.username === state.me)) sound = "bell";
     const newcomers = added.filter(a => a.username !== state.me).map(a => a.name);
     if (!newcomers.length) continue;
@@ -3570,17 +3570,17 @@ function readApprovalsSeen() {
 function saveApprovalsSeen(seen) {
   try {
     localStorage.setItem(APPROVALS_SEEN_KEY, JSON.stringify(seen));
-  } catch (ignored) { /* stockage indisponible : les approbations seront relevées au prochain chargement */ }
+  } catch (ignored) { /* storage unavailable: approvals will be recorded on the next load */ }
 }
 
 function forgetApprovalsSeen() {
   try {
     localStorage.removeItem(APPROVALS_SEEN_KEY);
-  } catch (ignored) { /* stockage indisponible : rien à oublier */ }
+  } catch (ignored) { /* storage unavailable: nothing to forget */ }
 }
 
-// Sons synthétisés par Web Audio, sans fichier : un seul contexte, créé au premier son. Le navigateur ne
-// le laisse jouer qu'après un geste dans la page (clic, touche) : unlockAudio le reprend au premier.
+// Sounds synthesised with Web Audio, without files: a single context, created on the first sound. The browser only
+// lets it play after a gesture in the page (click, key): unlockAudio resumes it on the first one.
 let audio = null;
 
 function audioContext() {
@@ -3609,25 +3609,25 @@ function soundTab() {
 function rememberSoundTab() {
   try {
     if (localStorage.getItem(SOUND_TAB_KEY) !== TAB_ID) localStorage.setItem(SOUND_TAB_KEY, TAB_ID);
-  } catch (ignored) { /* stockage indisponible : chaque onglet joue ses sons */ }
+  } catch (ignored) { /* storage unavailable: each tab plays its own sounds */ }
 }
 
-// Fermé, l'onglet du dernier clic ne joue plus rien : l'onglet notifiant reprend alors les sons.
+// Once closed, the tab of the last click plays nothing more: the notifying tab then takes the sounds back.
 function forgetSoundTab() {
   try {
     if (localStorage.getItem(SOUND_TAB_KEY) === TAB_ID) localStorage.removeItem(SOUND_TAB_KEY);
-  } catch (ignored) { /* stockage indisponible : rien à oublier */ }
+  } catch (ignored) { /* storage unavailable: nothing to forget */ }
 }
 
-// Joué par l'onglet du dernier clic ou de la dernière touche, seul autorisé à coup sûr par le navigateur ;
-// par celui-ci faute d'un tel onglet.
+// Played by the tab of the last click or key press, the only one the browser surely allows;
+// by this one if there is no such tab.
 function ringSound(name) {
   const tab = soundTab();
   if (soundChannel && tab && tab !== TAB_ID) soundChannel.postMessage({ name, tab });
   else playSound(name);
 }
 
-// Note amortie : attaque brève puis décroissance exponentielle, à partir de at secondes.
+// Damped note: short attack then exponential decay, starting at `at` seconds.
 function tone(
   ctx,
   output,
@@ -3646,7 +3646,7 @@ function tone(
   oscillator.stop(start + duration + 0.05);
 }
 
-// Partiels inharmoniques d'une cloche : la fondamentale résonne, les aigus s'éteignent vite.
+// Inharmonic partials of a bell: the fundamental resonates, the high ones die out quickly.
 const BELL_PARTIALS = [[1, 0.5, 1.6], [2.76, 0.25, 0.9], [5.4, 0.12, 0.5], [8.93, 0.06, 0.3]];
 
 function strike(
@@ -3662,9 +3662,9 @@ function strike(
   ));
 }
 
-// Sirène d'alerte : glissando continu qui monte et redescend entre SIREN_LOW et SIREN_HIGH Hz, en
-// SIREN_CYCLES cycles de SIREN_CYCLE secondes. Une dent de scie filtrée en passe-bas lui donne le
-// timbre plein d'une sirène mécanique, sans l'aigreur d'un signal carré.
+// Alert siren: continuous glissando rising and falling between SIREN_LOW and SIREN_HIGH Hz, over
+// SIREN_CYCLES cycles of SIREN_CYCLE seconds. A low-pass filtered sawtooth gives it the
+// full timbre of a mechanical siren, without the harshness of a square wave.
 const SIREN_LOW = 620;
 const SIREN_HIGH = 1240;
 const SIREN_CYCLE = 1.4;
@@ -3697,9 +3697,9 @@ function siren(
   oscillator.stop(end + 0.05);
 }
 
-// Coup sourd et sec : attaque franche puis décroissance immédiate, sans tenue, la hauteur chutant de from
-// à to Hz comme une grosse caisse. La dent de scie filtrée garde des harmoniques audibles sur de petits
-// haut-parleurs, qui rendent mal la fondamentale.
+// Dull, dry thud: sharp attack then immediate decay, no sustain, the pitch dropping from `from`
+// to `to` Hz like a bass drum. The filtered sawtooth keeps harmonics audible on small
+// speakers, which render the fundamental poorly.
 function thud(
   ctx,
   output,
@@ -3723,7 +3723,7 @@ function thud(
   oscillator.stop(end + 0.05);
 }
 
-// Grésillement radio : bruit blanc filtré en passe-bande, comme l'ouverture ou la fermeture d'un émetteur.
+// Radio crackle: band-pass filtered white noise, like a transmitter opening or closing.
 function crackle(
   ctx,
   output,
@@ -3747,7 +3747,7 @@ function crackle(
   noise.start(start);
 }
 
-// Message radio : ouverture grésillante, bips [fréquence, instant], fermeture à closeAt secondes.
+// Radio message: crackling opening, beeps [frequency, instant], closing at closeAt seconds.
 function radio(
   ctx,
   output,
@@ -3771,8 +3771,8 @@ function radio(
   );
 }
 
-// Réponse parlée qui suit un son, par la synthèse vocale du navigateur : voix anglaise, grave et rapide,
-// une réplique tirée au hasard. Elle ne passe pas par Web Audio, donc ni par le gain ni par la mesure de sonie.
+// Spoken reply following a sound, through the browser's speech synthesis: English voice, low and fast,
+// one line picked at random. It does not go through Web Audio, so neither through the gain nor the loudness measurement.
 const SOUND_VOICES = {
   orcaOrdered: { delay: 300, lines: ["Yes sir!", "Roger that!", "Affirmative!", "On it!"] },
   orcaLaunched: { delay: 450, lines: ["Operation underway!", "In position!", "Boots on the ground!", "Engaging!"] },
@@ -3781,8 +3781,8 @@ const SOUND_VOICES = {
   orcaAborted: { delay: 650, lines: ["Mission aborted!", "Mission failed!"] },
 };
 
-// subject, dit après la réplique : celle d'une action, ou le titre d'un onglet Orca (« Review MR !330 »), le « ! » de GitLab en moins
-// et MR épelé, sans quoi la voix anglaise lit « Mister ».
+// subject, spoken after the line: that of an action, or the title of an Orca tab ("Review MR !330"), without GitLab's "!"
+// and with MR spelled out, otherwise the English voice reads "Mister".
 function speakAfter(
   name,
   subject
@@ -3802,20 +3802,20 @@ function speakAfter(
 }
 
 const SOUNDS = {
-  // Cloche de bar, plusieurs coups : sa MR est approuvée.
+  // Bar bell, several strokes: one's MR is approved.
   bell: (ctx, output) => [0, 0.28, 0.56, 0.84, 1.12, 1.4].forEach(at => strike(
     ctx,
     output,
     1046,
     at
   )),
-  // Un seul coup clair et bref : la MR d'un autre est approuvée.
+  // A single short, clear stroke: someone else's MR is approved.
   ding: (ctx, output) => tone(
     ctx,
     output,
     { frequency: 1318, at: 0, duration: 0.6, gain: 0.2 }
   ),
-  // « Boum-boum » sec et grave, deux coups descendants : nouveau problème bloquant sur sa MR.
+  // Dry, low "boom-boom", two descending strokes: new blocking problem on one's MR.
   alert: (ctx, output) => {
     thud(
       ctx,
@@ -3828,26 +3828,26 @@ const SOUNDS = {
       { from: 110, to: 65, at: 0.19, duration: 0.3 }
     );
   },
-  // Sirène : le pipeline de la branche suivie passe en échec.
+  // Siren: the tracked branch's pipeline fails.
   broken: siren,
-  // Arpège majeur montant, do-mi-sol-do, la dernière note tenue : une MR est mergée.
-  // Radio militaire, chacun suivi d'une réplique (SOUND_VOICES). Ordre reçu : grésillement, un bip,
-  // fermeture — on vient de cliquer « Ouvrir dans Orca ».
+  // Rising major arpeggio, C-E-G-C, the last note held: an MR is merged.
+  // Military radio, each followed by a line (SOUND_VOICES). Order received: crackle, a beep,
+  // closing — "Open in Orca" was just clicked.
   orcaOrdered: (ctx, output) => radio(
     ctx,
     output,
     [[1400, 0.12]],
     0.25
   ),
-  // Deux bips montants : Orca a lancé la session demandée.
+  // Two rising beeps: Orca started the requested session.
   orcaLaunched: (ctx, output) => radio(
     ctx,
     output,
     [[1400, 0.15], [1870, 0.27]],
     0.4
   ),
-  // Grésillement prolongé puis bourdon grave qui descend, radio coupée : le lancement Orca a échoué, la
-  // réplique dit à quelle étape.
+  // Prolonged crackle then a low descending drone, radio cut: the Orca launch failed, the
+  // line says at which step.
   orcaUnreachable: (ctx, output) => {
     crackle(
       ctx,
@@ -3870,16 +3870,16 @@ const SOUNDS = {
   )),
 };
 
-// Sonie visée pour chaque son, en LUFS : la sonie momentanée de l'UIT-R BS.1770 (pondération K, fenêtre de
-// 400 ms), la plus forte du son. Chacun est rendu une fois hors ligne, mesuré, puis joué au gain qui l'y
-// ramène : les sons, si différents qu'ils soient, sortent tous à peu près aussi fort.
+// Target loudness for each sound, in LUFS: the ITU-R BS.1770 momentary loudness (K-weighting, 400 ms
+// window), the loudest of the sound. Each is rendered once offline, measured, then played at the gain that
+// brings it there: the sounds, however different, all come out about as loud.
 const SOUND_LOUDNESS_TARGET = -27;
 const SOUND_MEASURE_RATE = 48000;
 const SOUND_MEASURE_SECONDS = 5;
-// Gain des sons quand la mesure est impossible (pas d'OfflineAudioContext).
+// Sound gain when measuring is impossible (no OfflineAudioContext).
 const SOUND_FALLBACK_GAIN = 0.6;
-// Filtres de la pondération K, coefficients de la norme à 48 kHz : plateau qui relève les aigus, puis
-// passe-haut qui écarte l'infragrave.
+// K-weighting filters, the standard's coefficients at 48 kHz: a shelf that lifts the highs, then
+// a high-pass that removes the infrasonic range.
 const K_WEIGHTING = [
   { b: [1.53512485958697, -2.69169618940638, 1.19839281085285], a: [-1.69065929318241, 0.73248077421585] },
   { b: [1, -2, 1], a: [-1.99004745483398, 0.99007225036621] },
@@ -3934,8 +3934,8 @@ function momentaryLoudness(samples) {
   return -0.691 + 10 * Math.log10(loudest / window);
 }
 
-// Rend l'état du contexte audio une fois le son lancé (« running » : il est parti vers la sortie du
-// système), ou l'erreur : l'écoute des sons le montre, les autres appels l'ignorent.
+// Returns the audio context state once the sound has started ("running": it went to the system
+// output), or the error: the sound test shows it, other callers ignore it.
 async function playSound(
   name,
   subject = null
@@ -3968,11 +3968,11 @@ function readSound() {
 function saveSound(enabled) {
   try {
     localStorage.setItem(SOUND_KEY, String(enabled));
-  } catch (ignored) { /* stockage indisponible : la préférence vaut pour la session */ }
+  } catch (ignored) { /* storage unavailable: the preference holds for the session */ }
 }
 
-// announce : la case vient d'être cochée. La cloche fait vérifier tout de suite que le son passe, et les
-// approbations en place sont relevées sans être annoncées.
+// announce: the box has just been checked. The bell lets one check right away that sound works, and the
+// current approvals are recorded without being announced.
 async function setSound(
   enabled,
   announce = false
@@ -3989,8 +3989,8 @@ async function setSound(
   notifyProblems();
 }
 
-// Même tag par MR : une nouvelle notification remplace la précédente au lieu de s'empiler, et renotify la
-// fait réapparaître. Celles de ses propres MR restent affichées jusqu'à ce qu'on les ferme.
+// Same tag per MR: a new notification replaces the previous one instead of stacking, and renotify makes it
+// reappear. Those of one's own MRs stay displayed until closed.
 function showNotification(
   mr,
   problems,
@@ -4030,22 +4030,22 @@ function readNotified() {
 function saveNotified(notified) {
   try {
     localStorage.setItem(NOTIFIED_KEY, JSON.stringify(notified));
-  } catch (ignored) { /* stockage indisponible : les problèmes seront renotifiés au prochain chargement */ }
+  } catch (ignored) { /* storage unavailable: problems will be renotified on the next load */ }
 }
 
 function forgetNotified() {
   try {
     localStorage.removeItem(NOTIFIED_KEY);
-  } catch (ignored) { /* stockage indisponible : rien à oublier */ }
+  } catch (ignored) { /* storage unavailable: nothing to forget */ }
 }
 
-// Tout ce que le dashboard a écrit dans le localStorage de cette origine (donc de ce profil : chaque
-// port est une origine à part), puis rechargement : l'état en mémoire le réécrirait sinon aussitôt.
+// Everything the dashboard wrote to this origin's localStorage (hence this profile's: each
+// port is a separate origin), then reload: the in-memory state would otherwise rewrite it at once.
 function clearStorage() {
   if (!confirm(t("clearStorage.confirm"))) return;
   try {
     Object.keys(localStorage).filter(key => key.startsWith(STORAGE_PREFIX)).forEach(key => localStorage.removeItem(key));
-  } catch (ignored) { /* stockage indisponible : il n'y a rien à effacer */ }
+  } catch (ignored) { /* storage unavailable: there is nothing to clear */ }
   location.reload();
 }
 
@@ -4060,13 +4060,13 @@ function readNotify() {
 function saveNotify(enabled) {
   try {
     localStorage.setItem(NOTIFY_KEY, String(enabled));
-  } catch (ignored) { /* stockage indisponible : la préférence vaut pour la session */ }
+  } catch (ignored) { /* storage unavailable: the preference holds for the session */ }
 }
 
-// announce : la case vient d'être cochée. Notification de confirmation, pour vérifier tout de suite que le
-// navigateur et le système laissent passer les notifications, et oubli de ce qui a déjà été notifié, pour
-// que tous les problèmes en cours soient renotifiés — y compris par l'onglet notifiant s'il en est un autre.
-// L'oubli précède saveNotify : l'onglet notifiant relit l'état sur l'événement storage qu'elle déclenche.
+// announce: the box has just been checked. Confirmation notification, to check right away that the
+// browser and the system let notifications through, and forgetting what was already notified, so
+// that all current problems are renotified — including by the notifying tab if it is another one.
+// Forgetting comes before saveNotify: the notifying tab rereads the state on the storage event it triggers.
 async function setNotify(
   enabled,
   announce = false
@@ -4091,30 +4091,30 @@ async function setNotify(
   notifyProblems();
 }
 
-// Utilisateur du jeton GitLab, gardé dans le navigateur : il ne change pas d'un chargement à l'autre, et
-// notifications et sons le demandent ensemble au démarrage. « Effacer les données locales » l'oublie.
+// User of the GitLab token, kept in the browser: it does not change from one load to the next, and
+// notifications and sounds both ask for it at startup. "Clear local data" forgets it.
 let mePromise = null;
 
 function loadMe() {
   if (state.me) return Promise.resolve();
   try {
     state.me = localStorage.getItem(ME_KEY);
-  } catch (ignored) { /* stockage indisponible : demandé à GitLab */ }
+  } catch (ignored) { /* storage unavailable: asked from GitLab */ }
   if (state.me) return Promise.resolve();
   mePromise ??= api("/gitlab/user")
     .then(({ body }) => {
       state.me = body.username;
       try {
         localStorage.setItem(ME_KEY, state.me);
-      } catch (ignored) { /* stockage indisponible : redemandé au prochain chargement */ }
+      } catch (ignored) { /* storage unavailable: asked again on the next load */ }
     })
     .catch(error => showError(t("notify.me", { message: error.message })))
     .finally(() => { mePromise = null; });
   return mePromise;
 }
 
-// Élection d'un onglet notifiant : le verrou est gardé tant que l'onglet vit, puis passe au suivant.
-// Sans Web Locks, chaque onglet notifie.
+// Election of a notifying tab: the lock is held as long as the tab lives, then passes to the next one.
+// Without Web Locks, every tab notifies.
 function electNotifier() {
   const lead = () => {
     state.notifier = true;
@@ -4126,11 +4126,11 @@ function electNotifier() {
   }
   navigator.locks.request(NOTIFIER_LOCK, () => {
     lead();
-    return new Promise(() => { /* gardé jusqu'à la fermeture de l'onglet */ });
+    return new Promise(() => { /* held until the tab closes */ });
   });
 }
 
-// ---------- Filtres ----------
+// ---------- Filters ----------
 
 function populateFilterOptions() {
   rememberPeopleNames();
@@ -4154,7 +4154,7 @@ function populateFilterOptions() {
 const PEOPLE_FILTERS = ["reviewer", "assignee"];
 let authorChips = [];
 
-// Comme les autres filtres de personnes, un auteur filtré absent des MR affichées reste proposé.
+// Like the other people filters, a filtered author absent from the displayed MRs stays offered.
 function fillAuthorChips(people) {
   const absent = state.filters.authors.filter(username => !people.some(([known]) => known === username));
   for (const username of absent) if (!peopleNames.has(username)) lookUpPersonName(username);
@@ -4162,7 +4162,7 @@ function fillAuthorChips(people) {
   renderAuthorChips();
 }
 
-// Prénom seul, sauf quand deux auteurs le partagent.
+// First name only, unless two authors share it.
 function chipLabels(people) {
   const first = name => name.split(/\s+/)[0];
   const counts = new Map();
@@ -4191,8 +4191,8 @@ function renderAuthorChips() {
     .join("");
 }
 
-// Un clic simple donne toujours le même résultat : cet auteur seul, ou « Tous » s'il l'était déjà.
-// Ctrl ou Maj + clic compose une sélection ; la vider ou y mettre tout le monde revient à « Tous ».
+// A simple click always gives the same result: this author alone, or "All" if it already was.
+// Ctrl or Shift + click builds a selection; emptying it or including everyone goes back to "All".
 function chooseAuthor(
   username,
   additive
@@ -4205,11 +4205,11 @@ function chooseAuthor(
   const everyone = authorChips.every(([known]) => next.includes(known));
   updateFilters({ authors: everyone ? [] : next });
 }
-// Personnes proposées par chaque filtre, [username, nom], et son libellé « tous ».
+// People offered by each filter, [username, name], and its "all" label.
 const peopleFilters = {};
 
-// Une personne filtrée absente des MR affichées (lien partagé, autre vue, aucune MR ouverte) reste proposée,
-// sous son nom s'il est connu, demandé à GitLab sinon, et sous son username en attendant.
+// A filtered person absent from the displayed MRs (shared link, other view, no open MR) stays offered,
+// under their name if known, asked from GitLab otherwise, and under their username meanwhile.
 function fillPeopleFilter(
   id,
   placeholder,
@@ -4225,8 +4225,8 @@ function fillPeopleFilter(
   renderPeopleFilter(id);
 }
 
-// Noms des personnes déjà vues, par username, retenus dans le navigateur : ouvertes ou mergées, auteurs,
-// relecteurs ou assignés.
+// Names of people already seen, by username, remembered in the browser: open or merged, authors,
+// reviewers or assignees.
 const PEOPLE_NAMES_KEY = "mr-dashboard.peopleNames";
 const peopleNames = readPeopleNames();
 const peopleNameLookups = new Set();
@@ -4242,7 +4242,7 @@ function readPeopleNames() {
 function savePeopleNames() {
   try {
     localStorage.setItem(PEOPLE_NAMES_KEY, JSON.stringify(Object.fromEntries(peopleNames)));
-  } catch (ignored) { /* stockage indisponible : les noms seront redemandés au prochain chargement */ }
+  } catch (ignored) { /* storage unavailable: names will be asked again on the next load */ }
 }
 
 function rememberPeopleNames() {
@@ -4258,7 +4258,7 @@ function rememberPeopleNames() {
   if (changed) savePeopleNames();
 }
 
-// Une fois par username et par page : un username inconnu de GitLab reste affiché tel quel.
+// Once per username and per page: a username unknown to GitLab stays displayed as is.
 async function lookUpPersonName(username) {
   if (peopleNameLookups.has(username)) return;
   peopleNameLookups.add(username);
@@ -4268,7 +4268,7 @@ async function lookUpPersonName(username) {
     peopleNames.set(username, user.name);
     savePeopleNames();
     populateFilterOptions();
-  } catch (ignored) { /* GitLab injoignable : le username reste affiché */ }
+  } catch (ignored) { /* GitLab unreachable: the username stays displayed */ }
 }
 
 const personHtml = name => avatar(name) + `<span>${escapeHtml(name)}</span>`;
@@ -4320,7 +4320,7 @@ function fillSelect(id, placeholder, options) {
   select.value = current;
 }
 
-// Les MR mergées ne sont plus ni en Draft ni en alerte, et ne s'actualisent pas d'elles-mêmes.
+// Merged MRs are no longer Draft nor in alert, and do not refresh by themselves.
 function syncControlsFromState() {
   const f = state.filters;
   const merged = mergedView();
@@ -4356,7 +4356,7 @@ function matches(mr) {
   return true;
 }
 
-// Virgule = ou, espace = et ; « !249 » vise la MR 249 seule, « 249 » cherche partout.
+// Comma = or, space = and; "!249" targets MR 249 alone, "249" searches everywhere.
 function matchesQuery(mr, q) {
   const haystack = `${mr.title} ${mr.source_branch} ${mr.author?.name ?? ""} ${mr.labels.join(" ")}`.toLowerCase();
   const matchesTerm = term => /^!\d+$/.test(term) ? term === `!${mr.iid}` : `!${mr.iid} ${haystack}`.includes(term);
@@ -4366,7 +4366,7 @@ function matchesQuery(mr, q) {
   return !alternatives.length || alternatives.some(terms => terms.every(matchesTerm));
 }
 
-// ---------- Rendu ----------
+// ---------- Rendering ----------
 
 function render() {
   renderBranchPipeline();
@@ -4392,8 +4392,8 @@ function render() {
   fitTitles();
 }
 
-// Un titre trop long pour sa ligne voit sa police réduite juste assez pour y tenir, jusqu'à
-// TITLE_MIN_SCALE : au-delà, le « … » de la feuille de style prend le relais.
+// A title too long for its line gets its font shrunk just enough to fit, down to
+// TITLE_MIN_SCALE: beyond that, the stylesheet's "…" takes over.
 function fitTitles() {
   for (const link of document.querySelectorAll("#list .mr-cell .title a")) {
     link.style.fontSize = "";
@@ -4415,7 +4415,7 @@ function openSummary(
 
 const viewMrs = () => (mergedView() ? state.merged.mrs : state.mrs);
 
-// Liste des MR de la vue courante dans GitLab, sans les filtres du dashboard.
+// List of the current view's MRs in GitLab, without the dashboard's filters.
 function gitlabListLink() {
   if (!state.config) return "";
   const view = mergedView() ? "merged" : "opened";
@@ -4423,8 +4423,8 @@ function gitlabListLink() {
   return `<a class="gitlab-list" href="${escapeHtml(url)}" target="_blank" rel="noopener" title="${escapeHtml(t(`gitlabList.${view}.title`))}">${escapeHtml(t("gitlabList"))} ↗</a>`;
 }
 
-// Une valeur inconnue (signal en chargement, absent, en erreur) est toujours rangée en fin de liste,
-// quel que soit le sens du tri : elle ne doit ni masquer ni passer pour un bon résultat.
+// An unknown value (signal loading, missing, in error) is always sorted at the end of the list,
+// whatever the sort direction: it must neither hide nor pass for a good result.
 function tableComparator() {
   const columns = shownColumns();
   const column = columns.find(c => c.key === state.filters.sort) ?? columns.find(c => c.key === defaultSort().key);
@@ -4480,7 +4480,7 @@ function mrCell(mr) {
     ${labels ? `<div class="labels">${labels}</div>` : ""}`;
 }
 
-// Dans la sous-ligne du titre plutôt qu'en colonne : la taille de la MR n'ajoute aucune largeur au tableau.
+// In the title's sub-line rather than in a column: the MR size adds no width to the table.
 function diffStat(mr) {
   const d = mr.diffStats;
   if (!d) return "";
@@ -4490,13 +4490,13 @@ function diffStat(mr) {
     `<span class="add">+${n(d.additions)}</span> <span class="del">−${n(d.deletions)}</span></span>`;
 }
 
-// MR mergée : retrouvée par son merge commit, sa branche source est d'ordinaire supprimée.
+// Merged MR: found by its merge commit, its source branch is usually deleted.
 function gitDiffButton(mr) {
   if (mr.state === "merged" && !mr.merge_commit_sha) return "";
   return `<button type="button" class="mr-action" data-git-diff="${mr.iid}" title="${escapeHtml(t("gitDiff.title"))}" aria-label="diff">${DIFF_ICON}</button>`;
 }
 
-// Une page, un + au-dessus d'un − : un fichier modifié.
+// A page, a + above a −: a modified file.
 const DIFF_ICON = `<svg viewBox="0 0 16 16" width="1.15em" height="1.15em" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">`
   + `<path d="M3.5 1.5h6l3 3v10h-9z"/><path d="M8 4.8v4M6 6.8h4" stroke="var(--green-fg)"/><path d="M6 11.5h4" stroke="var(--red-fg)"/></svg>`;
 
@@ -4522,10 +4522,10 @@ function openGitDiff(mr) {
   MrTabs.open(`diff.html?${query}`, "diff", mr.iid);
 }
 
-// ---------- Fetch du dépôt local ----------
+// ---------- Local repository fetch ----------
 
-// Fetch à la demande, ou dès qu'une MR a reçu des commits, est apparue ou a disparu, ou que la branche
-// du pipeline a avancé : la copie locale suit GitLab au plus près, et reste utilisable s'il tombe.
+// Fetch on demand, or as soon as an MR received commits, appeared or disappeared, or the pipeline
+// branch moved forward: the local copy follows GitLab as closely as possible, and stays usable if it goes down.
 const gitFetchEnabled = () => state.configLoaded && state.config?.gitFetchIntervalS !== undefined;
 
 const gitFetchIntervalText = (before, after) => {
@@ -4533,8 +4533,8 @@ const gitFetchIntervalText = (before, after) => {
   return seconds > 0 ? `${before}${Math.round(seconds / 60)}${after}` : "";
 };
 
-// Suspendu, le fetch automatique l'est pour le serveur, donc pour tous les onglets : la page lit son
-// état au lieu de le garder dans le navigateur.
+// When suspended, automatic fetch is suspended for the server, hence for all tabs: the page reads its
+// state instead of keeping it in the browser.
 function fetchIfRepoChanged() {
   if (!gitFetchEnabled() || state.gitFetch.status?.auto === false) return;
   const seen = [...state.mrs.map(mr => `${mr.iid}:${mr.sha}`).sort(), state.branchPipeline?.sha ?? ""].join(" ");
@@ -4543,8 +4543,8 @@ function fetchIfRepoChanged() {
   gitFetch(seen);
 }
 
-// Avec l'état des MR, le serveur ne fetch que s'il diffère du dernier qu'on lui a signalé : une page
-// rechargée ou un autre onglet ne relance pas de fetch. Sans, le fetch part toujours (bouton).
+// With the MR state, the server only fetches if it differs from the last one reported to it: a reloaded
+// page or another tab does not trigger a fetch. Without it, the fetch always runs (button).
 async function gitFetch(signature) {
   state.gitFetch.running = true;
   renderGitFetch();
@@ -4575,25 +4575,25 @@ async function setGitFetchAuto(enabled) {
   renderGitFetch();
 }
 
-// Le serveur fetch aussi de lui-même à intervalle régulier : son état est relu pour le montrer.
+// The server also fetches by itself at regular intervals: its state is reread to show it.
 async function loadGitFetchStatus() {
   if (!gitFetchEnabled() || state.gitFetch.running) return;
   try {
     state.gitFetch.status = (await api("/git/status")).body;
     renderGitFetch();
   } catch (error) {
-    console.error("Lecture de l'état du fetch impossible :", error);
+    console.error("Unable to read the fetch state:", error);
   }
 }
 
-// Requêtes du serveur à GitLab : le navigateur ne lui parle jamais en direct, le compte du serveur vaut
-// pour tous les onglets. git fetch compris, Sonar à part : ce n'est pas GitLab.
+// Server requests to GitLab: the browser never talks to it directly, the server's count holds
+// for all tabs. git fetch included, Sonar excluded: it is not GitLab.
 const GITLAB_KINDS = ["gitlab", "gitlab-write", "git"];
 const REQUEST_ERRORS = ["connection", "4xx", "5xx", "git"];
-// Un 4xx vient le plus souvent d'une ressource absente, attendue : seules les autres erreurs disent
-// que GitLab va mal, et colorent le bouton.
+// A 4xx most often comes from an expected missing resource: only the other errors say
+// that GitLab is unwell, and colour the button.
 const ALARMING_ERRORS = ["connection", "5xx", "git"];
-// Relu chaque seconde, comme un compteur ; jamais deux lectures à la fois si le serveur traîne.
+// Reread every second, like a counter; never two reads at once if the server lags.
 const REQUEST_STATS_POLL_MS = 1000;
 const REQUEST_STATS_ROWS = [
   ["gitlab", "stats.read"],
@@ -4672,7 +4672,7 @@ function renderGitFetch() {
   const el = $("git-fetch-status");
   $("git-fetch").disabled = running || status?.running;
   $("git-fetch-auto").checked = status?.auto !== false;
-  // Cite l'intervalle du serveur, connu après les textes statiques.
+  // Quotes the server's interval, known after the static texts.
   $("git-fetch-auto").closest("label").title = t("gitFetch.autoTitle");
   renderGitFetchFreshness();
   el.className = "git-fetch-status";
@@ -4691,17 +4691,17 @@ function renderGitFetch() {
   }
 }
 
-// Même barre que l'actualisation auto, calée sur le prochain fetch automatique du serveur. Redessinée
-// seulement quand cette échéance change : l'état relu toutes les 30 s ne relance pas l'animation.
+// Same bar as the auto refresh, aligned on the server's next automatic fetch. Redrawn
+// only when that deadline changes: the state reread every 30 s does not restart the animation.
 function renderGitFetchFreshness() {
   const bar = $("git-fetch-freshness");
   const nextAt = state.gitFetch.running ? null : state.gitFetch.status?.nextAt;
   bar.hidden = !nextAt;
-  // Une animation masquée repart de zéro à l'affichage : elle sera redessinée.
+  // A hidden animation restarts from zero when displayed: it will be redrawn.
   if (!nextAt) delete bar.dataset.nextAt;
   if (!nextAt || bar.dataset.nextAt === nextAt) return;
   bar.dataset.nextAt = nextAt;
-  // Relit l'état juste après l'échéance, sans attendre la relecture des 30 s, pour relancer la barre.
+  // Rereads the state right after the deadline, without waiting for the 30 s reread, to restart the bar.
   clearTimeout(state.gitFetch.nextTimer);
   state.gitFetch.nextTimer = setTimeout(loadGitFetchStatus, Math.max(0, new Date(nextAt) - Date.now()) + 3000);
   const cycleMs = state.config.gitFetchIntervalS * 1000;
@@ -4712,16 +4712,16 @@ function renderGitFetchFreshness() {
   );
 }
 
-// ---------- Actions AI ----------
+// ---------- AI actions ----------
 
-// Une branche en retard ou en conflit, un indicateur qualité imparfait ou un thread non résolu : seules
-// les actions « to-fix » l'exigent, et le liseré rouge du bouton le signale.
+// A branch lagging or in conflict, an imperfect quality indicator or an unresolved thread: only
+// the "to-fix" actions require it, and the button's red border flags it.
 function hasSomethingToFix(mr) {
   const s = signalsOf(mr);
   return mr.has_conflicts || s.behind?.count > 0 || qualityDefects(s).length > 0 || s.threads?.unresolved > 0;
 }
 
-// Place du bouton gardée quand aucune action n'est proposée : « diff » reste au même endroit d'une ligne à l'autre.
+// Button space kept when no action is offered: "diff" stays at the same place from one row to the next.
 const aiPlaceholder = () => `<button type="button" class="mr-action ai placeholder" tabindex="-1" aria-hidden="true">${escapeHtml(MrAi.t("ai"))}</button>`;
 
 function aiButton(mr) {
@@ -4732,15 +4732,15 @@ function aiButton(mr) {
     `title="${escapeHtml(MrAi.buttonTitle(toFix))}">${escapeHtml(MrAi.t("ai"))}</button>`;
 }
 
-// Ce que les actions AI d'une MR demandent : si elle a quelque chose à corriger, et quoi.
+// What an MR's AI actions ask for: whether it has something to fix, and what.
 const aiFixContext = mr => ({ toFix: hasSomethingToFix(mr), fixContext: aiFixPrompt(mr) });
 
-// Le diff, qui ne charge ni indicateurs CI ni threads, propose ainsi la correction comme ici.
+// The diff, which loads neither CI indicators nor threads, thus offers the fix just like here.
 function saveAiFixContexts() {
   MrAi.saveFixContexts(Object.fromEntries(state.mrs.filter(mr => !signalsOf(mr).loading).map(mr => [mr.iid, aiFixContext(mr)])));
 }
 
-// Alimente le prompt seul : en français quelle que soit la langue de l'interface, comme aiFixPrompt.
+// Feeds the prompt only: in French whatever the interface language, like aiFixPrompt.
 function qualityDefects(s) {
   const defects = [];
   if (s.pipeline?.status === "failed") defects.push(`le pipeline #${s.pipeline.id} est en échec${linkFr(s.pipeline.web_url)}`);
@@ -4759,11 +4759,11 @@ function qualityDefects(s) {
   return defects;
 }
 
-// Lien vers le détail d'un indicateur : le correcteur y va droit, au lieu de le rechercher.
+// Link to an indicator's detail: the fixer goes straight to it, instead of searching for it.
 const linkFr = url => url ? ` : ${url}` : "";
 
-// Seuls les indicateurs que le projet suivi produit : exiger un mutant de moins d'un projet sans PIT
-// lancerait le correcteur sur un objectif impossible.
+// Only the indicators the tracked project produces: requiring one less mutant from a project without PIT
+// would send the fixer after an impossible goal.
 function perfectIndicators() {
   return [
     "pipeline vert",
@@ -4779,9 +4779,9 @@ function aiFixPrompt(mr) {
   const running = s.sonar?.refreshing || s.pit?.refreshing || PENDING_JOB_STATUSES.has(s.pipeline?.status);
   const behind = s.behind?.count ?? 0;
   const parts = [`Sur la MR !${mr.iid} (\`${mr.source_branch}\` → \`${mr.target_branch}\`) :`];
-  // Corrections d'abord, sur les valeurs du dernier pipeline terminé : mettre la branche à jour ne
-  // corrige aucun indicateur, et attendre le pipeline qui suit la mise à jour retarderait d'autant les
-  // corrections. Le tout part ensuite en un seul push, donc un seul pipeline.
+  // Fixes first, on the values of the last finished pipeline: updating the branch does not
+  // fix any indicator, and waiting for the pipeline following the update would delay the
+  // fixes just as much. Everything then goes out in a single push, hence a single pipeline.
   if (defects.length) {
     parts.push(
       "Corrige les indicateurs qualité imparfaits relevés par le dernier pipeline terminé, sans attendre de nouveau pipeline :\n" +
@@ -4789,8 +4789,8 @@ function aiFixPrompt(mr) {
       (running ? "\n(un pipeline est en cours : n'attends pas sa fin, vérifie seulement dans le code qu'un point n'est pas déjà corrigé sur la branche)" : "")
     );
   }
-  // Le compte seul ne dit pas quoi faire : le prompt dit où lire les threads et qu'ils demandent des
-  // corrections de la MR elle-même.
+  // The count alone does not say what to do: the prompt says where to read the threads and that they ask for
+  // fixes to the MR itself.
   if (unresolved > 0) {
     parts.push(
       `La MR a ${unresolved} thread${plural(unresolved)} non résolu${plural(unresolved)} (commentaires de revue et diff notes) : ` +
@@ -4806,16 +4806,16 @@ function aiFixPrompt(mr) {
       (mr.has_conflicts ? ", et résous les conflits que GitLab signale avec la cible." : ".")
     );
   }
-  // Le titre et la description, écrits au début du développement, ne suivent pas seuls les changements
-  // de cap faits depuis, ni ceux de cette correction.
+  // The title and description, written at the start of development, do not follow by themselves the changes
+  // of direction made since, nor those of this fix.
   parts.push(
     `Relis enfin le titre et la description de la MR (\`glab mr view ${mr.iid}\`) : s'ils ne décrivent plus ` +
     `ce que fait la MR une fois tes corrections faites, mets-les à jour (\`glab mr update ${mr.iid}\`), ` +
     "sans toucher à ce qui est encore juste."
   );
-  // Toute modification de la MR — mise à jour, correction, réponse à un thread — relance la CI et peut
-  // dégrader un indicateur jusque-là parfait : la boucle de vérification vaut donc dans tous les cas.
-  // Le moyen de lire les indicateurs est propre au projet : son catalogue d'actions le précise.
+  // Any change to the MR — update, fix, reply to a thread — reruns the CI and may
+  // degrade an indicator that was perfect so far: the verification loop therefore applies in every case.
+  // How to read the indicators is project-specific: its action catalogue specifies it.
   parts.push(
     "Pousse le tout en une fois sur la branche de la MR, attends la fin du pipeline du commit poussé, puis " +
     `relis l'état des indicateurs. Tant qu'ils ne sont pas parfaits (${perfectIndicators().join(", ")}), ` +
@@ -4824,7 +4824,7 @@ function aiFixPrompt(mr) {
   return parts.join("\n\n");
 }
 
-// Catalogue relu à l'ouverture : le bouton de la ligne suit aussitôt un catalogue modifié.
+// Catalogue reread on opening: the row's button immediately follows a modified catalogue.
 async function openAi(mr) {
   await MrAi.open(
     mr,
@@ -4851,8 +4851,8 @@ function threadsCell(mr) {
   return `<span class="ok${threads.total ? " good" : ""}" title="${escapeHtml(title)}">${text}</span>`;
 }
 
-// Pastille à côté du titre, seulement si quelqu'un a approuvé : l'absence d'approbation est l'état
-// ordinaire d'une MR en revue, elle n'a pas à occuper de place.
+// Badge next to the title, only if someone approved: no approval is the ordinary
+// state of an MR under review, it need not take up space.
 function approvalPill(mr) {
   const names = signalsOf(mr).approvals?.names;
   if (!names?.length) return "";
@@ -4860,7 +4860,7 @@ function approvalPill(mr) {
   return pill("green", t("approved", { n: count }), t("approved.title", { names: names.join(", ") }), mr.web_url);
 }
 
-// En rouge : un reviewer bloque la MR tant qu'il n'a pas relu les changements demandés.
+// In red: a reviewer blocks the MR until they have reviewed the requested changes.
 function blockedByPills(mr) {
   const signals = signalsOf(mr);
   const pills = (key, tone, others) => (others ?? [])
@@ -4886,35 +4886,35 @@ function commitsCell(mr) {
   return `<a href="${escapeHtml(mr.web_url)}/commits" target="_blank" rel="noopener" aria-label="${escapeHtml(t("commits.title"))}" aria-haspopup="dialog" data-commit-activity="${mr.iid}">${commits.count}</a>`;
 }
 
-// ---------- Activité des commits (survol du nombre de commits) ----------
+// ---------- Commit activity (hovering the commit count) ----------
 
-// Délai avant ouverture : un simple passage de la souris sur la colonne — en allant vers le volet,
-// notamment — ne doit ni rien charger, ni changer la MR affichée.
+// Delay before opening: simply moving the mouse across the column — on the way to the panel,
+// notably — must neither load anything nor change the displayed MR.
 const COMMIT_ACTIVITY_OPEN_MS = 350;
-// Géométrie du graphique, en unités du viewBox (le SVG s'adapte à la largeur de la popup).
+// Chart geometry, in viewBox units (the SVG adapts to the popup width).
 const CA_W = 560;
 const CA_H = 210;
 const CA_MARGIN = { left: 30, right: 12, top: 12, bottom: 18 };
-// Demi-largeur d'un libellé de jour, en unités du viewBox, et écart minimal entre deux minuits pour
-// l'écrire.
+// Half-width of a day label, in viewBox units, and minimum gap between two midnights to
+// write it.
 const CA_DAY_LABEL_HALF_WIDTH = 15;
 const CA_DAY_LABEL_MIN_SPACING = 38;
-// Coche d'un merge, posée en travers de la courbe : courte, pour ne pas se confondre avec les traits
-// des jours.
+// Merge tick, laid across the curve: short, so it is not confused with the day
+// marks.
 const CA_MERGE_HALF_HEIGHT = 6;
-// Heures de bureau, à l'heure locale : la surface sous la courbe y est plus opaque.
+// Office hours, in local time: the area under the curve is more opaque there.
 const OFFICE_START_HOUR = 8;
 const OFFICE_END_HOUR = 20;
-// Commentaires rapprochés d'un même camp (auteur ou autres) fondus en un point : une revue postée
-// d'un bloc compte des dizaines de diff notes à la même minute.
+// Close comments from the same side (author or others) merged into one point: a review posted
+// in one block counts dozens of diff notes at the same minute.
 const COMMENT_BURST_MS = 30 * 60000;
-// Comptes techniques qui commentent les MR (rapports PIT, Trivy, Sonar) : ni revue, ni réponse.
+// Technical accounts that comment on MRs (PIT, Trivy, Sonar reports): neither review nor reply.
 const BOT_USERNAME = /^(project|group)_\d+_bot|^sonarqube$/;
 
 const commitActivity = { anchor: null, openTimer: 0, cache: new Map() };
 
-// Rechargé seulement si la MR a reçu un push ou un commentaire depuis : nombre de commits, date du
-// dernier push et nombre de commentaires servent de clé de cache.
+// Reloaded only if the MR received a push or a comment since: commit count, date of the
+// last push and comment count serve as the cache key.
 function loadCommitActivity(mr) {
   const commits = signalsOf(mr).commits;
   const key = `${commits?.count}|${commits?.pushDate}|${mr.user_notes_count}`;
@@ -4925,7 +4925,7 @@ function loadCommitActivity(mr) {
     error
   ));
   const entry = { key, promise };
-  // Résultat gardé aussi en clair, pour que le mode anonymisation en lise les commits.
+  // Result also kept in clear, so the anonymisation mode can read its commits.
   promise.then(activity => { entry.activity = activity; }, () => commitActivity.cache.delete(mr.iid));
   commitActivity.cache.set(mr.iid, entry);
   return promise;
@@ -4956,8 +4956,8 @@ async function loadGitlabActivity(mr) {
   };
 }
 
-// GitLab injoignable : commits du clone local, au dernier fetch, et commentaires gardés à la dernière
-// ouverture du volet (null si jamais lus). Sans clone non plus, l'erreur de GitLab reste celle affichée.
+// GitLab unreachable: commits from the local clone, as of the last fetch, and comments kept at the last
+// opening of the panel (null if never read). Without a clone either, GitLab's error stays the one displayed.
 async function loadLocalActivity(
   mr,
   gitlabError
@@ -4980,8 +4980,8 @@ async function loadLocalActivity(
   };
 }
 
-// Un merge (plus d'un parent) n'est pas du travail du développeur : c'est la cible ramenée dans la
-// branche, souvent par le reviewer. Il est sorti de la courbe et montré comme un jalon.
+// A merge (more than one parent) is not the developer's work: it is the target brought into the
+// branch, often by the reviewer. It is taken out of the curve and shown as a milestone.
 function commitEvents(commitList) {
   const event = c => ({ date: new Date(c.date).getTime(), sha: c.sha, title: c.title, author: c.author });
   const byDate = (a, b) => a.date - b.date;
@@ -4995,7 +4995,7 @@ function commentsOf(
   mr,
   notes
 ) {
-  // La note de mutation est un rapport d'outil, même quand elle est publiée sous un compte personnel.
+  // The mutation score is a tool report, even when published under a personal account.
   const pitMarker = pitTracked() ? state.config.pitMarker : "";
   const isToolReport = n => BOT_USERNAME.test(n.author.username) || Boolean(pitMarker && n.body?.startsWith(pitMarker));
   return notes
@@ -5012,7 +5012,7 @@ function readActivityComments() {
   }
 }
 
-// Best effort, comme la sauvegarde des MR : stockage plein ou bloqué ⇒ rien de gardé.
+// Best effort, like the MR snapshot: storage full or blocked ⇒ nothing kept.
 function saveActivityComments(
   iid,
   comments
@@ -5023,7 +5023,7 @@ function saveActivityComments(
     .slice(0, ACTIVITY_COMMENTS_SIZE);
   try {
     localStorage.setItem(ACTIVITY_COMMENTS_KEY, JSON.stringify(Object.fromEntries(kept)));
-  } catch (ignored) { /* stockage indisponible : le volet se passera des commentaires */ }
+  } catch (ignored) { /* storage unavailable: the panel will do without the comments */ }
 }
 
 function commentBursts(comments) {
@@ -5042,7 +5042,7 @@ function commentBursts(comments) {
 }
 
 function scheduleCommitActivity(anchor) {
-  // Même MR : le volet l'affiche déjà — la cellule a pu être recréée par un rendu du tableau.
+  // Same MR: the panel already shows it — the cell may have been recreated by a table render.
   if (commitActivity.anchor?.dataset.commitActivity === anchor.dataset.commitActivity) {
     commitActivity.anchor = anchor;
     return;
@@ -5088,21 +5088,21 @@ async function openCommitActivity(anchor) {
   } catch (error) {
     content = `${head}<span class="muted">${escapeHtml(t("ca.error", { message: error.message }))}</span></div>`;
   }
-  // Survol passé à une autre MR pendant le chargement : ce résultat n'est plus attendu.
+  // Hover moved to another MR during loading: this result is no longer expected.
   if (commitActivity.anchor !== anchor) return;
   body.innerHTML = content;
   showCommitActivity();
 }
 
-// Le volet recouvre le bas droit de la page : la marge qu'il réserve laisse défiler les dernières lignes au-dessus.
+// The panel covers the bottom right of the page: the margin it reserves lets the last rows scroll above it.
 function showCommitActivity() {
   const panel = $("commit-activity");
   panel.hidden = false;
   document.body.style.paddingBottom = `calc(${panel.offsetHeight}px + 1rem)`;
 }
 
-// MR mergée : le graphique s'arrête à son merge — ou au dernier commentaire, posté après — au lieu de
-// courir jusqu'à maintenant.
+// Merged MR: the chart stops at its merge — or at the last comment, posted afterwards — instead of
+// running until now.
 function renderCommitActivity(
   activity,
   head,
@@ -5114,7 +5114,7 @@ function renderCommitActivity(
   const dates = [...commits, ...merges, ...comments].map(e => e.date);
   const start = Math.min(...dates);
   const end = Math.max(reference, ...dates);
-  // Le graphique part du minuit du premier jour : la journée d'arrivée du premier commit se lit entière.
+  // The chart starts at midnight of the first day: the first commit's day reads in full.
   const midnight = new Date(start);
   midnight.setHours(0, 0, 0, 0);
   const summary = t(mergedAt ? "ca.summary.merged" : "ca.summary", {
@@ -5149,8 +5149,8 @@ function localActivityNote(local) {
   return `<p class="ca-note local">${escapeHtml(t("ca.local", { date: date(local.fetchedAt) }))} ${escapeHtml(comments)}</p>`;
 }
 
-// Nombre de commits cumulé, en escalier jusqu'à maintenant. Chaque commentaire est posé sur la courbe
-// à sa date : des marches juste après un point rouge sont des corrections de revue.
+// Cumulative commit count, as a staircase up to now. Each comment is placed on the curve
+// at its date: steps right after a red point are review fixes.
 function cumulativeChart(
   activity,
   start,
@@ -5226,9 +5226,9 @@ function cumulativeChart(
     `</svg>`;
 }
 
-// Un trait sous l'axe à chaque minuit local, origine comprise. Le jour n'est écrit que si les traits
-// sont assez espacés. Au ras d'un bord — l'origine, ou le jour qui vient de commencer —, il est calé sur
-// ce bord plutôt que centré sur son trait, qu'il déborderait.
+// A mark under the axis at each local midnight, origin included. The day is written only if the marks
+// are far enough apart. Flush with an edge — the origin, or the day just started —, it is aligned on
+// that edge rather than centred on its mark, which it would overflow.
 function caDayTicks(
   start,
   end,
@@ -5257,8 +5257,8 @@ function caDayTicks(
   }).join("");
 }
 
-// Plages de 8 h à 20 h de chaque jour affiché, qui découpent la surface opaque sous la courbe. Un seul
-// graphique est affiché à la fois : l'identifiant fixe ne peut pas entrer en collision.
+// 8 am to 8 pm ranges of each displayed day, which cut out the opaque area under the curve. Only one
+// chart is displayed at a time: the fixed identifier cannot collide.
 function caOfficeHoursClip(
   start,
   end,
@@ -5280,8 +5280,8 @@ function caOfficeHoursClip(
   return `<defs><clipPath id="ca-office-hours">${rects.join("")}</clipPath></defs>`;
 }
 
-// Samedis et dimanches grisés sur toute la hauteur, sous la courbe : une longue période sans commit
-// s'explique d'un coup d'œil quand elle tombe sur un week-end. Ces jours-là n'ont pas d'heures de bureau.
+// Saturdays and Sundays greyed over the full height, under the curve: a long period without commits
+// is explained at a glance when it falls on a weekend. Those days have no office hours.
 function caWeekendBands(
   start,
   end,
@@ -5305,7 +5305,7 @@ function caWeekendBands(
 
 const isWeekend = date => date.getDay() === 0 || date.getDay() === 6;
 
-// Deux camps, deux formes en plus des deux couleurs : rouge et vert se confondent pour un daltonien.
+// Two sides, two shapes on top of the two colours: red and green are confused by a colour-blind person.
 function caLegend(
   withMerges,
   merged
@@ -5348,10 +5348,10 @@ function behindCell(mr) {
   const behind = s.behind;
   if (!behind || behind.count == null) return `<span class="muted" title="${escapeHtml(behind?.error ?? s.error ?? "")}">?</span>`;
   if (behind.count === 0) return `<span class="ok good${behind.localAt !== undefined ? " local" : ""}" title="${escapeHtml(t("behind.upToDate", { target: mr.target_branch }) + localNote(behind))}">${escapeHtml(t("behind.none"))}</span>`;
-  // Le nombre et son ancienneté sur une ligne, l'unité en petit dessous : la colonne ne prend que la
-  // largeur de son libellé le plus court.
+  // The number and its age on one line, the unit in small print below: the column only takes the
+  // width of its shortest label.
   const hours = behind.since ? (gitlabNow() - new Date(behind.since)) / 3600000 : 0;
-  // En retard, le nombre prend la couleur de son ancienneté : l'écart se lit sans viser la parenthèse.
+  // When late, the number takes the colour of its age: the gap reads without aiming at the parenthesis.
   const late = hours > BEHIND_ORANGE_HOURS;
   const tone = late ? "late-orange" : "muted";
   const countClass = [late && tone, behind.localAt !== undefined && "local"].filter(Boolean).join(" ");
@@ -5362,10 +5362,10 @@ function behindCell(mr) {
   return `<div>${count} ${since}</div><div class="behind-unit">${escapeHtml(t("behind.unit", { n: behind.count }))}</div>`;
 }
 
-// ---------- Pipeline de la branche suivie ----------
+// ---------- Pipeline of the tracked branch ----------
 
-// Tant que le dernier pipeline de la branche tourne, il est relu seul toutes les BRANCH_PIPELINE_POLL_MS ;
-// la relecture s'arrête d'elle-même quand il est terminé.
+// While the branch's latest pipeline runs, it is reread alone every BRANCH_PIPELINE_POLL_MS;
+// the polling stops by itself when it is finished.
 function scheduleBranchPipelinePoll() {
   clearTimeout(state.branchPipelineTimer);
   state.branchPipelineTimer = null;
@@ -5375,7 +5375,7 @@ function scheduleBranchPipelinePoll() {
 }
 
 async function pollBranchPipeline() {
-  // Une mise à jour complète en cours rapportera le pipeline elle-même.
+  // A full update in progress will report the pipeline itself.
   if (state.refreshing) {
     scheduleBranchPipelinePoll();
     return;
@@ -5385,9 +5385,9 @@ async function pollBranchPipeline() {
     renderBranchPipeline();
     notifyProblems();
     fetchIfRepoChanged();
-    // Sauvegardé à la date de la dernière mise à jour complète, et seulement si la sauvegarde est encore
-    // celle qu'affiche cet onglet : un autre onglet a pu en écrire une plus récente depuis. Pas pendant une
-    // mise à jour : le tableau mêle alors signaux anciens et nouveaux.
+    // Saved at the date of the last full update, and only if the snapshot is still
+    // the one this tab displays: another tab may have written a more recent one since. Not during an
+    // update: the table then mixes old and new signals.
     if (!state.refreshing && readSnapshot()?.at.getTime() === state.refreshedAt?.getTime()) {
       saveSnapshot({
         at: state.refreshedAt,
@@ -5399,7 +5399,7 @@ async function pollBranchPipeline() {
       });
     }
   } catch (error) {
-    console.error("Relecture du pipeline de la branche impossible :", error);
+    console.error("Unable to reread the branch pipeline:", error);
   }
   scheduleBranchPipelinePoll();
 }
@@ -5413,8 +5413,8 @@ function readBuildHistory() {
   }
 }
 
-// Sans effet si l'historique de ce projet et de cette branche a moins de BUILD_HISTORY_TTL_MS : tous
-// les onglets le partagent par localStorage.
+// No effect if this project's and branch's history is less than BUILD_HISTORY_TTL_MS old: all
+// tabs share it through localStorage.
 async function refreshBuildHistoryIfStale() {
   const { gitlabProject: project, pipelineBranch: branch } = state.config;
   if (!branch || state.buildHistoryLoading) return;
@@ -5433,16 +5433,16 @@ async function refreshBuildHistoryIfStale() {
     state.buildHistory = { project, branch, at: new Date().toISOString(), builds };
     try {
       localStorage.setItem(BUILD_HISTORY_KEY, JSON.stringify(state.buildHistory));
-    } catch (ignored) { /* stockage plein ou bloqué : rechargé au prochain chargement */ }
+    } catch (ignored) { /* storage full or blocked: reloaded on the next load */ }
     renderBranchPipeline();
   } catch (error) {
-    console.error("Historique des builds indisponible :", error);
+    console.error("Build history unavailable:", error);
   } finally {
     state.buildHistoryLoading = false;
   }
 }
 
-// Du plus ancien au plus récent : { id, d: durée en secondes, c: date de création }.
+// From oldest to most recent: { id, d: duration in seconds, c: creation date }.
 async function loadBuildHistory(
   project,
   branch
@@ -5470,8 +5470,8 @@ async function loadBuildHistory(
   return builds.slice(0, BUILD_HISTORY_SIZE).reverse();
 }
 
-// Barres depuis zéro : l'échelle ne grossit pas les écarts. Un seul <path>, un trait vertical par
-// build, pour ne pas ajouter un élément au DOM par build.
+// Bars from zero: the scale does not magnify the gaps. A single <path>, one vertical line per
+// build, so as not to add a DOM element per build.
 function buildHistoryChart() {
   const history = state.buildHistory;
   if (!history?.builds.length || history.branch !== state.config.pipelineBranch) return "";
@@ -5503,7 +5503,7 @@ function withBuildDurations(project) {
   return { ...pipeline, buildDurations, previous };
 }
 
-// Le plus récent du dernier réussi et du dernier en échec.
+// The most recent of the last successful and the last failed.
 function latestConclusive(project) {
   const candidates = [project.lastSuccess?.nodes[0], project.lastFailure?.nodes[0]].filter(Boolean);
   return candidates.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0] ?? null;
@@ -5513,8 +5513,8 @@ function isActive(pipeline) {
   return ACTIVE_PIPELINE_GROUPS.has(pipeline.detailedStatus.group);
 }
 
-// Repliée : la ligne de tête du dernier pipeline. Dépliée : lien vers tous les pipelines, durées des builds
-// et historique dans la barre, cartes du dernier pipeline et du précédent en dessous.
+// Collapsed: the latest pipeline's header line. Expanded: link to all pipelines, build durations
+// and history in the bar, cards of the latest pipeline and the previous one below.
 function renderBranchPipeline() {
   const section = $("branch-pipeline");
   const branch = state.config?.pipelineBranch;
@@ -5547,7 +5547,7 @@ function toggleBranchPipeline() {
   renderBranchPipeline();
 }
 
-// Ligne de tête d'un pipeline : celle de sa carte, et celle de la barre repliée.
+// Header line of a pipeline: that of its card, and that of the collapsed bar.
 function pipelineHead(
   p,
   label
@@ -5561,7 +5561,7 @@ function pipelineHead(
   if (p.duration) duration = compactDuration(p.duration * 1000);
   else if (p.startedAt) {
     duration = t("branchPipeline.running", { duration: compactDuration(gitlabNow() - new Date(p.startedAt)) });
-    // Durées des pipelines réussis de cette même branche : seul le dernier pipeline les porte.
+    // Durations of the successful pipelines of this same branch: only the latest pipeline carries them.
     progress = pipelineProgress(
       p.startedAt,
       p.buildDurations,
@@ -5604,7 +5604,7 @@ function pipelineCard(
   return `<details class="bp-card" data-pipeline-key="${escapeHtml(pipelineOpenKey(p))}"${open ? " open" : ""}><summary class="bp-head">${head}</summary><ol class="bp-stages">${stages}</ol></details>`;
 }
 
-// Réussi : replié, la ligne de tête suffit. Tout autre statut se déplie pour montrer où ça bloque.
+// Successful: collapsed, the header line is enough. Any other status expands to show where it is stuck.
 const defaultPipelineOpen = p => p.detailedStatus.group !== "success";
 const pipelineOpenKey = p => `${p.id}:${p.detailedStatus.group}`;
 
@@ -5619,7 +5619,7 @@ function buildDurationsLine(durations) {
   return `<span class="bp-builds" title="${escapeHtml(tooltip)}">${escapeHtml(t("branchPipeline.builds", { branch: state.config.pipelineBranch, range }))}</span>`;
 }
 
-// 612 s ⇒ « 10'12" ».
+// 612 s ⇒ "10'12"".
 function minutesSeconds(seconds) {
   return `${Math.floor(seconds / 60)}'${String(Math.round(seconds % 60)).padStart(2, "0")}"`;
 }
@@ -5629,13 +5629,13 @@ function stageIcon(group) {
   return `<span class="bp-icon ${tone}" aria-hidden="true">${icon}</span>`;
 }
 
-// ---------- Utilitaires ----------
+// ---------- Utilities ----------
 
-// « - 4h » plutôt que « il y a 4 heures » : la colonne se lit plus vite sans le préfixe répété, et reste
-// étroite. Les jours gardent leur mot, court dans les deux langues.
+// "- 4h" rather than "4 hours ago": the column reads faster without the repeated prefix, and stays
+// narrow. Days keep their word, short in both languages.
 const durationFormat = unit => new Intl.NumberFormat(locale(), { style: "unit", unit, unitDisplay: "long" });
 
-// Entre 1 h et 3 h, « 2h59 » : l'heure arrondie (« 3h ») y écraserait une précision encore utile.
+// Between 1 h and 3 h, "2h59": the rounded hour ("3h") would crush a still useful precision.
 function relative(iso) {
   const seconds = (new Date(iso) - gitlabNow()) / 1000;
   const sign = seconds < 0 ? "- " : "";
@@ -5648,7 +5648,7 @@ function relative(iso) {
   return `${sign}${durationFormat("day").format(Math.round(hours / 24))}`;
 }
 
-// « < 1 min », « 20 min », « 1h20 », « 2 j 3h » (« 2 d 3h » en anglais) : plus précis que relative() à l'échelle d'une journée de retard.
+// "< 1 min", "20 min", "1h20", "2 j 3h" ("2 d 3h" in English): more precise than relative() at the scale of a day of lag.
 function compactDuration(ms) {
   const minutes = Math.max(0, Math.floor(ms / 60000));
   if (minutes < 1) return "< 1 min";
@@ -5661,7 +5661,7 @@ function compactDuration(ms) {
 
 const formatDate = formatDateTime;
 const formatPercent = value => (value / 100).toLocaleString(locale(), { style: "percent", maximumFractionDigits: 1 });
-// Formes françaises fixes, pour le prompt et les traductions françaises.
+// Fixed French forms, for the prompt and the French translations.
 const formatPercentFr = value => value.toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " %";
 const plural = n => (n > 1 ? "s" : "");
 
@@ -5669,16 +5669,16 @@ function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 }
 
-// Un même message n'est affiché qu'une fois : plusieurs appels peuvent échouer pour la même raison.
+// The same message is displayed only once: several calls may fail for the same reason.
 function showError(message) {
   if ([...$("errors").children].some(banner => banner.textContent === message)) return;
   $("errors").insertAdjacentHTML("beforeend", `<div class="error-banner">${escapeHtml(message)}</div>`);
 }
 
-// ---------- Événements ----------
+// ---------- Events ----------
 
-// Filtres et tri sont partagés entre les vues ; un tri sur une colonne absente de la nouvelle vue
-// reprend le tri par défaut de celle-ci.
+// Filters and sort are shared between views; a sort on a column absent from the new view
+// falls back to that view's default sort.
 function setView(view) {
   if (view === state.filters.view) return;
   const sortShown = viewGroups(view).some(g => g.columns.includes(state.filters.sort));
@@ -5692,7 +5692,7 @@ function setView(view) {
   if (view === "merged") loadMerged();
 }
 
-// Le tri et la vue ne sont pas des filtres : la réinitialisation les laisse.
+// Sort and view are not filters: the reset leaves them.
 function filtersActive() {
   const f = state.filters;
   return Boolean(f.q || f.authors.length || f.reviewer || f.assignee || f.labels.length || f.draft || f.alerts
@@ -5768,15 +5768,15 @@ $("period").addEventListener("change", e => {
   loadMerged();
 });
 $("alerts").addEventListener("change", e => updateFilters({ alerts: e.target.checked }));
-// Toute la barre déplie ou replie, sauf ses liens, qui gardent leur rôle.
+// The whole bar expands or collapses, except its links, which keep their role.
 $("branch-pipeline").addEventListener("click", e => {
   if (e.target.closest(".bp-bar") && !e.target.closest("a")) toggleBranchPipeline();
 });
-// Hauteur de la barre réservée au bas de la page : la dernière MR ne passe jamais dessous.
+// Bar height reserved at the bottom of the page: the last MR never goes under it.
 new ResizeObserver(([entry]) => {
   document.documentElement.style.setProperty("--dock-height", `${entry.target.offsetHeight}px`);
 }).observe($("branch-pipeline"));
-// « toggle » ne remonte pas : écouté en capture. Revenir au défaut efface le choix manuel.
+// "toggle" does not bubble: listened to in capture. Going back to the default clears the manual choice.
 $("branch-pipeline").addEventListener("toggle", e => {
   const key = e.target.dataset?.pipelineKey;
   if (!key) return;
@@ -5836,8 +5836,8 @@ document.addEventListener("click", e => {
     updateFilters({ labels: state.filters.labels.filter(l => l !== remove.dataset.removeLabel) });
   }
 });
-// Volet d'activité des commits : ouvert au survol ou au focus du nombre de commits, il reste ouvert
-// quand la souris le rejoint et ne se ferme que par ×, Échap ou un clic hors de lui.
+// Commit activity panel: opened on hover or focus of the commit count, it stays open
+// when the mouse reaches it and closes only with ×, Escape or a click outside it.
 document.addEventListener("mouseover", e => {
   const anchor = e.target.closest("[data-commit-activity]");
   if (anchor) scheduleCommitActivity(anchor);
@@ -5857,9 +5857,9 @@ document.addEventListener("click", e => {
 document.addEventListener("keydown", e => {
   if (e.key === "Escape" && commitActivity.anchor) closeCommitActivity();
 });
-// Page préc. / Page suiv. faites ici plutôt que par le navigateur : le focus reste sur le dernier
-// filtre touché, et une liste déroulante y change de valeur au lieu de faire défiler. Le pas
-// retranche aussi les en-têtes collants, sous lesquels le navigateur ferait passer des lignes.
+// Page Up / Page Down handled here rather than by the browser: focus stays on the last
+// filter touched, and a drop-down list changes value there instead of scrolling. The step
+// also subtracts the sticky headers, under which the browser would slide rows.
 document.addEventListener("keydown", e => {
   if (e.key !== "PageDown" && e.key !== "PageUp") return;
   if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
@@ -5870,8 +5870,8 @@ document.addEventListener("keydown", e => {
 });
 window.addEventListener("scroll", maybeLoadMoreMerged, { passive: true });
 window.addEventListener("resize", maybeLoadMoreMerged);
-// Largeur de la colonne changée (fenêtre, zoom, taille du texte) : les titres sont réajustés. Leur
-// réduction ne touche que la hauteur du tableau, qui ne relance donc rien.
+// Column width changed (window, zoom, text size): titles are readjusted. Their
+// shrinking only affects the table height, which therefore triggers nothing.
 let fittedTableWidth = 0;
 new ResizeObserver(([entry]) => {
   if (entry.contentRect.width === fittedTableWidth) return;
@@ -5879,7 +5879,7 @@ new ResizeObserver(([entry]) => {
   fitTitles();
 }).observe(document.querySelector("table.mrs"));
 $("clear-storage").addEventListener("click", clearStorage);
-// Données lues par le mode anonymisation : les MR, leurs signaux et l'activité de leurs commits.
+// Data read by the anonymisation mode: the MRs, their signals and their commit activity.
 Anonymizer.attach({
   data: () => ({
     mrs: state.mrs,
@@ -5905,10 +5905,10 @@ $("autoRefresh").addEventListener("change", e => {
   saveAutoRefresh(state.autoRefresh);
   scheduleAutoRefresh();
 });
-// N'est émis que dans les autres onglets : celui qui a sauvegardé affiche déjà ces données.
+// Only fired in the other tabs: the one that saved already displays this data.
 window.addEventListener("storage", e => {
   if (e.key === SNAPSHOT_KEY) adoptNewerSnapshot();
-  // Suit la case cochée dans un autre onglet, sans resauvegarder ni redemander l'autorisation.
+  // Follows the box checked in another tab, without re-saving nor asking for permission again.
   if (e.key === NOTIFY_KEY && "Notification" in window) {
     state.notify = e.newValue === "true" && Notification.permission === "granted";
     $("notify").checked = state.notify;
@@ -5968,7 +5968,7 @@ if (window.AudioContext) {
   ));
   ["pointerdown", "keydown"].forEach(type => window.addEventListener(type, unlockAudio, true));
   window.addEventListener("pagehide", forgetSoundTab);
-  // Joués dans cet onglet, où l'on vient de cliquer « Ouvrir dans Orca » : le navigateur l'autorise.
+  // Played in this tab, where "Open in Orca" was just clicked: the browser allows it.
   const orcaSounds = {
     ordered: "orcaOrdered",
     launched: "orcaLaunched",
@@ -5983,7 +5983,7 @@ if (window.AudioContext) {
     );
   });
   if (readSound()) setSound(true);
-  // Écoute des sons, case « Sons » cochée ou non : le clic suffit au navigateur pour les jouer.
+  // Sound test, "Sounds" box checked or not: the click is enough for the browser to play them.
   const toggleSoundTest = open => {
     $("sound-panel").hidden = !open;
     $("sound-test-button").setAttribute("aria-expanded", String(open));
@@ -6010,17 +6010,17 @@ if (window.AudioContext) {
 }
 electNotifier();
 setInterval(notifyProblems, REMINDER_CHECK_MS);
-// Données sauvegardées : affichées tout de suite avec leur âge, et GitLab n'est interrogé que si
-// l'actualisation est due, cycle compté depuis la sauvegarde : recharger la page ne le sollicite pas.
-// Sans elles, premier chargement au fil de l'eau.
-// Une sauvegarde illisible par cette version de la page (forme d'une version antérieure, données
-// inattendues) est jetée : elle ne doit jamais empêcher la mise à jour de partir.
+// Saved data: displayed at once with its age, and GitLab is queried only if the
+// refresh is due, the cycle counted from the snapshot: reloading the page does not hit it.
+// Without it, first load as it goes.
+// A snapshot unreadable by this version of the page (shape of an earlier version, unexpected
+// data) is discarded: it must never prevent the update from running.
 const saved = readSnapshot();
 if (saved) {
   try {
     applySnapshot(saved);
   } catch (error) {
-    console.error("Sauvegarde du dashboard illisible, ignorée :", error);
+    console.error("Dashboard snapshot unreadable, ignored:", error);
     forgetSnapshot();
     Object.assign(state, { mrs: [], signals: new Map(), branchPipeline: undefined, refreshedAt: null });
     if (!state.configLoaded) state.config = null;

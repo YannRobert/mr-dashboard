@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Commentaires — MisteR Dashboard</title>
 <script>
-  // Thème du dashboard et taille du texte, posés avant le premier rendu.
+  // Dashboard theme and text size, set before the first render.
   try {
     const scale = Number(localStorage.getItem("mr-dashboard.textScale"));
     if (scale) document.documentElement.style.setProperty("--text-scale", scale);
@@ -45,7 +45,7 @@
     --accent-fg: #0f1020;
     --red-bg: #3d1a1a; --red-fg: #ffb4ab; --red-line: #f97066;
   }
-  /* Taille du texte du dashboard (même base, même réglage A− / A+), un peu plus grande : on lit de la prose. */
+  /* Dashboard text size (same base, same A− / A+ setting), a bit larger: this is prose reading. */
   html { font-size: calc(clamp(13px, 0.75vw, 28px) * var(--text-scale, 1) * 1.15); }
   body {
     margin: 0;
@@ -59,10 +59,10 @@
     display: flex; flex-direction: column; gap: 0.45rem;
     padding: 0.75rem 1rem; background: var(--surface); border-bottom: 1px solid var(--border);
   }
-  /* Même disposition que l'en-tête du diff : titre, puis auteur et branches, liens à droite du titre. */
+  /* Same layout as the diff header: title, then author and branches, links right of the title. */
   .title-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 1.4rem; }
   header h1 { flex: 1 1 30rem; margin: 0; font-size: 1.05rem; overflow-wrap: anywhere; }
-  /* Nature de la page, devant le titre : le diff et les commentaires d'une MR ont le même en-tête. */
+  /* Page kind, before the title: an MR's diff and comments share the same header. */
   .page-kind {
     display: inline-block; margin-right: 0.6em; padding: 0.1em 0.6em; border-radius: 0.4rem; vertical-align: 0.1em;
     font-size: 0.8rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
@@ -73,7 +73,7 @@
   .branches { color: var(--muted); font-size: 0.9rem; overflow-wrap: anywhere; }
   .branches code { font-size: 0.85rem; }
   .summary { color: var(--muted); font-size: 0.85rem; }
-  /* Auteur de la MR, pastille comprise : qui l'a ouverte, même dans un onglet ouvert depuis longtemps. */
+  /* MR author, badge included: who opened it, even in a tab opened long ago. */
   .mr-author { display: inline-flex; align-items: center; gap: 0.4em; font-size: 0.85rem; white-space: nowrap; }
   .mr-author[hidden] { display: none; }
   .mr-author .avatar { font-size: 0.7rem; }
@@ -114,14 +114,14 @@
     border: 1px solid var(--border-strong); border-radius: 0.5rem; background: var(--bg);
   }
   .cached-banner .retry { margin-left: auto; }
-  /* État porté par le badge et, pour le seul état à traiter, par la couleur : un fil ordinaire ou résolu
-     reste neutre. */
+  /* State carried by the badge and, for the only state needing action, by color: an ordinary or resolved
+     thread stays neutral. */
   .thread {
     background: var(--surface); border: 1px solid var(--border-strong);
     border-radius: 0.5rem; overflow: hidden;
   }
   .thread.resolved > summary { color: var(--muted); }
-  /* Non résolu : tout le cadre en rouge, visible où qu'on en soit dans un long commentaire, et l'en-tête teinté. */
+  /* Unresolved: the whole border in red, visible wherever you are in a long comment, and a tinted header. */
   .thread.unresolved { border: 2px solid var(--red-line); }
   .thread.unresolved > summary { background: var(--red-bg); }
   .thread.unresolved .badge { color: var(--red-fg); background: var(--surface); }
@@ -136,7 +136,7 @@
   .note { padding: 0.6rem 0.8rem; }
   .note-meta { margin-bottom: 0.3rem; font-size: 0.78rem; color: var(--muted); }
   .note-meta strong { color: var(--text); }
-  /* Sélection et barres de défilement aux couleurs de la page, pas celles du navigateur. */
+  /* Selection and scrollbars in the page colors, not the browser's. */
   ::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); }
   html { scrollbar-color: var(--border-strong) transparent; }
 </style>
@@ -229,7 +229,7 @@
   const params = new URLSearchParams(location.search);
   const lang = params.get("lang") in TEXTS ? params.get("lang") : savedLang();
 
-  // Langue du dashboard, retenue par son bouton FR / EN : l'adresse la donne d'ordinaire.
+  // Dashboard language, remembered by its FR / EN button: the URL usually provides it.
   function savedLang() {
     try {
       const lang = localStorage.getItem("mr-dashboard.lang");
@@ -249,7 +249,7 @@
   closeTab.title = texts.closeTitle;
   closeTab.dataset.closeRefused = texts.closeRefused;
   document.getElementById("anonymize").title = texts.anonymize;
-  // MR et commentaires affichés, lus par le mode anonymisation ; le corps des commentaires y est remplacé en entier.
+  // Displayed MR and comments, read by the anonymization mode; comment bodies are replaced entirely there.
   let shown = null;
   Anonymizer.attach({ data: () => shown, opaque: ".gl-body" });
 
@@ -257,7 +257,7 @@
     return String(text).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   }
 
-  // « 3 h », « 2 j » : de quoi situer un commentaire dans la vie de la MR.
+  // « 3 h », « 2 j »: enough to place a comment in the MR's life.
   function age(iso) {
     const minutes = Math.max(0, Math.round((Date.now() - new Date(iso)) / 60000));
     if (minutes < 60) return `${minutes} min`;
@@ -277,7 +277,7 @@
     if (!mr) return;
     const branches = mr.state === "merged" ? texts.mergedBranches : texts.branches;
     document.getElementById("branches").innerHTML = branches({ branch: escapeHtml(mr.sourceBranch), target: escapeHtml(mr.targetBranch) });
-    // Absent d'une sauvegarde antérieure à son ajout : affiché au chargement suivant.
+    // Missing from a save older than its addition: shown on next load.
     const authorName = mr.author?.name;
     if (authorName) {
       const author = document.getElementById("mr-author");
@@ -290,7 +290,7 @@
     gitlab.textContent = texts.gitlab;
     gitlab.href = mr.webUrl;
     gitlab.hidden = false;
-    // Même diff que depuis le dashboard : une MR mergée se retrouve par ses commits, sa branche ayant pu disparaître.
+    // Same diff as from the dashboard: a merged MR is found by its commits, its branch may be gone.
     if (mr.state === "merged" && !mr.mergeCommitSha) return;
     const query = new URLSearchParams({
       iid,
@@ -318,7 +318,7 @@
     const [first, ...replies] = notes;
     const resolved = discussion.resolvable && discussion.resolved;
     const when = n => `<span title="${escapeHtml(formatDateTime(n.createdAt))}">${escapeHtml(age(n.createdAt))}</span>`;
-    // Auteur et date du premier commentaire dans l'en-tête du fil ; chaque réponse porte les siens.
+    // Author and date of the first comment in the thread header; each reply carries its own.
     const note = (n, i) => `<div class="note">`
       + (i ? `<div class="note-meta"><strong>${escapeHtml(n.author?.name ?? "?")}</strong> · ${when(n)}</div>` : "")
       + `<div class="gl-body">${GitlabNotes.render(n.bodyHtml, gitlabWeb)}</div></div>`;
@@ -333,8 +333,8 @@
       + notes.map(note).join("") + GitlabNotes.threadActionsHtml(discussion, lang) + `</details>`;
   }
 
-  // Commentaires généraux : ceux qui ne portent sur aucune ligne ; les messages système de GitLab
-  // (commits ajoutés, statut changé) n'en sont pas.
+  // General comments: those not attached to any line; GitLab system messages
+  // (commits added, status changed) are not.
   async function fetchComments(config) {
     let mr = null;
     const discussions = await GitlabNotes.allNodes(async after => {
@@ -360,12 +360,12 @@
     return { mr, general };
   }
 
-  // Dernières données GitLab de chaque MR consultée, pour l'afficher sans attendre GitLab, ou malgré lui :
-  // les CACHED_MRS dernières, par MR (l'origine du serveur sépare déjà les projets suivis).
+  // Latest GitLab data of each viewed MR, to show it without waiting for GitLab, or despite it:
+  // the last CACHED_MRS, per MR (the server origin already separates tracked projects).
   const CACHE_KEY = "mr-dashboard.comments";
   const CACHE_VERSION = 1;
   const CACHED_MRS = 30;
-  // Au-delà, GitLab est signalé comme lent ; sa réponse, si elle arrive, remplace quand même la sauvegarde.
+  // Beyond that, GitLab is flagged as slow; its response, if it arrives, still replaces the saved copy.
   const SLOW_MS = 15000;
 
   function readCache() {
@@ -377,7 +377,7 @@
     }
   }
 
-  // Best effort : stockage plein ⇒ on retire les MR consultées le moins récemment jusqu'à ce que ça tienne.
+  // Best effort: storage full ⇒ drop the least recently viewed MRs until it fits.
   function saveToCache(entry) {
     const mrs = { ...readCache(), [iid]: entry };
     const kept = Object.entries(mrs).sort(([, a], [, b]) => b.at.localeCompare(a.at)).slice(0, CACHED_MRS);
@@ -391,8 +391,8 @@
     }
   }
 
-  // Bandeau au-dessus de la copie affichée ; failure : true pour une attente trop longue, ou la cause d'un
-  // échec, affichée en petit avec de quoi réessayer.
+  // Banner above the displayed copy; failure: true for a wait that is too long, or the cause of a
+  // failure, shown small with a way to retry.
   function showBanner(
       text,
       failure
@@ -400,7 +400,7 @@
     const banner = document.getElementById("cached-banner");
     banner.innerHTML = !text ? "" : !failure ? escapeHtml(text)
       : `<strong>${escapeHtml(text)}</strong>`
-        // Réessayer seulement une fois la requête finie : une requête lente encore en cours peut aboutir.
+        // Retry only once the request has finished: a slow request still in flight may succeed.
         + (typeof failure === "string" ? `<span class="detail">${escapeHtml(failure)}</span>`
           + `<button type="button" class="retry">${escapeHtml(texts.retry)}</button>` : "");
     banner.title = text ? texts.cachedReadOnly : "";
@@ -427,7 +427,7 @@
     document.getElementById("summary").textContent = texts.summary({ n: general.length, open });
   }
 
-  // Rend la MR et ses commentaires ; rend le conteneur, ou rien quand il n'y a aucun commentaire.
+  // Renders the MR and its comments; returns the container, or nothing when there is no comment.
   function render({ mr, general, gitlabWeb }) {
     shown = { mr, general, iid };
     renderHeader(mr);
@@ -441,7 +441,7 @@
     return container;
   }
 
-  // Sauvegarde affichée en lecture seule : une réponse ou une résolution partirait d'un état peut-être périmé.
+  // Saved copy shown read-only: a reply or resolution would start from a possibly stale state.
   function renderCached(entry) {
     render(entry)?.querySelectorAll(".thread-actions button").forEach(button => {
       button.disabled = true;
@@ -469,7 +469,7 @@
       showLoadedAt(document.getElementById("loaded-at"), lang, entry.at);
       const container = render(entry);
       if (!container) return;
-      // Après une réponse, une résolution : seul ce fil est réaffiché, les autres gardent leur état.
+      // After a reply or resolution: only this thread is re-rendered, the others keep their state.
       GitlabNotes.handleThreads(container, {
         iid,
         lang,

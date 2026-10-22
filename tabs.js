@@ -1,11 +1,11 @@
-// Un onglet par page et par MR : le diff de !226, ses commentaires. Un lien vers une page déjà ouverte
-// y ramène et la recharge, pour ne jamais montrer une version périmée de la MR. Partagé par index.html,
+// One tab per page and per MR: the diff of !226, its comments. A link to an already open page
+// brings it to front and reloads it, never to show a stale version of the MR. Shared by index.html,
 // diff.html and comments.html.
 window.MrTabs = (() => {
   const name = (page, iid) => `mr-dashboard-${page}-${iid}`;
 
-  // Onglet nommé : le navigateur rend celui qui porte déjà ce nom, ou en ouvre un vide à remplir. Un onglet
-  // déjà ouvert est rechargé sans ajouter d'entrée à son historique.
+  // Named tab: the browser returns the one already bearing this name, or opens an empty one to fill. An
+  // already open tab is reloaded without adding a history entry.
   function open(url, page, iid) {
     const tab = window.open("", name(page, iid));
     if (!tab) return;
@@ -18,11 +18,11 @@ window.MrTabs = (() => {
     tab.focus();
   }
 
-  // Nomme l'onglet courant, pour que les liens des autres pages le retrouvent.
+  // Names the current tab, so links from other pages can find it.
   const claim = (page, iid) => { window.name = name(page, iid); };
 
-  // Clic simple sur un lien a[data-tab] : onglet de la page, s'il est ouvert ; le clic du milieu et
-  // Ctrl+clic gardent leur comportement habituel.
+  // Plain click on an a[data-tab] link: the page's tab, if open; middle click and
+  // Ctrl+click keep their usual behavior.
   document.addEventListener("click", event => {
     const link = event.target.closest("a[data-tab]");
     if (!link || event.button || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
@@ -30,8 +30,8 @@ window.MrTabs = (() => {
     open(link.href, link.dataset.tab, link.dataset.iid);
   });
 
-  // Bouton [data-close-tab] : ferme l'onglet, sans confirmation. Le navigateur ne laisse une page fermer
-  // que l'onglet qu'un lien ou un script a ouvert ; sinon rien ne se passe, et le bouton le dit
+  // [data-close-tab] button: closes the tab, without confirmation. The browser only lets a page close
+  // a tab that a link or script opened; otherwise nothing happens, and the button says so
   // (data-close-refused).
   document.addEventListener("click", event => {
     const button = event.target.closest("[data-close-tab]");

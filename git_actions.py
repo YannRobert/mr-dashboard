@@ -1,13 +1,13 @@
-"""Actions git sur le clone local du projet suivi : fetch et diff d'une MR, ouverte ou mergée, et ce
-que le clone sait d'une MR ouverte quand GitLab ne répond pas.
+"""Git actions on the local clone of the tracked project: fetch and diff of a MR, open or merged, and what
+the clone knows about an open MR when GitLab does not respond.
 
-Tant que le fetch automatique est activé, il tourne aussi tout seul à intervalle régulier : les branches
-distantes restent à jour même sans page ouverte, et restent en place pendant une coupure de GitLab, même
-quand il sert une page de maintenance à la place du dépôt — on peut alors relire et committer sur
-origin/<branche>, puis pousser à son retour.
+While automatic fetch is enabled, it also runs by itself at a regular interval: remote branches stay up
+to date even with no page open, and stay in place during a GitLab outage, even when it serves a
+maintenance page instead of the repository — one can then review and commit on origin/<branch>, and push
+once it is back.
 
-Fetch et diff se font dans le dépôt suivi (--repo-dir), worktree principal ou secondaire, sans jamais
-rien y extraire : il porte le travail en cours.
+Fetch and diff run in the tracked repository (--repo-dir), main or secondary worktree, without ever
+checking anything out there: it holds the work in progress.
 """
 import os
 import re
@@ -21,14 +21,14 @@ from pathlib import Path
 FETCH_TIMEOUT_S = 60
 DIFF_TIMEOUT_S = 30
 MAX_DIFF_BYTES = 5_000_000
-# Contexte d'un diff de fichier entier : plus de lignes qu'aucun fichier n'en compte.
+# Context of a whole-file diff: more lines than any file has.
 WHOLE_FILE_CONTEXT = 100_000_000
-# Jamais d'invite d'identifiants : sans terminal pour y répondre, git attendrait jusqu'au délai.
+# Never prompt for credentials: with no terminal to answer, git would wait until the timeout.
 GIT_ENV = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
 SHA = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
-# États des MR déjà signalés, retenus pour ne pas refetcher quand une page en rejoue un ancien.
+# MR states already reported, remembered so as not to fetch again when a page replays an old one.
 SEEN_SIGNATURES = 100
-# Commandes qui interrogent le dépôt distant, donc GitLab.
+# Commands that query the remote repository, hence GitLab.
 REMOTE_COMMANDS = ("fetch", "ls-remote")
 
 
@@ -45,11 +45,11 @@ class GitActions:
             on_remote_call
     ):
         self._repo_dir = repo_dir
-        # Chemin donné par git, une fois pour toutes : dans un worktree secondaire, .git est un fichier
-        # et FETCH_HEAD est dans le répertoire commun du clone.
+        # Path given by git, once and for all: in a secondary worktree, .git is a file and FETCH_HEAD
+        # is in the common directory of the clone.
         self._fetch_head = Path(self._git_output(["rev-parse", "--path-format=absolute", "--git-path", "FETCH_HEAD"]))
         self._fetch_interval_s = fetch_interval_s
-        # Appelé à chaque commande qui interroge le dépôt distant, avec son échec ou non.
+        # Called on each command that queries the remote repository, with whether it failed.
         self._on_remote_call = on_remote_call
         self._fetch_lock = threading.Lock()
         self._state_lock = threading.Lock()
@@ -57,12 +57,12 @@ class GitActions:
         self._running = False
         self._last = None
         self._last_success_at = None
-        # États des MR déjà signalés par les pages, tous onglets et navigateurs confondus.
+        # MR states already reported by the pages, across all tabs and browsers.
         self._seen_signatures = deque(maxlen=SEEN_SIGNATURES)
         self._auto = True
         self._wake = threading.Event()
-        # Échéance du prochain fetch automatique, en temps monotone : chaque fetch, d'où qu'il vienne,
-        # la repousse d'un intervalle.
+        # Due time of the next automatic fetch, in monotonic time: each fetch, wherever it comes from,
+        # pushes it back by one interval.
         self._next_due = 0.0
         self._next_at = None
 
@@ -83,7 +83,7 @@ class GitActions:
             self._wake.clear()
 
     def set_auto(self, enabled):
-        """Réactivé, le fetch automatique part aussitôt, sans attendre la fin de l'intervalle."""
+        """Once re-enabled, the automatic fetch starts at once, without waiting for the end of the interval."""
         with self._state_lock:
             self._auto = enabled
             if enabled:
@@ -91,8 +91,8 @@ class GitActions:
         self._wake.set()
 
     def fetch(self):
-        """Lance un fetch, ou attend celui en cours et en renvoie le résultat : deux demandes rapprochées
-        n'en font qu'un."""
+        """Starts a fetch, or waits for the one in progress and returns its result: two close requests
+        make only one."""
         with self._state_lock:
             seen = self._fetches
         with self._fetch_lock:
@@ -112,9 +112,9 @@ class GitActions:
             return result
 
     def fetch_if_changed(self, signature):
-        """Fetch si l'état des MR vu par la page n'a jamais été signalé. Un état déjà vu a déjà été fetché :
-        une page rechargée, qui rejoue sa sauvegarde avant de se mettre à jour, ou un autre navigateur,
-        dont la sauvegarde est plus ancienne, ne relancent pas de fetch en alternant entre deux états."""
+        """Fetches if the MR state seen by the page has never been reported. A state already seen has already
+        been fetched: a reloaded page, which replays its saved state before updating, or another browser
+        with an older saved state, do not trigger fetches by alternating between two states."""
         with self._state_lock:
             if signature in self._seen_signatures:
                 return self._last
@@ -124,18 +124,18 @@ class GitActions:
     def _run_fetch(self):
         at = datetime.now(timezone.utc).isoformat()
         try:
-            # Une page de maintenance servie en 200 à la place du dépôt passe pour un dépôt sans branche :
-            # git ne signale rien, et --prune effacerait alors toutes les branches origin/*. Sans branche
-            # annoncée, pas de fetch.
+            # A maintenance page served with a 200 instead of the repository looks like a repository with no
+            # branch: git reports nothing, and --prune would then delete every origin/* branch. No
+            # advertised branch, no fetch.
             advertised = self._git(["ls-remote", "--heads", "origin"], timeout=FETCH_TIMEOUT_S)
             if advertised.returncode != 0:
                 return {"at": at, "ok": False, "message": last_line(advertised.stderr) or f"code {advertised.returncode}"}
             if not advertised.stdout.strip():
-                return {"at": at, "ok": False, "message": "origin n'annonce aucune branche (maintenance ?) : "
-                                                          "fetch annulé pour garder les branches origin/*"}
+                return {"at": at, "ok": False, "message": "origin advertises no branch (maintenance?): "
+                                                          "fetch cancelled to keep the origin/* branches"}
             completed = self._git(["fetch", "--prune", "origin"], timeout=FETCH_TIMEOUT_S)
         except subprocess.TimeoutExpired:
-            return {"at": at, "ok": False, "message": f"aucune réponse de git fetch en {FETCH_TIMEOUT_S} s"}
+            return {"at": at, "ok": False, "message": f"no response from git fetch within {FETCH_TIMEOUT_S} s"}
         except OSError as error:
             return {"at": at, "ok": False, "message": str(error)}
         if completed.returncode != 0:
@@ -158,9 +158,9 @@ class GitActions:
             branch,
             target
     ):
-        """Bornes d'une MR ouverte : sa cible sur origin et sa branche, avec les commits qu'elle n'a pas encore
-        poussés quand le clone en a. Le troisième terme est la branche telle que sur origin, ou None quand
-        elle n'a pas de commit local à montrer."""
+        """Bounds of an open MR: its target on origin and its branch, with the commits not pushed yet when
+        the clone has some. The third item is the branch as on origin, or None when it has no local
+        commit to show."""
         self._check_branch_names(
             branch,
             target
@@ -174,8 +174,8 @@ class GitActions:
         return f"refs/remotes/origin/{target}", head or published, published if head else None
 
     def _unpushed_head(self, branch):
-        """La branche locale quand elle est strictement devant origin/<branche>, sinon None : une branche
-        locale en retard ou divergée (rebase, force-push) montrerait un état faux, origin fait alors foi."""
+        """The local branch when it is strictly ahead of origin/<branch>, otherwise None: a local branch that
+        is behind or has diverged (rebase, force-push) would show a wrong state, so origin prevails."""
         local, published = f"refs/heads/{branch}", f"refs/remotes/origin/{branch}"
         for ref in (local, published):
             if self._git(["rev-parse", "--verify", "--quiet", ref]).returncode != 0:
@@ -193,12 +193,12 @@ class GitActions:
             merge_commit,
             target
     ):
-        """Bornes d'une MR mergée, branche source supprimée ou non : la cible juste avant le merge et
-        le dernier commit de la MR. Tout se lit dans l'historique, aucun worktree ni branche locale."""
+        """Bounds of a merged MR, whether or not its source branch was deleted: the target just before the
+        merge and the last commit of the MR. Everything is read from history, no worktree or local branch."""
         if not iid.isdigit() or not SHA.fullmatch(head) or not SHA.fullmatch(merge_commit):
-            raise GitError("MR ou commit invalide")
+            raise GitError("invalid MR or commit")
         self._check_branch_names(target)
-        # Branche source supprimée et MR squashée : GitLab garde sa tête sous refs/merge-requests.
+        # Source branch deleted and MR squashed: GitLab keeps its head under refs/merge-requests.
         if not self._has_commit(head):
             self._fetch(f"refs/merge-requests/{iid}/head")
         if not self._has_commit(merge_commit):
@@ -212,20 +212,20 @@ class GitActions:
             last=None,
             paths=()
     ):
-        """Sans plage, le diff de la MR depuis le point où elle part de sa cible, celui de l'onglet
-        Changes de GitLab ; avec, ce qu'ont apporté ensemble ses commits de first à last. Avec des
-        chemins, le diff de ces seuls fichiers, chacun en entier : ses lignes inchangées en contexte."""
+        """Without a range, the MR diff from the point where it leaves its target, as in GitLab's Changes
+        tab; with one, what its commits from first to last brought together. With paths, the diff of
+        those files only, each in full: its unchanged lines as context."""
         base, head, _ = revisions
         options = [f"--unified={WHOLE_FILE_CONTEXT}", "--", *paths] if paths else []
         if first is None and last is None:
             return self._diff_range(f"{base}...{head}", *options)
         shas = [commit["sha"] for commit in self.commits(revisions)]
         if first not in shas or last not in shas or shas.index(first) > shas.index(last):
-            raise GitError("plage de commits hors de la MR")
+            raise GitError("commit range outside the MR")
         return self._diff_range(f"{first}^1", last, *options)
 
     def commits(self, revisions):
-        """Commits de la MR, du plus ancien au plus récent, sans ceux de la cible qu'elle a mergée."""
+        """Commits of the MR, oldest first, without those of the target it merged in."""
         base, head, published = revisions
         completed = self._git(
             [
@@ -235,7 +235,7 @@ class GitActions:
             timeout=DIFF_TIMEOUT_S
         )
         if completed.returncode != 0:
-            raise GitError(last_line(completed.stderr) or "git log en échec")
+            raise GitError(last_line(completed.stderr) or "git log failed")
         unpushed = set()
         if published:
             listed = self._git(["rev-list", "--first-parent", f"{published}..{head}"], timeout=DIFF_TIMEOUT_S)
@@ -260,9 +260,9 @@ class GitActions:
             branch,
             target
     ):
-        """Nombre de commits, date du dernier et retard sur la cible d'une MR ouverte, d'après les branches
-        origin/* du dernier fetch, sans réseau : de quoi les donner pendant une coupure de GitLab. Le retard
-        court, comme dans la page, depuis le commit de la cible qui suit le dernier commit commun."""
+        """Commit count, date of the last one and lag behind the target of an open MR, from the origin/*
+        branches of the last fetch, without network: enough to show them during a GitLab outage. The lag
+        runs, as in the page, from the target commit that follows the last common commit."""
         self._check_branch_names(
             branch,
             target
@@ -270,7 +270,7 @@ class GitActions:
         head, base = f"refs/remotes/origin/{branch}", f"refs/remotes/origin/{target}"
         for ref, name in ((head, branch), (base, target)):
             if self._git(["rev-parse", "--verify", "--quiet", ref]).returncode != 0:
-                raise GitError(f"branche absente du clone local : {name}")
+                raise GitError(f"branch missing from the local clone: {name}")
         common = self._git_output(["merge-base", head, base])
         count = int(self._git_output(["rev-list", "--count", f"{base}..{head}"]))
         commit_date, author_date = self._git_output(["log", "-1", "--format=%cI%x1f%aI", head]).split("\x1f")
@@ -299,7 +299,7 @@ class GitActions:
         }
 
     def _last_fetch_at(self):
-        """Date du dernier fetch qui a abouti, même lancé hors du serveur : celle de FETCH_HEAD."""
+        """Date of the last successful fetch, even one run outside the server: that of FETCH_HEAD."""
         try:
             mtime = self._fetch_head.stat().st_mtime
         except OSError:
@@ -309,7 +309,7 @@ class GitActions:
     def _git_output(self, args):
         completed = self._git(args)
         if completed.returncode != 0:
-            raise GitError(last_line(completed.stderr) or f"git {args[0]} en échec")
+            raise GitError(last_line(completed.stderr) or f"git {args[0]} failed")
         return completed.stdout.strip()
 
     def _diff_range(self, *revisions):
@@ -324,14 +324,14 @@ class GitActions:
                 timeout=DIFF_TIMEOUT_S
             )
         except subprocess.TimeoutExpired as error:
-            raise GitError(f"aucune réponse de git diff en {DIFF_TIMEOUT_S} s") from error
+            raise GitError(f"no response from git diff within {DIFF_TIMEOUT_S} s") from error
         if completed.returncode != 0:
-            raise GitError(last_line(completed.stderr.decode(errors="replace")) or "git diff en échec")
-        # Au-delà, le navigateur peinerait à l'afficher.
+            raise GitError(last_line(completed.stderr.decode(errors="replace")) or "git diff failed")
+        # Beyond that, the browser would struggle to display it.
         if len(completed.stdout) > MAX_DIFF_BYTES:
             raise GitError(
-                f"diff de {len(completed.stdout) // 1_000_000} Mo, au-delà des {MAX_DIFF_BYTES // 1_000_000} Mo "
-                "affichables : le lire dans GitLab"
+                f"{len(completed.stdout) // 1_000_000} MB diff, beyond the {MAX_DIFF_BYTES // 1_000_000} MB "
+                "that can be displayed: read it in GitLab"
             )
         return completed.stdout.decode(errors="replace")
 
@@ -341,14 +341,14 @@ class GitActions:
     ):
         for name in names:
             if self._git(["check-ref-format", "--branch", name]).returncode != 0:
-                raise GitError(f"nom de branche invalide : {name}")
+                raise GitError(f"invalid branch name: {name}")
 
     def _fetch_missing(
             self,
             branch,
             target
     ):
-        """Branche poussée depuis le dernier fetch : on va la chercher, elle seule."""
+        """Branch pushed since the last fetch: fetch it, and only it."""
         missing = [name for name in (branch, target) if not self._has_remote_branch(name)]
         if missing:
             self._fetch(*missing)
@@ -357,9 +357,9 @@ class GitActions:
         try:
             completed = self._git(["fetch", "origin", *refspecs], timeout=FETCH_TIMEOUT_S)
         except subprocess.TimeoutExpired as error:
-            raise GitError(f"aucune réponse de git fetch en {FETCH_TIMEOUT_S} s") from error
+            raise GitError(f"no response from git fetch within {FETCH_TIMEOUT_S} s") from error
         if completed.returncode != 0:
-            raise GitError(last_line(completed.stderr) or "introuvable sur origin")
+            raise GitError(last_line(completed.stderr) or "not found on origin")
 
     def _has_remote_branch(self, name):
         return self._git(["rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{name}"]).returncode == 0

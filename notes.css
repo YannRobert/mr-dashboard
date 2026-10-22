@@ -1,4 +1,4 @@
-/* Corps d'un commentaire GitLab rendu (notes.js) : de quoi lire titres, listes, tableaux et code, aux couleurs de la page. */
+/* Body of a rendered GitLab comment (notes.js): enough to read headings, lists, tables and code, in the page colors. */
 .gl-body { overflow-wrap: anywhere; color: var(--text); }
 .gl-body > :first-child { margin-top: 0; }
 .gl-body > :last-child { margin-bottom: 0; }
@@ -26,7 +26,7 @@
 .gl-body hr { border: none; border-top: 1px solid var(--border); margin: 0.8em 0; }
 .gl-body .gfm-project_member, .gl-body .gfm-merge_request, .gl-body .gfm-issue, .gl-body .gfm-commit { font-weight: 500; }
 
-/* Bas d'un fil : Répondre, Résoudre ou Rouvrir, et la réponse en cours d'écriture (notes.js). */
+/* Thread footer: Reply, Resolve or Reopen, and the reply being written (notes.js). */
 .thread-actions { display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; padding: 0.35rem 0.6rem; border-top: 1px solid var(--border); }
 .thread-actions[hidden] { display: none; }
 .thread-actions button {
@@ -34,8 +34,8 @@
   background: var(--surface); border: 1px solid var(--border-strong); border-radius: 0.5rem;
 }
 .thread-actions button:hover { border-color: var(--accent); }
-/* Chaque action sa teinte, mêlée au fond de la page pour valoir en thème clair comme sombre : Répondre en
-   couleur d'accent, Résoudre en vert, Rouvrir en orange. */
+/* Each action its own hue, mixed with the page background to work in light and dark themes: Reply in
+   accent color, Resolve in green, Reopen in orange. */
 .thread-actions button:not([type="submit"]) { --tint: var(--accent); font-weight: 600; background: color-mix(in srgb, var(--tint) 16%, var(--surface)); border-color: color-mix(in srgb, var(--tint) 55%, var(--surface)); }
 .thread-actions button:not([type="submit"]):hover { background: color-mix(in srgb, var(--tint) 28%, var(--surface)); border-color: var(--tint); }
 .thread-actions button[data-thread-resolve="true"] { --tint: #16a34a; }
@@ -51,8 +51,8 @@
 }
 .thread-reply .thread-actions { border-top: none; }
 
-/* Réponses d'un fil (diff.html, comments.html) : chacune une carte en retrait, avec son fond, son cadre et
-   un espace avant elle. Séparées d'un simple trait, plusieurs réponses se lisaient comme un seul message. */
+/* Replies of a thread (diff.html, comments.html): each an indented card, with its background, border and
+   a space before it. Separated by a mere rule, several replies read as a single message. */
 .note + .note {
   margin: 0.55rem 0.6rem 0.55rem 1.6rem; padding: 0.45rem 0.7rem;
   border: 1px solid var(--border); border-radius: 0.4rem;
