@@ -188,8 +188,10 @@ prompt = """
 
 Variables du prompt : `{iid}`, `{title}`, `{source_branch}`, `{target_branch}`, `{web_url}`, et
 `{fix_context}`, le prompt de correction calculé par le dashboard (mise à jour de la branche,
-indicateurs imparfaits, threads, boucle de vérification jusqu'à des indicateurs parfaits). Une
-variable inconnue reste telle quelle dans le prompt affiché.
+indicateurs imparfaits, threads, boucle de vérification jusqu'à des indicateurs parfaits). Cette
+boucle ne dit pas comment lire les indicateurs : le prompt du projet l'ajoute après `{fix_context}`
+s'il dispose d'un outil pour cela (script, CLI…). Une variable inconnue reste telle quelle dans le
+prompt affiché.
 
 Sans catalogue, seule la correction est proposée, avec `{fix_context}` pour prompt. Un catalogue
 invalide n'en propose aucune : le dialogue dit pourquoi.

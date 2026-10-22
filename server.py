@@ -51,17 +51,15 @@ Usage — d'ordinaire via scripts/mr-dashboard/start.sh, qui lit ces options dan
 Aucun défaut ne désigne un projet : une option oubliée arrête le serveur au lieu de lui faire suivre
 un autre dépôt que prévu.
 
-Prérequis (les mêmes que scripts/mr-ci-signals.py) :
+Prérequis :
     SONAR_TOKEN dans l'environnement — sans lui, les pastilles Sonar restent grises.
     ~/.config/glab-cli/config.yml authentifié contre gitlab.example.com.
 """
 import argparse
 import base64
 import http.client
-import importlib.util
 import json
 import os
-import shlex
 import ssl
 import threading
 import time
@@ -118,8 +116,6 @@ PAGES = {
 # Un JS ou CSS demandé avec ?v=<étiquette> ne change jamais sous cette URL : le navigateur le garde sans
 # revalider, et le reprend même quand le serveur ne répond pas.
 IMMUTABLE_CACHE_CONTROL = "max-age=31536000, immutable"
-REPO_ROOT = STATIC_DIR.parent
-SIGNALS_SCRIPT = REPO_ROOT / "scripts" / "mr-ci-signals.py"
 # Exigé sur le POST : un en-tête non standard impose au navigateur un preflight CORS, que ce serveur
 # ne satisfait jamais — une page tierce ne peut donc pas déclencher l'action.
 ACTION_HEADER = "X-MR-Dashboard"
@@ -830,45 +826,6 @@ def range_end(end):
     return {"line_code": line_code, "type": end["type"], **{n: v for n, v in lines.items() if v is not None}}
 
 
-def signals_command(args):
-    """Commande de vérification citée par le prompt de correction, exécutée depuis --repo-dir.
-
-    Depuis ce dépôt : chemin relatif, et seulement les options qui s'écartent des défauts du script,
-    pour un prompt lisible. Depuis un autre clone, qui n'a pas ce script : son chemin absolu.
-    """
-    defaults = signals_script_defaults()
-    options = [
-        ("--gitlab-host", args.gitlab_host, defaults.DEFAULT_GITLAB_HOST),
-        ("--gitlab-project", quote(args.gitlab_project, safe=""), defaults.DEFAULT_GITLAB_PROJECT),
-    ]
-    if args.no_sonar:
-        options.append(("--no-sonar", None, None))
-    else:
-        options += [
-            ("--sonar-host", args.sonar_host, defaults.DEFAULT_SONAR_HOST),
-            ("--sonar-project", args.sonar_project, defaults.DEFAULT_SONAR_PROJECT),
-        ]
-    if args.no_pit:
-        options.append(("--no-pit", None, None))
-    else:
-        options.append(("--pit-marker", args.pit_marker, defaults.MUTATION_MARKER))
-    in_this_repo = args.repo_dir.resolve().is_relative_to(REPO_ROOT)
-    command = ["python3", "scripts/mr-ci-signals.py" if in_this_repo else shlex.quote(str(SIGNALS_SCRIPT))]
-    for name, value, default in options:
-        if value is None:
-            command.append(name)
-        elif not in_this_repo or value != default:
-            command += [name, shlex.quote(value)]
-    return " ".join(command)
-
-
-def signals_script_defaults():
-    spec = importlib.util.spec_from_file_location("mr_ci_signals", SIGNALS_SCRIPT)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
 def require_unless_disabled(
         parser,
         args,
@@ -903,8 +860,8 @@ def main():
     parser.add_argument(
         "--repo-dir",
         type=Path,
-        default=STATIC_DIR,
-        help="clone local du projet suivi, où Orca ouvre la session de correction et où tournent les actions git (défaut : ce dépôt)"
+        required=True,
+        help="clone local du projet suivi, où Orca ouvre la session de correction et où tournent les actions git"
     )
     parser.add_argument(
         "--git-fetch-interval",
@@ -956,7 +913,6 @@ def main():
             "pitMarker": args.pit_marker,
             "pipelineBranch": args.pipeline_branch,
             "targetBranch": args.target_branch,
-            "signalsCommand": signals_command(args),
             "orcaEnabled": orca is not None,
             "gitFetchIntervalS": args.git_fetch_interval,
         },
