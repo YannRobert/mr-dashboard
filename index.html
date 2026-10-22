@@ -676,6 +676,10 @@
         <h4 data-i18n="soundTest.negative">Mauvaises nouvelles</h4>
         <button type="button" data-sound="broken"><span aria-hidden="true">🔴</span><b data-i18n="soundTest.broken">Sirène</b><small data-i18n="soundTest.brokenWhen"></small></button>
         <button type="button" data-sound="alert"><span aria-hidden="true">⚠</span><b data-i18n="soundTest.alert">Alerte</b><small data-i18n="soundTest.alertWhen"></small></button>
+        <h4 data-i18n="soundTest.actions">Tes actions</h4>
+        <button type="button" data-sound="orcaOrdered"><span aria-hidden="true">📻</span><b data-i18n="soundTest.orcaOrdered">Radio « Yes sir! »</b><small data-i18n="soundTest.orcaOrderedWhen"></small></button>
+        <button type="button" data-sound="orcaLaunched"><span aria-hidden="true">🎖</span><b data-i18n="soundTest.orcaLaunched">Radio « Mission accomplished! »</b><small data-i18n="soundTest.orcaLaunchedWhen"></small></button>
+        <button type="button" data-sound="orcaFailed"><span aria-hidden="true">📵</span><b data-i18n="soundTest.orcaFailed">Radio « Negative! »</b><small data-i18n="soundTest.orcaFailedWhen"></small></button>
         <p id="sound-test-status" hidden></p>
       </div>
     </div>
@@ -1049,6 +1053,13 @@ const I18N = {
     "soundTest.brokenWhen": () => `Le pipeline de ${state.config?.pipelineBranch || "la branche suivie"} passe en échec`,
     "soundTest.merged": "Arpège",
     "soundTest.mergedWhen": "Une MR est mergée, la tienne ou celle d'un autre",
+    "soundTest.actions": "Tes actions",
+    "soundTest.orcaOrdered": "Radio « Yes sir! »",
+    "soundTest.orcaOrderedWhen": "Tu cliques « Ouvrir dans Orca »",
+    "soundTest.orcaLaunched": "Radio « Mission accomplished! »",
+    "soundTest.orcaLaunchedWhen": "La session Claude Code a démarré dans Orca",
+    "soundTest.orcaFailed": "Radio « Negative! »",
+    "soundTest.orcaFailedWhen": "Le lancement dans Orca échoue, ou Claude Code n'y démarre pas",
     "soundTest.played": "Son envoyé au système. Rien entendu ? Onglet coupé (clic droit sur l'onglet), son du site (icône à gauche de l'adresse), puis sortie et volume du navigateur dans le mélangeur de volume du système.",
     "soundTest.blocked": p => `Son bloqué par le navigateur (état audio : ${p.state}).`,
     "soundTest.error": p => `Son impossible : ${p.message}`,
@@ -1343,6 +1354,13 @@ const I18N = {
     "soundTest.brokenWhen": () => `The ${state.config?.pipelineBranch || "followed branch"} pipeline fails`,
     "soundTest.merged": "Arpeggio",
     "soundTest.mergedWhen": "An MR is merged, yours or someone else's",
+    "soundTest.actions": "Your actions",
+    "soundTest.orcaOrdered": "Radio « Yes sir! »",
+    "soundTest.orcaOrderedWhen": "You click “Open in Orca”",
+    "soundTest.orcaLaunched": "Radio « Mission accomplished! »",
+    "soundTest.orcaLaunchedWhen": "The Claude Code session started in Orca",
+    "soundTest.orcaFailed": "Radio « Negative! »",
+    "soundTest.orcaFailedWhen": "Starting in Orca fails, or Claude Code does not start there",
     "soundTest.played": "Sound sent to the system. Heard nothing? Muted tab (right-click the tab), site sound (icon left of the address), then the browser's output and level in the system volume mixer.",
     "soundTest.blocked": p => `Sound blocked by the browser (audio state: ${p.state}).`,
     "soundTest.error": p => `Sound unavailable: ${p.message}`,
@@ -3626,6 +3644,82 @@ function thud(
   oscillator.stop(end + 0.05);
 }
 
+// Grésillement radio : bruit blanc filtré en passe-bande, comme l'ouverture ou la fermeture d'un émetteur.
+function crackle(
+  ctx,
+  output,
+  { at, duration, gain }
+) {
+  const samples = Math.round(ctx.sampleRate * duration);
+  const buffer = ctx.createBuffer(1, samples, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < samples; i++) data[i] = Math.random() * 2 - 1;
+  const noise = ctx.createBufferSource();
+  const filter = ctx.createBiquadFilter();
+  const envelope = ctx.createGain();
+  const start = ctx.currentTime + at;
+  noise.buffer = buffer;
+  filter.type = "bandpass";
+  filter.frequency.value = 2500;
+  filter.Q.value = 0.8;
+  envelope.gain.setValueAtTime(gain, start);
+  envelope.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+  noise.connect(filter).connect(envelope).connect(output);
+  noise.start(start);
+}
+
+// Message radio : ouverture grésillante, bips [fréquence, instant], fermeture à closeAt secondes.
+function radio(
+  ctx,
+  output,
+  beeps,
+  closeAt
+) {
+  crackle(
+    ctx,
+    output,
+    { at: 0, duration: 0.12, gain: 0.35 }
+  );
+  beeps.forEach(([frequency, at]) => tone(
+    ctx,
+    output,
+    { frequency, at, duration: 0.08, gain: 0.08, type: "square" }
+  ));
+  crackle(
+    ctx,
+    output,
+    { at: closeAt, duration: 0.06, gain: 0.3 }
+  );
+}
+
+// Réponse parlée qui suit un son, par la synthèse vocale du navigateur : voix anglaise, grave et rapide,
+// une réplique tirée au hasard. Elle ne passe pas par Web Audio, donc ni par le gain ni par la mesure de sonie.
+const SOUND_VOICES = {
+  orcaOrdered: { delay: 300, lines: ["Yes sir!", "Roger that!", "Affirmative!", "Right away!", "Moving out!"] },
+  orcaLaunched: { delay: 450, lines: ["Mission accomplished!", "Objective secured!", "We're in position!", "Job's done!"] },
+  orcaFailed: { delay: 650, lines: ["Negative!", "Unable to comply!", "Mission failed!", "We've lost contact!"] },
+};
+
+// subject, dit après la réplique : le titre d'un onglet Orca (« Review MR !330 »), le « ! » de GitLab en moins
+// et MR épelé, sans quoi la voix anglaise lit « Mister ».
+function speakAfter(
+  name,
+  subject
+) {
+  const voice = SOUND_VOICES[name];
+  if (!voice || !window.speechSynthesis) return;
+  const line = voice.lines[Math.floor(Math.random() * voice.lines.length)];
+  const spoken = subject ? `${line} ${subject.replace(/!/g, "").replace(/\bMR\b/g, "M R")}.` : line;
+  const utterance = new SpeechSynthesisUtterance(spoken);
+  const english = speechSynthesis.getVoices().filter(candidate => candidate.lang.startsWith("en"));
+  utterance.voice = english.find(candidate => /male|david|guy|mark|george/i.test(candidate.name) && !/female/i.test(candidate.name))
+    ?? english[0] ?? null;
+  utterance.lang = "en-US";
+  utterance.pitch = 0.6;
+  utterance.rate = 1.15;
+  setTimeout(() => speechSynthesis.speak(utterance), voice.delay);
+}
+
 const SOUNDS = {
   // Cloche de bar, plusieurs coups : sa MR est approuvée.
   bell: (ctx, output) => [0, 0.28, 0.56, 0.84, 1.12, 1.4].forEach(at => strike(
@@ -3656,6 +3750,34 @@ const SOUNDS = {
   // Sirène : le pipeline de la branche suivie passe en échec.
   broken: siren,
   // Arpège majeur montant, do-mi-sol-do, la dernière note tenue : une MR est mergée.
+  // Radio militaire, chacun suivi d'une réplique (SOUND_VOICES). Ordre reçu : grésillement, un bip,
+  // fermeture — on vient de cliquer « Ouvrir dans Orca ».
+  orcaOrdered: (ctx, output) => radio(
+    ctx,
+    output,
+    [[1400, 0.12]],
+    0.25
+  ),
+  // Deux bips montants : Orca a lancé la session demandée.
+  orcaLaunched: (ctx, output) => radio(
+    ctx,
+    output,
+    [[1400, 0.15], [1870, 0.27]],
+    0.4
+  ),
+  // Grésillement prolongé puis bourdon grave qui descend, radio coupée : le lancement Orca a échoué.
+  orcaFailed: (ctx, output) => {
+    crackle(
+      ctx,
+      output,
+      { at: 0, duration: 0.3, gain: 0.35 }
+    );
+    thud(
+      ctx,
+      output,
+      { from: 220, to: 90, at: 0.25, duration: 0.35 }
+    );
+  },
   merged: (ctx, output) => [[523, 0], [659, 0.09], [784, 0.18], [1046, 0.27]].forEach(([frequency, at], i, notes) => tone(
     ctx,
     output,
@@ -3729,13 +3851,20 @@ function momentaryLoudness(samples) {
 
 // Rend l'état du contexte audio une fois le son lancé (« running » : il est parti vers la sortie du
 // système), ou l'erreur : l'écoute des sons le montre, les autres appels l'ignorent.
-async function playSound(name) {
+async function playSound(
+  name,
+  subject = null
+) {
   try {
     const ctx = audioContext();
     const output = ctx.createGain();
     output.gain.value = await soundGain(name);
     output.connect(ctx.destination);
     SOUNDS[name](ctx, output);
+    speakAfter(
+      name,
+      subject
+    );
     if (ctx.state === "suspended") await ctx.resume();
     return { state: ctx.state };
   } catch (error) {
@@ -5735,6 +5864,14 @@ if (window.AudioContext) {
   ));
   ["pointerdown", "keydown"].forEach(type => window.addEventListener(type, unlockAudio, true));
   window.addEventListener("pagehide", forgetSoundTab);
+  // Joués dans cet onglet, où l'on vient de cliquer « Ouvrir dans Orca » : le navigateur l'autorise.
+  const orcaSounds = { ordered: "orcaOrdered", launched: "orcaLaunched", failed: "orcaFailed" };
+  document.addEventListener("mr-dashboard:orca", e => {
+    if (state.sound) playSound(
+      orcaSounds[e.detail.step],
+      e.detail.title
+    );
+  });
   if (readSound()) setSound(true);
   // Écoute des sons, case « Sons » cochée ou non : le clic suffit au navigateur pour les jouer.
   const toggleSoundTest = open => {

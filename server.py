@@ -16,7 +16,8 @@ relayé, et le serveur n'écoute que sur 127.0.0.1 : les seules écritures dans 
 Actions locales, en POST :
     /orca/launch  ouvre dans Orca une session Claude Code avec le prompt d'une action du bouton AI
                 d'une MR : {"iid", "action", "prompt", "model", "effort"} (cf. orca_launcher.py), quand le serveur tourne
-                dans WSL et qu'Orca est installé ; GET /ai/actions en donne le catalogue (cf. ai_actions.py)
+                dans WSL et qu'Orca est installé ; GET /ai/actions en donne le catalogue (cf. ai_actions.py),
+                GET /orca/status?launch= dit si le terminal d'un lancement a lu son prompt
     /git/fetch  git fetch du clone local, qui tourne aussi tout seul toutes les --git-fetch-interval
                 secondes ; GET /git/status en donne le dernier résultat (cf. git_actions.py)
     /git/auto   active ou suspend le fetch automatique : {"enabled": true|false}
@@ -308,6 +309,8 @@ def make_handler(
                 self.send_json(200, stats.snapshot())
             elif self.path == "/avatars":
                 self.send_json(200, avatar_colors.snapshot())
+            elif self.path.startswith("/orca/status?"):
+                self.orca_status(parse_qs(urlsplit(self.path).query))
             elif self.path.startswith("/git/diff?"):
                 self.git_diff(parse_qs(urlsplit(self.path).query))
             elif self.path.startswith("/git/commits?"):
@@ -412,7 +415,15 @@ def make_handler(
             except OrcaError as error:
                 self.send_json(502, {"message": str(error)})
                 return
-            self.send_json(200, result)
+            self.send_json(200, {**result, "title": title})
+
+        def orca_status(self, query):
+            try:
+                read = OrcaLauncher.prompt_read(query.get("launch", [""])[0])
+            except OrcaError as error:
+                self.send_json(400, {"message": str(error)})
+                return
+            self.send_json(200, {"read": read})
 
         def git_fetch(self, payload):
             signature = payload.get("signature") if isinstance(payload, dict) else None

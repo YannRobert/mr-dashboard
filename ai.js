@@ -37,8 +37,10 @@ window.MrAi = (() => {
       "dialog.effort.max": "Maximal",
       "dialog.effort.recommended": p => `${p.level} (recommandé)`,
       "dialog.orca.opening": "Ouverture dans Orca…",
-      "dialog.orca.opened": "Session lancée dans Orca",
-      "dialog.orca.unconfirmed": "Orca n'a pas confirmé à temps : bascule sur Orca, l'onglet s'y ouvre dès que sa fenêtre est au premier plan",
+      "dialog.orca.opened": "Onglet ouvert dans Orca, en attente du démarrage de Claude Code…",
+      "dialog.orca.unconfirmed": "Orca n'a pas confirmé à temps : bascule sur Orca, l'onglet s'y ouvre dès que sa fenêtre est au premier plan. En attente du démarrage de Claude Code…",
+      "dialog.orca.read": "Session Claude Code démarrée dans Orca",
+      "dialog.orca.unread": p => `Claude Code n'a pas démarré en ${p.seconds} s : regarde dans Orca`,
       "dialog.orca.failed": p => `Échec : ${p.message}`,
     },
     en: {
@@ -75,8 +77,10 @@ window.MrAi = (() => {
       "dialog.effort.max": "Max",
       "dialog.effort.recommended": p => `${p.level} (recommended)`,
       "dialog.orca.opening": "Opening in Orca…",
-      "dialog.orca.opened": "Session started in Orca",
-      "dialog.orca.unconfirmed": "Orca did not confirm in time: switch to Orca, the tab opens as soon as its window is in front",
+      "dialog.orca.opened": "Tab opened in Orca, waiting for Claude Code to start…",
+      "dialog.orca.unconfirmed": "Orca did not confirm in time: switch to Orca, the tab opens as soon as its window is in front. Waiting for Claude Code to start…",
+      "dialog.orca.read": "Claude Code session started in Orca",
+      "dialog.orca.unread": p => `Claude Code did not start within ${p.seconds} s: check Orca`,
       "dialog.orca.failed": p => `Failed: ${p.message}`,
     },
   };
@@ -395,11 +399,36 @@ window.MrAi = (() => {
     part("ai-copied").textContent = t("dialog.copied");
   }
 
+  // La session Claude Code supprime le fichier du prompt une fois démarrée (cf. orca_launcher.py) : seule
+  // preuve qu'elle est partie, l'onglet créé par Orca pouvant attendre son shell plus de dix secondes.
+  const PROMPT_READ_TIMEOUT_S = 90;
+  const PROMPT_READ_POLL_MS = 1000;
+
+  async function promptRead(launch) {
+    const deadline = Date.now() + PROMPT_READ_TIMEOUT_S * 1000;
+    while (Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, PROMPT_READ_POLL_MS));
+      const body = await request(`orca/status?launch=${encodeURIComponent(launch)}`);
+      if (body.read) return true;
+    }
+    return false;
+  }
+
+  // Étape du lancement Orca (ordered, launched, failed), avec le titre de l'onglet une fois connu, que la
+  // page qui a des sons (index.html) fait entendre ; les autres ignorent l'événement.
+  function announce(
+    step,
+    title = null
+  ) {
+    document.dispatchEvent(new CustomEvent("mr-dashboard:orca", { detail: { step, title } }));
+  }
+
   // Le serveur ouvre un onglet Orca sur le worktree principal, qui lance Claude Code avec le prompt affiché.
   async function openInOrca() {
     const status = part("ai-copied");
     part("ai-orca").disabled = true;
     status.textContent = t("dialog.orca.opening");
+    announce("ordered");
     try {
       const body = await request(
         "orca/launch",
@@ -416,8 +445,12 @@ window.MrAi = (() => {
         }
       );
       status.textContent = t(body.confirmed ? "dialog.orca.opened" : "dialog.orca.unconfirmed", body);
+      const read = await promptRead(body.launch);
+      status.textContent = read ? t("dialog.orca.read") : t("dialog.orca.unread", { seconds: PROMPT_READ_TIMEOUT_S });
+      announce(read ? "launched" : "failed", body.title);
     } catch (error) {
       status.textContent = t("dialog.orca.failed", { message: error.message });
+      announce("failed");
     } finally {
       part("ai-orca").disabled = false;
     }

@@ -11,6 +11,7 @@ dans Orca.
 import base64
 import json
 import os
+import re
 import secrets
 import shlex
 import shutil
@@ -21,10 +22,14 @@ from pathlib import Path
 PROMPT_MAX_CHARS = 20_000
 COMMAND_TIMEOUT_S = 60
 # Le prompt passe par un fichier : un long texte multiligne ne survivrait pas aux guillemets de la
-# ligne de commande Windows. Le terminal le lit puis le supprime ; un fichier jamais lu (terminal fermé
-# avant que son shell ait démarré) est purgé au lancement suivant, passé ce délai.
+# ligne de commande Windows. Le terminal le lit, et la session Claude Code le supprime une fois démarrée,
+# par un hook SessionStart qu'apportent ses réglages propres (fichier voisin, passé par --settings) ;
+# un fichier jamais supprimé (shell ou claude en échec au démarrage) est purgé au lancement suivant,
+# passé ce délai.
 PROMPT_DIR = Path.home() / ".cache" / "mr-dashboard"
 PROMPT_MAX_AGE_S = 24 * 3600
+# Identifiant d'un lancement : le nom de son fichier de prompt, sans extension.
+LAUNCH_ID = re.compile(r"MR\d+-[0-9a-f]{8}")
 # Orca n'attend le terminal que quelques secondes, quand le shell WSL en met parfois plus de dix à
 # démarrer : il répond alors en échec alors que le terminal est bel et bien créé.
 UNCONFIRMED_ERROR = "Timed out waiting for terminal handle"
@@ -101,33 +106,42 @@ class OrcaLauncher:
             model=None,
             effort=None
     ):
-        """Ouvre le terminal et renvoie {worktree, confirmed}. Sans model ni effort, claude prend ceux de sa configuration."""
+        """Ouvre le terminal et renvoie {worktree, confirmed, launch}. Sans model ni effort, claude prend ceux de sa configuration."""
         if not prompt.strip() or len(prompt) > PROMPT_MAX_CHARS:
             raise OrcaError("prompt vide ou trop long")
         prompt_file = self._write_prompt(
             iid,
             prompt
         )
+        settings_file = self._write_settings(prompt_file)
         model_option = f"--model {shlex.quote(model)} " if model else ""
         effort_option = f"--effort {shlex.quote(effort)} " if effort else ""
         self._raise_orca()
-        # Le fichier n'est jamais supprimé ici sur erreur : le terminal a pu être créé quand même, et
-        # son shell le lirait alors trop tard. Sans le fichier, claude ne démarre pas du tout plutôt
+        # Les fichiers ne sont jamais supprimés ici sur erreur : le terminal a pu être créé quand même,
+        # et son shell les lirait alors trop tard. Sans le prompt, claude ne démarre pas du tout plutôt
         # que de démarrer sans consigne.
         try:
             self._orca([
                 "terminal", "create",
                 "--worktree", "path:" + self._windows_path(self._repo_root),
                 "--title", title,
-                "--command", f"[ -f '{prompt_file}' ] && claude {model_option}{effort_option}\"$(cat '{prompt_file}'; rm -f '{prompt_file}')\"",
+                "--command", f"[ -f '{prompt_file}' ] && claude --settings '{settings_file}' {model_option}{effort_option}\"$(cat '{prompt_file}')\"",
                 "--focus",
                 "--json",
             ])
         except OrcaError as error:
             if not error.unconfirmed:
                 raise
-            return {"worktree": str(self._repo_root), "confirmed": False}
-        return {"worktree": str(self._repo_root), "confirmed": True}
+            return {"worktree": str(self._repo_root), "confirmed": False, "launch": prompt_file.stem}
+        return {"worktree": str(self._repo_root), "confirmed": True, "launch": prompt_file.stem}
+
+    @staticmethod
+    def prompt_read(launch):
+        """Vrai quand la session Claude Code du lancement a démarré : son hook SessionStart supprime le
+        fichier du prompt. La création de l'onglet, que confirme Orca, ne le garantit pas."""
+        if not LAUNCH_ID.fullmatch(launch):
+            raise OrcaError("lancement inconnu")
+        return not (PROMPT_DIR / f"{launch}.md").exists()
 
     def _write_prompt(
             self,
@@ -135,11 +149,20 @@ class OrcaLauncher:
             prompt
     ):
         PROMPT_DIR.mkdir(parents=True, exist_ok=True)
-        for stale in PROMPT_DIR.glob("*MR*.md"):
+        for stale in PROMPT_DIR.glob("MR*"):
             if time.time() - stale.stat().st_mtime > PROMPT_MAX_AGE_S:
                 stale.unlink(missing_ok=True)
         path = PROMPT_DIR / f"MR{iid}-{secrets.token_hex(4)}.md"
         path.write_text(prompt, encoding="utf-8")
+        path.chmod(0o600)
+        return path
+
+    @staticmethod
+    def _write_settings(prompt_file):
+        path = prompt_file.with_suffix(".settings.json")
+        cleanup = f"rm -f {shlex.quote(str(prompt_file))} {shlex.quote(str(path))}"
+        settings = {"hooks": {"SessionStart": [{"matcher": "startup", "hooks": [{"type": "command", "command": cleanup}]}]}}
+        path.write_text(json.dumps(settings), encoding="utf-8")
         path.chmod(0o600)
         return path
 
