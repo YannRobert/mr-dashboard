@@ -1,54 +1,59 @@
 #!/usr/bin/env bash
 #
-# Lance le serveur du MisteR Dashboard détaché de la session courante (setsid nohup), pour qu'il
-# survive au terminal ou à la session Claude Code qui l'a démarré.
+# Starts the MisteR Dashboard server detached from the current session (setsid nohup), so that it
+# outlives the terminal that started it.
 #
-# Usage : scripts/mr-dashboard/start.sh [profil] [options de server.py…]
-#   profil   nom d'un fichier de profiles/ sans son extension (défaut : back) — projet GitLab, clé
-#            Sonar, port… ; chaque profil tourne en parallèle des autres sur son propre port
-#   options  transmises telles quelles à server.py, après celles du profil (elles l'emportent)
+# Usage: start.sh <profile> [server.py options…]
+#   profile  path to a profile file, or the name of one in $MR_DASHBOARD_PROFILES
+#            (default: ~/.config/mr-dashboard/profiles), without its .conf extension; each profile
+#            runs alongside the others on its own port (see profile.example.conf)
+#   options  passed as is to server.py, after those of the profile (they win)
 #
-# Le serveur servi est celui du dépôt (ou du worktree) où vit ce script, quel que soit le
-# répertoire courant.
-#
-# Fichiers d'état, un jeu par profil, dans ~/.local/state :
-#   mr-dashboard-<profil>.log   journal du serveur
-#   mr-dashboard-<profil>.pid   PID, lu par stop.sh
+# State files, one set per profile, in ~/.local/state:
+#   mr-dashboard-<profile>.log   server log
+#   mr-dashboard-<profile>.pid   PID, read by stop.sh
 
 set -euo pipefail
 
-script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+dashboard_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+profiles_dir="${MR_DASHBOARD_PROFILES:-$HOME/.config/mr-dashboard/profiles}"
 state_dir="$HOME/.local/state"
 
-profile=back
-if [[ $# -gt 0 && "$1" != -* ]]; then
-    profile="$1"
-    shift
-fi
-profile_file="$script_dir/profiles/$profile.conf"
-if [[ ! -f "$profile_file" ]]; then
-    echo "Profil inconnu : $profile (aucun $profile_file)." >&2
-    echo "Profils disponibles : $(cd "$script_dir/profiles" && ls -- *.conf | sed 's/\.conf$//' | xargs)" >&2
+if [[ $# -eq 0 || "$1" == -* ]]; then
+    echo "Usage: $0 <profile> [server.py options…] (see profile.example.conf)" >&2
     exit 1
 fi
+if [[ "$1" == */* || "$1" == *.conf ]]; then
+    profile_file="$1"
+else
+    profile_file="$profiles_dir/$1.conf"
+fi
+shift
+if [[ ! -f "$profile_file" ]]; then
+    echo "Unknown profile: no $profile_file." >&2
+    exit 1
+fi
+profile="$(basename "$profile_file" .conf)"
 
-PORT= GITLAB_PROJECT= SONAR_ENABLED= SONAR_PROJECT= SONAR_JOB= PIT_ENABLED= PIT_JOB= PIT_MARKER= PIPELINE_BRANCH= TARGET_BRANCH= REPO_DIR= GIT_FETCH_INTERVAL=
-# shellcheck source=profiles/back.conf
+PORT= GITLAB_HOST= GITLAB_PROJECT= SONAR_ENABLED= SONAR_HOST= SONAR_PROJECT= SONAR_JOB= PIT_ENABLED= PIT_JOB= PIT_MARKER= PIPELINE_BRANCH= TARGET_BRANCH= REPO_DIR= GIT_FETCH_INTERVAL=
+# shellcheck source=profile.example.conf
 source "$profile_file"
 
 for switch in SONAR_ENABLED PIT_ENABLED; do
     if [[ "${!switch}" != true && "${!switch}" != false ]]; then
-        echo "$switch doit valoir true ou false dans $profile_file (valeur : '${!switch}')." >&2
+        echo "$switch must be true or false in $profile_file (value: '${!switch}')." >&2
         exit 1
     fi
 done
 
 args=()
 [[ -n "$PORT" ]] && args+=(--port "$PORT")
+[[ -n "$GITLAB_HOST" ]] && args+=(--gitlab-host "$GITLAB_HOST")
 [[ -n "$GITLAB_PROJECT" ]] && args+=(--gitlab-project "$GITLAB_PROJECT")
 if [[ "$SONAR_ENABLED" == false ]]; then
     args+=(--no-sonar)
 else
+    [[ -n "$SONAR_HOST" ]] && args+=(--sonar-host "$SONAR_HOST")
     [[ -n "$SONAR_PROJECT" ]] && args+=(--sonar-project "$SONAR_PROJECT")
     [[ -n "$SONAR_JOB" ]] && args+=(--sonar-job "$SONAR_JOB")
 fi
@@ -64,7 +69,7 @@ fi
 [[ -n "$GIT_FETCH_INTERVAL" ]] && args+=(--git-fetch-interval "$GIT_FETCH_INTERVAL")
 args+=("$@")
 
-# Port réellement utilisé : la dernière occurrence l'emporte, comme dans argparse.
+# Port actually used: the last occurrence wins, as in argparse.
 port=8765
 for ((i = 0; i < ${#args[@]}; i++)); do
     case "${args[i]}" in
@@ -77,34 +82,33 @@ log_file="$state_dir/mr-dashboard-$profile.log"
 pid_file="$state_dir/mr-dashboard-$profile.pid"
 
 if [[ -f "$pid_file" ]] && kill -0 "$(cat "$pid_file")" 2> /dev/null; then
-    echo "Profil $profile déjà lancé (PID $(cat "$pid_file")) : $url"
+    echo "Profile $profile already running (PID $(cat "$pid_file")): $url"
     exit 0
 fi
-# Test par ss et non par curl : sous WSL, une connexion à un port libre n'est pas refusée, elle
-# reste en attente.
+# Checked with ss rather than curl: under WSL, a connection to a free port is not refused, it hangs.
 if [[ -n "$(ss -Hltn "sport = :$port")" ]]; then
-    echo "Le port $port est déjà pris par un autre process : choisir un autre PORT dans $profile_file." >&2
+    echo "Port $port is already taken by another process: choose another PORT in $profile_file." >&2
     exit 1
 fi
 
 if [[ "$SONAR_ENABLED" == true && -z "${SONAR_TOKEN:-}" ]]; then
-    echo "⚠️  SONAR_TOKEN absent : les pastilles Sonar resteront grises." >&2
+    echo "⚠️  SONAR_TOKEN missing: Sonar badges will stay grey." >&2
 fi
 
 mkdir -p "$state_dir"
-setsid nohup python3 "$script_dir/server.py" "${args[@]}" > "$log_file" 2>&1 < /dev/null &
+setsid nohup python3 "$dashboard_dir/server.py" "${args[@]}" > "$log_file" 2>&1 < /dev/null &
 echo $! > "$pid_file"
 disown
 
 for _ in $(seq 1 20); do
     if [[ "$(curl -s --max-time 1 -o /dev/null -w '%{http_code}' "$url")" == "200" ]]; then
-        echo "MisteR Dashboard ($profile) lancé : $url"
-        echo "Journal : $log_file — arrêt : $script_dir/stop.sh $profile"
+        echo "MisteR Dashboard ($profile) started: $url"
+        echo "Log: $log_file — stop: $dashboard_dir/stop.sh $profile"
         exit 0
     fi
     sleep 0.5
 done
 
-echo "Le serveur ne répond pas en 200 sur $url après 10 s. Journal :" >&2
+echo "The server does not answer 200 on $url after 10 s. Log:" >&2
 tail -n 20 "$log_file" >&2
 exit 1

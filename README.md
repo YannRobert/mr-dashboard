@@ -53,8 +53,20 @@ The server has **no default that points to a project**: a forgotten required opt
 startup instead of silently tracking another repository. To track several projects at once, start
 one server per project, each on its own `--port`.
 
-The server must outlive the terminal that started it if you want notifications all day: run it
-under `nohup`/`setsid`, a terminal multiplexer, or a user service (systemd, launchd…).
+The server must outlive the terminal that started it if you want notifications all day. `start.sh`
+does it for you: it reads the options from a profile, starts the server detached (`setsid nohup`),
+checks that the page answers, and writes its log and PID to `~/.local/state/mr-dashboard-<profile>.*`.
+
+```bash
+mkdir -p ~/.config/mr-dashboard/profiles
+cp profile.example.conf ~/.config/mr-dashboard/profiles/project.conf   # then edit it
+./start.sh project            # or a path: ./start.sh ~/somewhere/project.conf
+./stop.sh project             # without argument: stops every running profile
+```
+
+Options given after the profile are passed to `server.py` and win over the profile's. Set
+`MR_DASHBOARD_PROFILES` to keep the profiles elsewhere. Under a user service (systemd, launchd…), run
+`start.sh` as a forking service whose PID file is `~/.local/state/mr-dashboard-<profile>.pid`.
 
 ### Options
 
