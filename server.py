@@ -34,6 +34,8 @@ Actions locales, en POST :
     /avatars    couleur de la pastille de chaque personne, la même dans tous les navigateurs (cf.
                 avatar_colors.py) : GET en donne l'attribution, POST {"names", "count"} en donne une, parmi
                 count, à chaque nom qui n'en a pas encore
+    /version    GET : version des HTML, JS et CSS servis, que version.js compare à celle de la page
+                chargée pour la recharger (cf. front_version.py)
     /stats      GET : requêtes envoyées à GitLab (API, git fetch) et à Sonar sur 1, 5 et 15 min, par
                 catégorie, erreurs de connexion, 4xx et 5xx comprises, et depuis le démarrage
                 (cf. request_stats.py)
@@ -72,6 +74,7 @@ from urllib.parse import parse_qs, quote, unquote, urlsplit
 import claude_models
 from ai_actions import AiActions, AiActionsError
 from avatar_colors import DEFAULT_PATH as AVATAR_COLORS_PATH, AvatarColors
+from front_version import FrontVersion, tag as front_version_tag
 from git_actions import GitActions, GitError
 from orca_launcher import OrcaError, OrcaLauncher
 from relay_cache import TTL_S, RelayCache
@@ -105,7 +108,16 @@ STATIC_FILES = {
     "/anonymize.js": "text/javascript; charset=utf-8",
     "/dates.js": "text/javascript; charset=utf-8",
     "/avatars.css": "text/css; charset=utf-8",
+    "/version.js": "text/javascript; charset=utf-8",
 }
+PAGES = {
+    "/index.html": "text/html; charset=utf-8",
+    "/diff.html": "text/html; charset=utf-8",
+    "/comments.html": "text/html; charset=utf-8",
+}
+# Un JS ou CSS demandé avec ?v=<étiquette> ne change jamais sous cette URL : le navigateur le garde sans
+# revalider, et le reprend même quand le serveur ne répond pas.
+IMMUTABLE_CACHE_CONTROL = "max-age=31536000, immutable"
 SIGNALS_SCRIPT = STATIC_DIR.parent / "mr-ci-signals.py"
 REPO_ROOT = STATIC_DIR.parent.parent
 # Exigé sur le POST : un en-tête non standard impose au navigateur un preflight CORS, que ce serveur
@@ -279,6 +291,7 @@ def make_handler(
 ):
     upstream = UpstreamPool()
     relay_cache = RelayCache()
+    front_version = FrontVersion(STATIC_DIR, {**PAGES, **STATIC_FILES})
 
     class Handler(BaseHTTPRequestHandler):
 
@@ -288,16 +301,17 @@ def make_handler(
         def do_GET(self):
             if not self.host_allowed():
                 return
-            if self.path in ("/", "/index.html") or self.path.startswith("/?"):
-                self.send_file(STATIC_DIR / "index.html", "text/html; charset=utf-8")
+            path = urlsplit(self.path).path
+            if path == "/":
+                path = "/index.html"
+            if path in PAGES:
+                self.send_file(path, front_version.versioned_html(self.read_static(path)), False)
+            elif path in STATIC_FILES:
+                self.send_file(path, self.read_static(path), "v=" in urlsplit(self.path).query)
             elif self.path == "/config":
                 self.send_json(200, settings["public"])
-            elif self.path.startswith("/diff.html"):
-                self.send_file(STATIC_DIR / "diff.html", "text/html; charset=utf-8")
-            elif self.path.startswith("/comments.html"):
-                self.send_file(STATIC_DIR / "comments.html", "text/html; charset=utf-8")
-            elif self.path in STATIC_FILES:
-                self.send_file(STATIC_DIR / self.path.lstrip("/"), STATIC_FILES[self.path])
+            elif self.path == "/version":
+                self.send_json(200, {"version": front_version.version()})
             elif self.path == "/ai/actions":
                 try:
                     self.send_json(200, ai_actions.catalog())
@@ -685,12 +699,32 @@ def make_handler(
         ):
             self.send_body(status, json.dumps(payload).encode(), {"Content-Type": "application/json"})
 
+        @staticmethod
+        def read_static(path):
+            return (STATIC_DIR / path.lstrip("/")).read_bytes()
+
         def send_file(
                 self,
                 path,
-                content_type
+                body,
+                immutable
         ):
-            self.send_body(200, path.read_bytes(), {"Content-Type": content_type})
+            """Fichier de la page, avec son ETag : un navigateur qui a déjà ce contenu reçoit un 304 vide."""
+            etag = f'"{front_version_tag(body)}"'
+            if self.headers.get("If-None-Match") == etag:
+                self.send_response(304)
+                self.send_header("ETag", etag)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", {**PAGES, **STATIC_FILES}[path])
+            self.send_header("ETag", etag)
+            if immutable:
+                self.send_header("Cache-Control", IMMUTABLE_CACHE_CONTROL)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
 
         def log_message(
                 self,

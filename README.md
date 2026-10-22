@@ -306,7 +306,10 @@ Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut
 ## Après une modification
 
 - `index.html`, `diff.html` et les fichiers qu'ils chargent (`ai.js`, `notes.js`…) sont relus à chaque
-  requête : recharger la page suffit. Un nouveau fichier s'ajoute à `STATIC_FILES` de `server.py`.
+  requête : les onglets ouverts se rechargent d'eux-mêmes dans les 30 s (`version.js`), ou dès qu'on y
+  revient, sauf pendant une saisie, et seulement si le serveur répond. Chaque JS et CSS est demandé avec
+  l'empreinte de son contenu (`?v=`) : seul un fichier modifié est retéléchargé, les autres sortent du
+  cache du navigateur, même serveur arrêté. Un nouveau fichier s'ajoute à `STATIC_FILES` de `server.py`.
 - `server.py`, `orca_launcher.py`, `ai_actions.py` ou `git_actions.py` : `stop.sh` puis `start.sh`, ou
   `systemctl --user restart mr-dashboard@<profil>` si le serveur tourne en service systemd (`CLAUDE.md`).
 - Le serveur sert l'`index.html` du dépôt (ou du worktree) d'où il a été lancé : pour tester la
