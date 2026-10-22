@@ -42,18 +42,18 @@ Local actions, over POST:
 
 Usage — usually through scripts/mr-dashboard/start.sh, which reads these options from a profile
 (scripts/mr-dashboard/profiles/<name>.conf):
-    python3 mr-dashboard/server.py --gitlab-project <group/project> --pipeline-branch <branch> \
-        --sonar-project <key> --sonar-job <job> --pit-job <job> --pit-marker <marker> \
+    python3 mr-dashboard/server.py --gitlab-host https://gitlab.example.com --gitlab-project <group/project> \
+        --pipeline-branch <branch> --sonar-host https://sonarqube.example.com --sonar-project <key> --sonar-job <job> --pit-job <job> --pit-marker <marker> \
         --repo-dir <local clone of the project> --git-fetch-interval 300 --port 8766
-    python3 mr-dashboard/server.py --gitlab-project <group/project> --pipeline-branch main \
-        --no-sonar --no-pit   # project without Sonar analysis or mutation testing
+    python3 mr-dashboard/server.py --gitlab-host https://gitlab.example.com --gitlab-project <group/project> \
+        --pipeline-branch main --no-sonar --no-pit   # project without Sonar analysis or mutation testing
 
 No default points to a project: a forgotten option stops the server instead of making it track
 another repository than intended.
 
 Prerequisites:
     SONAR_TOKEN in the environment — without it, Sonar badges stay grey.
-    ~/.config/glab-cli/config.yml authenticated against gitlab.example.com.
+    ~/.config/glab-cli/config.yml authenticated against the GitLab host.
 """
 import argparse
 import base64
@@ -80,9 +80,6 @@ from request_stats import RequestStats, http_error
 
 DEFAULT_PORT = 8765
 DEFAULT_GIT_FETCH_INTERVAL_S = 300
-DEFAULT_SONAR_HOST = "https://sonarqube.example.com"
-DEFAULT_GITLAB_HOST = "https://gitlab.example.com"
-DEFAULT_GITLAB_TOKEN_HOST = "gitlab.example.com"
 DEFAULT_GLAB_CONFIG = os.path.expanduser("~/.config/glab-cli/config.yml")
 # Content-Encoding: gzip responses are relayed as is, the browser decompresses them.
 FORWARDED_RESPONSE_HEADERS = ("Content-Encoding", "X-Total", "X-Total-Pages", "X-Next-Page", "X-Page", "X-Per-Page")
@@ -844,12 +841,12 @@ def require_unless_disabled(
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
-    parser.add_argument("--sonar-host", default=DEFAULT_SONAR_HOST)
+    parser.add_argument("--sonar-host", help="Sonar server URL, such as https://sonarqube.example.com")
     parser.add_argument("--sonar-project", help="Sonar project key")
     parser.add_argument("--no-sonar", action="store_true", help="project without Sonar analysis: columns and indicators hidden")
-    parser.add_argument("--gitlab-host", default=DEFAULT_GITLAB_HOST)
+    parser.add_argument("--gitlab-host", required=True, help="GitLab server URL, such as https://gitlab.example.com")
     parser.add_argument("--gitlab-project", required=True, help="project path, not encoded")
-    parser.add_argument("--gitlab-token-host", default=DEFAULT_GITLAB_TOKEN_HOST)
+    parser.add_argument("--gitlab-token-host", help="host name of the token in the glab configuration (default: the one of --gitlab-host)")
     parser.add_argument("--glab-config", default=DEFAULT_GLAB_CONFIG)
     parser.add_argument("--sonar-job", help="name of the CI job that runs the Sonar analysis")
     parser.add_argument("--pit-job", help="name of the CI job that posts the mutation note")
@@ -875,7 +872,7 @@ def main():
         parser,
         args,
         "no_sonar",
-        ("sonar_project", "sonar_job")
+        ("sonar_host", "sonar_project", "sonar_job")
     )
     require_unless_disabled(
         parser,
@@ -896,7 +893,7 @@ def main():
         print("⚠️  SONAR_TOKEN missing: Sonar badges will stay grey.")
     settings = {
         "gitlab_host": args.gitlab_host,
-        "gitlab_token": gitlab_token(args.glab_config, args.gitlab_token_host),
+        "gitlab_token": gitlab_token(args.glab_config, args.gitlab_token_host or urlsplit(args.gitlab_host).hostname),
         "sonar_host": args.sonar_host,
         "sonar_token": sonar_token,
         "quiet": args.quiet,
