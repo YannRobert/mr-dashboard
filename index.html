@@ -387,7 +387,8 @@
   table.mrs td.g-time { color: var(--muted); font-variant-numeric: tabular-nums; }
   table.mrs td.nowrap { white-space: nowrap; }
   table.mrs td.signal { white-space: nowrap; }
-  table.mrs td.signal .stack { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; }
+  table.mrs td.num .threads-age { font-size: 0.7rem; }
+  table.mrs td.signal .stack, table.mrs td.num .stack { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; }
   .running-note { font-size: var(--fs-small); color: var(--muted); text-decoration: none; }
   .running-note::before { content: "⟳ "; }
   .running-note:hover { color: var(--text); text-decoration: underline; }
@@ -1276,6 +1277,8 @@ const I18N = {
     "gitDiff.title": "git diff de cette MR",
     "comments.title": "Afficher les commentaires",
     "threads.title": p => `${p.n} thread${plural(p.n)} non résolu${plural(p.n)} sur ${p.total}`,
+    "threads.oldest": p => `depuis ${p.age}`,
+    "threads.oldest.title": p => `Plus ancien thread non résolu ouvert le ${p.date}`,
     "approved": p => (p.n > 1 ? `Approuvée ×${p.n}` : "Approuvée"),
     "approved.title": p => `Approuvée par ${p.names}`,
     "changesRequested": p => (p.n > 1 ? `Changements demandés ×${p.n}` : "Changements demandés"),
@@ -1581,6 +1584,8 @@ const I18N = {
     "gitDiff.title": "git diff of this MR",
     "comments.title": "Show comments",
     "threads.title": p => `${p.n} unresolved thread${pluralEn(p.n)} out of ${p.total}`,
+    "threads.oldest": p => `for ${p.age}`,
+    "threads.oldest.title": p => `Oldest unresolved thread opened on ${p.date}`,
     "approved": p => (p.n > 1 ? `Approved ×${p.n}` : "Approved"),
     "approved.title": p => `Approved by ${p.names}`,
     "changesRequested": p => (p.n > 1 ? `Changes requested ×${p.n}` : "Changes requested"),
@@ -2527,7 +2532,22 @@ async function loadSignals(mr) {
     signals.error = error.message;
   }
   [signals.commits, signals.threads, signals.approvals] = await basics;
+  if (signals.threads.unresolved > 0) signals.threads.oldestUnresolvedAt = await loadOldestUnresolvedAt(mr);
   return signals;
+}
+
+// Les compteurs GraphQL ne datent pas les threads : les discussions ne sont lues que pour une MR qui en a
+// de non résolus. Un échec laisse le compte seul, sans ancienneté.
+async function loadOldestUnresolvedAt(mr) {
+  try {
+    const discussions = await gitlabAll(`${projectPath()}/merge_requests/${mr.iid}/discussions`);
+    return discussions
+      .filter(d => d.notes.some(n => n.resolvable && !n.resolved))
+      .map(d => d.notes[0].created_at)
+      .sort()[0] ?? null;
+  } catch (ignored) {
+    return null;
+  }
 }
 
 // Une MR dont la mise à jour échoue garde, à l'écran comme dans la sauvegarde, ses derniers bons signaux,
@@ -4791,7 +4811,13 @@ function threadsCell(mr) {
   if (threads.error) return `<span class="muted" title="${escapeHtml(threads.error)}">?</span>`;
   const text = `${threads.unresolved} / ${threads.total}`;
   const title = t("threads.title", { n: threads.unresolved, total: threads.total });
-  if (threads.unresolved > 0) return pill("orange", text, title, mr.web_url);
+  if (threads.unresolved > 0) {
+    const badge = pill("orange", text, title, mr.web_url);
+    if (!threads.oldestUnresolvedAt) return badge;
+    const age = compactDuration(gitlabNow() - new Date(threads.oldestUnresolvedAt));
+    const ageTitle = t("threads.oldest.title", { date: formatDate(threads.oldestUnresolvedAt) });
+    return `<div class="stack">${badge}<span class="muted threads-age" title="${escapeHtml(ageTitle)}">${escapeHtml(t("threads.oldest", { age }))}</span></div>`;
+  }
   return `<span class="ok${threads.total ? " good" : ""}" title="${escapeHtml(title)}">${text}</span>`;
 }
 
