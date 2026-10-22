@@ -1,318 +1,292 @@
 # MisteR Dashboard
 
-Créé et maintenu par [Yann ROBERT](https://github.com/YannRobert)
+Created and maintained by [Yann ROBERT](https://github.com/YannRobert)
 
-Tableau de bord local des MR ouvertes d'un projet GitLab — par défaut `group/project` —,
-avec les signaux CI (pipeline, Sonar, PIT, threads, retard sur la cible) et des notifications
-navigateur.
+A local dashboard of the open merge requests of a GitLab project, with their CI signals (pipeline,
+SonarQube, mutation testing, unresolved threads, lag behind the target branch) and browser
+notifications. It also offers an offline diff viewer built on the local clone, a comments page, and
+an **AI** button that prepares Claude Code prompts for a merge request.
 
-`server.py` sert la page (`index.html`) et relaie les appels GitLab et Sonar, pour garder les tokens
-hors du navigateur. Il n'écoute que sur `127.0.0.1`.
+`server.py` serves the page (`index.html`) and relays the GitLab and SonarQube APIs, so that tokens
+never reach the browser. It only listens on `127.0.0.1`.
 
-## Prérequis
+## Prerequisites
 
-- `~/.config/glab-cli/config.yml` authentifié contre `gitlab.example.com` (celui de `glab`).
-- `SONAR_TOKEN` dans l'environnement du shell qui lance le serveur. Sans lui, les pastilles Sonar
-  restent grises.
+- **Python 3.11 or later** (`tomllib`). Standard library only: nothing to install, no build step.
+- **git**, and a local clone of the tracked project.
+- **A GitLab token**, read from the [`glab`](https://gitlab.com/gitlab-org/cli) configuration
+  (`~/.config/glab-cli/config.yml`): run `glab auth login --hostname gitlab.example.com` once.
+- **`SONAR_TOKEN`** in the environment of the shell that starts the server, if the project uses
+  SonarQube. Without it, the Sonar badges stay grey.
+- Optional: [Orca](#orca-integration) and Claude Code, for the AI button's launch action.
 
-## Lancer le serveur — toujours détaché
-
-Le serveur doit survivre à la session qui l'a lancé. Lancé en tâche de fond d'une session Claude Code,
-il est **tué au bout de 2 h** ; lancé au premier plan d'un terminal, il meurt avec ce terminal. On le
-détache donc avec `setsid nohup`, via le lanceur :
+## Running
 
 ```bash
-scripts/mr-dashboard/start.sh              # profil back (ce dépôt)
-scripts/mr-dashboard/start.sh <profil>     # autre projet, cf. § Suivre un autre projet
+python3 server.py \
+    --gitlab-host https://gitlab.example.com \
+    --gitlab-project group/project \
+    --pipeline-branch main \
+    --sonar-host https://sonarqube.example.com \
+    --sonar-project group-project \
+    --sonar-job sonar \
+    --pit-job mutation_test \
+    --pit-marker '<!-- mutation-report -->' \
+    --repo-dir ~/src/project
 ```
 
-Il ne lance rien si le profil tourne déjà ou si son port est pris, attend que la page réponde en
-`200`, puis affiche l'URL ; en cas d'échec, il affiche la fin du journal. Les options passées après
-le profil sont transmises à `server.py` et l'emportent sur celles du profil
-(`start.sh back --port 9100`).
+A project without SonarQube analysis or without mutation testing says so:
 
-| Action | Commande |
-|---|---|
-| Vérifier qu'il répond | `curl -s --max-time 2 -o /dev/null -w '%{http_code}\n' http://localhost:8765/` (attendu : `200`) |
-| Consulter le journal | `tail -f ~/.local/state/mr-dashboard-<profil>.log` |
-| Arrêter un profil | `scripts/mr-dashboard/stop.sh <profil>` |
-| Tout arrêter | `scripts/mr-dashboard/stop.sh` |
+```bash
+python3 server.py \
+    --gitlab-host https://gitlab.example.com \
+    --gitlab-project group/project \
+    --pipeline-branch main \
+    --repo-dir ~/src/project \
+    --no-sonar \
+    --no-pit
+```
 
-Le serveur ne survit pas à un redémarrage de WSL : le relancer avec `start.sh`.
+Then open **http://localhost:8765/**. Under WSL, the Windows browser reaches it through `localhost`.
 
-## Suivre un autre projet
+The server has **no default that points to a project**: a forgotten required option stops it at
+startup instead of silently tracking another repository. To track several projects at once, start
+one server per project, each on its own `--port`.
 
-Tout ce qui est propre au projet suivi vient d'un **profil**, `profiles/<nom>.conf`, que
-`profiles/back.conf` documente variable par variable. Pour un autre projet (le front par exemple),
-le copier sous un autre nom, l'adapter — **avec un autre `PORT`** pour faire tourner les deux
-ensemble — puis `start.sh <nom>`.
+The server must outlive the terminal that started it if you want notifications all day: run it
+under `nohup`/`setsid`, a terminal multiplexer, or a user service (systemd, launchd…).
 
-- `server.py` n'a **aucun défaut qui désigne un projet** : une variable requise oubliée arrête le
-  démarrage (le journal dit laquelle), au lieu de faire suivre ce dépôt-ci en silence.
-- Un projet **sans mutation testing** ou **sans Sonar** le déclare : `PIT_ENABLED=false`,
-  `SONAR_ENABLED=false`. Les colonnes correspondantes disparaissent, ni leurs données ni leurs
-  notifications ne sont chargées, et le prompt de correction ne réclame plus ces indicateurs.
-- `TARGET_BRANCH` fixe la branche cible filtrée à l'ouverture (vide : toutes les cibles).
-- Le prompt de correction cite `scripts/mr-ci-signals.py` de ce dépôt par son chemin absolu, avec les
-  options du projet suivi (`--no-pit`, `--no-sonar`, `--pit-marker` compris) : son clone n'a pas ce
-  script.
+### Options
 
-## Ouvrir le dashboard
+| Option | Required | Description |
+|---|---|---|
+| `--gitlab-host` | yes | GitLab server URL, such as `https://gitlab.example.com` |
+| `--gitlab-project` | yes | project path, not encoded (`group/project`) |
+| `--pipeline-branch` | yes | branch whose latest pipeline is shown below the MR table |
+| `--repo-dir` | yes | local clone of the tracked project: git actions run there, Orca sessions open there, `.mr-dashboard/ai-actions.toml` is read there |
+| `--port` | no | listening port (default `8765`) |
+| `--target-branch` | no | target branch filtered when the page opens (default: all) |
+| `--gitlab-token-host` | no | host name of the token in the glab configuration (default: the one of `--gitlab-host`) |
+| `--glab-config` | no | glab configuration file (default `~/.config/glab-cli/config.yml`) |
+| `--sonar-host` | unless `--no-sonar` | SonarQube server URL |
+| `--sonar-project` | unless `--no-sonar` | SonarQube project key |
+| `--sonar-job` | unless `--no-sonar` | name of the CI job that runs the Sonar analysis |
+| `--no-sonar` | no | project without Sonar analysis: Sonar columns, data and notifications disappear |
+| `--pit-job` | unless `--no-pit` | name of the CI job that posts the mutation testing note |
+| `--pit-marker` | unless `--no-pit` | beginning of the mutation testing note posted on the MR |
+| `--no-pit` | no | project without mutation testing: its column, data and notifications disappear |
+| `--git-fetch-interval` | no | seconds between two automatic `git fetch` of the local clone, `0` for none (default `300`) |
+| `--quiet` | no | do not log each request |
 
-**http://localhost:8765/** dans le navigateur Windows (WSL relaie `localhost`).
+## Using the dashboard
 
-- Pour recevoir les notifications, cocher **Notifications** dans l'en-tête et accepter la demande du
-  navigateur. Sur ses propres MR, la notification reste affichée et revient toutes les 15 minutes tant
-  qu'un problème reste ouvert.
-- Une nouvelle approbation d'une MR est notifiée aussi, sauf celle qu'on a donnée soi-même, de même que
-  le passage en échec du pipeline de la branche suivie (notification fermée à son retour au vert).
-  **Sons**, à côté, indépendant des notifications : cloche de bar quand sa MR est approuvée ou qu'on
-  approuve celle d'un autre (à la mise à jour suivante), un tintement quand un autre l'approuve, un son grave
-  sur un nouveau problème bloquant de sa MR, sirène quand le pipeline de la branche suivie passe en
-  échec, arpège majeur joyeux, sans notification, quand une MR est mergée, la sienne ou celle d'un autre. Un seul
-  son par mise à jour, le plus important, et tous au même volume perçu, mesuré à leur premier passage ; cocher la case fait entendre la
-  cloche. 🔊, à côté, joue chacun des sons à la demande, bonnes nouvelles puis mauvaises, case cochée ou non : de quoi les
-  essayer et vérifier qu'ils sortent sur le bon appareil, sans attendre un événement. Après un rechargement, le navigateur ne laisse jouer un son qu'après un clic ou une touche dans
-  la page. Avec plusieurs onglets du dashboard ouverts, le son sort de celui où l'on a
-  cliqué ou tapé en dernier, même si un autre onglet a détecté l'événement.
-- **Langue** : anglais à la première visite (langue du navigateur pour qui utilisait déjà le dashboard),
-  puis celle du bouton FR / EN, retenue par le navigateur ; `?lang=fr` ou `?lang=en` l'impose à la page
-  sans changer ce choix.
-- **Recherche** : les mots séparés par un espace doivent tous se trouver dans la MR (titre, branche,
-  auteur, labels, numéro) ; la virgule sépare des alternatives. `!249` vise la MR 249 seule, `249`
-  la cherche partout (`PROJ-2491` compris) : `!249,!250` n'affiche que ces deux MR.
-- Recharger la page ne sollicite ni GitLab ni git : elle réaffiche les données sauvegardées dans le
-  navigateur et n'interroge GitLab que si l'actualisation des 5 minutes est due, comptées depuis la
-  dernière, d'où qu'elle vienne (autre onglet compris). Le serveur ne fetch que si une page lui signale
-  un état des MR qu'il n'a jamais vu : une sauvegarde rejouée, ou celle, plus ancienne, d'un autre
-  navigateur, ne relance rien. **Rafraîchir** et **git fetch** partent toujours.
-- Une actualisation charge d'abord les signaux des MR affichées, de haut en bas du tableau, puis ceux
-  des MR masquées par les filtres : un filtre ou un tri changé en cours de route est suivi aussitôt.
-- Le texte grandit avec la largeur de la fenêtre : à 100 % de zoom, le tableau tient dès 1366 px de
-  large ; en deçà, il défile dans son cadre, sans les en-têtes collants.
-  **A− / A+**, dans l'en-tête, l'ajustent de 70 à 150 % (retenu dans le navigateur, repris par la page
-  de diff) ; préférer ce réglage au zoom du navigateur, qui vaut pour tous les onglets du dashboard.
-- **🕶 Mode démo**, dans l'en-tête du dashboard et des commentaires, pour des captures d'écran
-  montrables hors de l'équipe : à l'écran seulement, les personnes prennent des noms fictifs (Jane
-  Doe, Erika Mustermann…), intitulés et messages de commit deviennent du lorem ipsum (Draft, emoji et
-  ticket de tête gardés, le ticket en `DEMO-<n>`), les branches des slugs lorem (type, `main`,
-  `master`, `develop` et branche du pipeline gardés), les labels des mots lorem (portée `::` gardée),
-  les numéros de MR décalés d'un même écart tiré au hasard (ordre gardé), le projet `demo/project`, et le corps des
-  commentaires du lorem ipsum ; notifications comprises. L'adresse d'un lien, que le navigateur
-  affiche au survol, devient `https://example.com/demo/project` (vers le dashboard : son chemin, sans
-  paramètres) ; le lien suivi retrouve la sienne le temps du clic. Les données de la page ne changent pas :
-  actions, liens et filtres agissent toujours sur les vraies MR. Un second clic rend l'affichage
-  d'origine, sans recharger ; le mode vaut pour tous les onglets du dashboard. Aucun mot d'origine
-  n'est repris, et les valeurs fictives dépendent d'un sel aléatoire gardé dans le navigateur : la même
-  personne garde le même faux nom d'une capture à l'autre. Le diff n'est pas anonymisé.
-- Le dernier pipeline de la branche suivie (`develop` d'ordinaire) tient dans une barre ancrée au bas de
-  la fenêtre, visible quel que soit le nombre de MR, rouge quand il a échoué. Un clic la déplie : jobs
-  par stage, pipeline précédent, durées des builds et historique ; dépliée ou repliée, elle le reste au
-  rechargement.
-- **Ouvertes | Mergées**, dans l'en-tête : la vue des MR mergées (`?view=merged`) relit l'histoire des
-  MR fermées sur une période de merge (7, 30 — par défaut —, 90 jours ou toutes), pour comprendre
-  après coup pourquoi certaines ont duré. Ni pipeline, ni qualité, ni retard : durée totale,
-  développement (premier commit → dernier push) et stabilisation (dernier push → merge), en temps
-  calendaire. Le volet d'activité des commits s'y arrête au merge. Chargée à la demande, par paquets
-  de 50 au fil du défilement — toute la période dès qu'on trie sur une autre colonne que la date de
-  merge —, elle n'est ni sauvegardée, ni actualisée automatiquement, ni notifiée.
-- **Requêtes GitLab · 1 / 5 / 15 min**, dans l'en-tête : ce que le serveur a envoyé à GitLab, API et
-  `git fetch`, sur la dernière minute et les 5 et 15 dernières, tous onglets confondus — le navigateur
-  ne parle jamais à GitLab en direct. Au clic, un tableau : lectures, écritures et fetch par fenêtre,
-  total, erreurs (connexion, 4xx, 5xx, git fetch), cumul et moyenne par minute depuis le démarrage du serveur, et Sonar à part ; en
-  orange, une erreur hors 4xx dans les 5 dernières minutes. Pour vérifier que le dashboard ne surcharge pas GitLab.
-- Le serveur garde 30 s ses lectures réussies de GitLab et de Sonar : des onglets ou des navigateurs qui
-  demandent la même chose dans ce délai, ou en même temps, n'envoient qu'une requête (ligne « Servies par
-  le cache » du tableau des requêtes). Une écriture (commentaire, réponse, résolution) vide le cache ;
-  **Rafraîchir** passe outre. Une modification faite dans GitLab même peut donc mettre 30 s à apparaître.
+- **Notifications**: tick *Notifications* in the header and accept the browser prompt. On your own
+  MRs, the notification stays on screen and comes back every 15 minutes while a problem remains. A
+  new approval of a MR is notified too (except your own), as is a failure of the tracked branch's
+  pipeline (closed when it turns green again).
+- **Sounds**, independent of notifications: a bell when your MR is approved or when you approve
+  someone else's, a chime when someone else approves, a low double thump on a new blocking problem
+  of your MR, a siren when the tracked branch's pipeline fails, a cheerful arpeggio when a MR is
+  merged. One sound per refresh, the most important one, all at the same perceived loudness. 🔊
+  plays each of them on demand, to check they come out of the right device. After a reload, the
+  browser only lets a sound play after a click or a key press in the page; with several dashboard
+  tabs open, the sound comes out of the one used last.
+- **Language**: English on the first visit, then whatever the FR / EN button selects, remembered by
+  the browser; `?lang=fr` or `?lang=en` forces it for the page without changing that choice.
+- **Search**: space-separated words must all match the MR (title, branch, author, labels, number); a
+  comma separates alternatives. `!249` targets MR 249 alone, `249` searches it everywhere
+  (`PROJ-2491` included): `!249,!250` shows only those two MRs.
+- **Refresh**: reloading the page queries neither GitLab nor git. It redisplays the data saved in the
+  browser and only queries GitLab when the 5-minute auto-refresh is due, counted from the last one,
+  whichever tab triggered it. **Refresh** and **git fetch** always run. A refresh loads the signals of
+  the displayed MRs first, top to bottom, then those hidden by the filters.
+- **Text size**: text grows with the window width; **A− / A+** in the header adjust it from 70 to
+  150 % (remembered, and applied to the diff page too). Prefer it to browser zoom, which applies to
+  every dashboard tab.
+- **🕶 Demo mode**, in the header of the dashboard and comments pages, for screenshots that can be
+  shown outside the team: on screen only, people get fictitious names, titles and commit messages
+  become lorem ipsum (Draft marker, leading emoji and ticket kept, the ticket as `DEMO-<n>`), branches
+  become lorem slugs (type prefix, `main`, `master`, `develop` and the pipeline branch kept), labels
+  become lorem words (`::` scope kept), MR numbers are shifted by one random offset (order kept), the
+  project becomes `demo/project`, comment bodies become lorem ipsum, notifications included. Link
+  addresses shown on hover become `https://example.com/demo/project`; the real one is restored for
+  the click. The underlying data does not change: actions, links and filters still act on the real
+  MRs. No original word is reused, and the fake values derive from a random salt kept in the browser,
+  so the same person keeps the same fake name across screenshots. The diff is not anonymized.
+- **Pipeline bar**: the latest pipeline of `--pipeline-branch` sits in a bar anchored at the bottom of
+  the window, red when it failed. A click expands it: jobs by stage, previous pipeline, build
+  durations and history.
+- **Open | Merged**: the merged view (`?view=merged`) replays the history of MRs merged over a period
+  (7, 30 — default —, 90 days or all) to understand afterwards why some took long: total duration,
+  development (first commit → last push) and stabilization (last push → merge), in calendar time.
+  Loaded on demand, 50 at a time while scrolling; neither saved, auto-refreshed nor notified.
+- **GitLab requests · 1 / 5 / 15 min**: what the server sent to GitLab (API and `git fetch`) over the
+  last minute, 5 and 15 minutes, all tabs combined — the browser never talks to GitLab directly. A
+  click shows reads, writes and fetches per window, errors (connection, 4xx, 5xx, git fetch), totals
+  since startup, and Sonar separately; an error other than 4xx in the last 5 minutes shows in orange.
+- **Relay cache**: the server keeps successful GitLab and Sonar reads for 30 s, so tabs or browsers
+  asking the same thing within that delay send a single request. A write (comment, reply, resolve)
+  clears the cache; **Refresh** bypasses it. A change made in GitLab itself can thus take 30 s to show.
 
-### Aucune notification ne s'affiche
+### No notification shows up
 
-Cocher la case envoie aussitôt « 🔔 Notifications MisteR Dashboard activées ». Si elle n'apparaît pas,
-c'est le navigateur ou Windows qui bloque, pas le dashboard :
+Ticking the box immediately sends a test notification. If it does not appear, the browser or the OS
+is blocking it, not the dashboard:
 
-1. autorisation du site : icône à gauche de l'URL → *Notifications* → *Autoriser* ;
-2. Windows : *Paramètres → Système → Notifications* → le navigateur doit être activé, et
-   *Ne pas déranger* (ou l'*Assistant de concentration*) désactivé ;
-3. décocher puis recocher la case pour renvoyer la notification de test.
+1. site permission: icon left of the URL → *Notifications* → *Allow*;
+2. OS settings: notifications must be enabled for the browser, and *Do not disturb* / *Focus* off;
+3. untick and tick the box again to resend the test notification.
 
-## Actions AI
+## AI actions
 
-Le bouton **AI** d'une MR ouverte propose les actions du catalogue du projet suivi : le dialogue
-affiche le prompt de l'action choisie, à copier dans Claude Code ou à lancer dans un onglet Orca (quand
-le serveur tourne dans WSL et qu'Orca est installé). Le prompt se modifie dans le dialogue avant d'être
-copié ou lancé, pour ajouter du contexte ou retirer une mention : c'est le texte modifié qui part. Le
-curseur attend sur la ligne vide qui le termine, où ce qu'on tape s'ajoute à la suite. Le prompt modifié est
-gardé, par MR et par action, jusqu'au rechargement de la page ; **Prompt d'origine** le rétablit.
-**Modèle**, à côté de **Ouvrir dans Orca**, choisit celui de la session lancée (`claude --model`) :
-celui de l'action dans le catalogue, présélectionné, ou celui de la configuration de Claude Code (*par défaut*). Il est gardé
-comme le prompt. Un prompt copié prend le modèle de la session où on le colle (`/model` pour en changer).
-La liste propose les alias, qui prennent toujours la dernière version (*Opus (5.5)*), puis les versions
-précises plus anciennes (*Opus 4.8*…), de la plus récente à la plus ancienne ; celle qu'un alias désigne
-n'y est pas répétée. Le dashboard les lit dans le cache que Claude Code tient lui-même à jour
-(`~/.claude/cache/model-catalog/`, relu à chaque ouverture du dialogue) : un nouveau modèle y apparaît
-sans rien changer ici. La liste la plus récente du cache dit ce que désigne chaque alias, et les
-versions précises viennent de toutes ses listes, la plus récente pouvant se réduire aux dernières. Faute de ce cache, non documenté par Anthropic, seuls
-les alias sont proposés.
-**Effort**, à côté, choisit de même son niveau d'effort (`claude --effort`, de *Bas* à *Maximal*) :
-bas pour une tâche simple, comme orchestrer une revue, qui coûte moins ; élevé pour une tâche difficile.
-La liste ne garde que les niveaux du modèle choisi, celui qu'Anthropic recommande signalé ; un niveau que
-le nouveau modèle refuse revient à *par défaut*, et un modèle sans effort (Haiku 4.5) grise la liste.
-*Par défaut* garde celui de la configuration de Claude Code (`/effort` pour en changer dans une session).
-**Fermer**, Échap ou un clic hors du dialogue le ferment. Le bouton porte un liseré rouge quand la MR a
-quelque chose à corriger : branche en retard ou en conflit, indicateur qualité imparfait, thread non
-résolu.
+The **AI** button of an open MR offers the actions of the tracked project's catalogue. The dialog
+shows the chosen action's prompt, to copy into Claude Code or to launch in an Orca tab (see
+[Orca integration](#orca-integration)). The prompt can be edited in the dialog before being copied or
+launched: the edited text is what goes out. It is kept per MR and per action until the page is
+reloaded; **Original prompt** restores it.
 
-Le même bouton figure en haut du diff d'une MR ouverte, avec les mêmes actions : de quoi demander une
-explication en lisant le diff, puis poser ses questions dans la session ouverte. La correction n'y est
-proposée que si un onglet du dashboard a mis ses données à jour dans la demi-heure : seul le dashboard
-charge les indicateurs CI et les threads dont son prompt est fait.
+- **Model** selects the model of the launched session (`claude --model`): the action's one from the
+  catalogue, preselected, or Claude Code's configured default. Aliases come first (they always map to
+  the latest version), then older specific versions. The list is read from the cache Claude Code
+  maintains itself (`~/.claude/cache/model-catalog/`, reread every time the dialog opens), so new
+  models show up without changing anything here; without that cache, only the aliases are offered.
+- **Effort** selects the effort level (`claude --effort`, from *Low* to *Max*). Only the levels the
+  chosen model supports are listed, the recommended one flagged; a model without effort levels greys
+  the list out.
+- **Close**, Escape or a click outside the dialog close it. The button has a red outline when the MR
+  has something to fix: branch behind or in conflict, imperfect quality indicator, unresolved thread.
 
-Le catalogue est le fichier `.mr-dashboard/ai-actions.toml`, commité à la racine du projet suivi et lu
-dans `REPO_DIR`, le worktree depuis lequel le dashboard est lancé par défaut. Il est relu à chaque ouverture du dialogue : un prompt modifié s'essaie
-sans redémarrer ni commiter. Une action par bloc `[[action]]`, dans l'ordre du dialogue :
+The same button sits at the top of an open MR's diff, with the same actions: ask for an explanation
+while reading the diff. The fix action is offered there only if a dashboard tab refreshed its data
+within the last half hour, since only the dashboard loads the CI signals and threads its prompt is
+built from.
+
+### The `ai-actions.toml` catalogue
+
+The catalogue is `.mr-dashboard/ai-actions.toml`, committed at the root of the tracked project and
+read from `--repo-dir`. It is reread every time the dialog opens: an edited prompt can be tried
+without restarting the server or committing. One `[[action]]` block per action, in dialog order:
 
 ```toml
 [[action]]
-id = "…"           # unique dans le fichier
-label = "…"        # libellé du choix dans le dialogue
-tab = "… !{iid}"   # titre de l'onglet Orca (défaut : label)
-when = "to-fix"    # facultatif : seulement quand la MR a quelque chose à corriger
-model = "sonnet"   # facultatif : modèle présélectionné pour Orca, alias (fable, opus, sonnet, haiku) ou version (claude-opus-4-8)
-effort = "low"     # facultatif : niveau d'effort présélectionné pour Orca (low, medium, high, xhigh ou max)
-voice = "…"        # facultatif : réplique anglaise dite après « Yes sir! » au lancement dans Orca, sons activés
+id = "review"                 # unique within the file
+label = "Review"              # label of the choice in the dialog
+tab = "Review !{iid}"         # title of the Orca tab (default: label)
+when = "to-fix"               # optional: offered only when the MR has something to fix
+model = "sonnet"              # optional: preselected model, an alias (fable, opus, sonnet, haiku) or a version (claude-opus-4-8)
+effort = "low"                # optional: preselected effort level (low, medium, high, xhigh or max)
+voice = "Reviewing now."      # optional: line spoken after "Yes sir!" when launched in Orca, sounds on
 prompt = """
-…
+Review merge request !{iid} ({title}), {source_branch} into {target_branch}: {web_url}
 """
 ```
 
-Variables du prompt : `{iid}`, `{title}`, `{source_branch}`, `{target_branch}`, `{web_url}`, et
-`{fix_context}`, le prompt de correction calculé par le dashboard (mise à jour de la branche,
-indicateurs imparfaits, threads, boucle de vérification jusqu'à des indicateurs parfaits). Cette
-boucle ne dit pas comment lire les indicateurs : le prompt du projet l'ajoute après `{fix_context}`
-s'il dispose d'un outil pour cela (script, CLI…). Une variable inconnue reste telle quelle dans le
-prompt affiché.
+Prompt variables: `{iid}`, `{title}`, `{source_branch}`, `{target_branch}`, `{web_url}`, and
+`{fix_context}`, the fix prompt computed by the dashboard (branch update, imperfect indicators,
+unresolved threads, a verification loop until all indicators are green). That loop does not say how
+to read the indicators: the project's prompt adds it after `{fix_context}` if it has a tool for it. An
+unknown variable is left as is in the displayed prompt.
 
-Sans catalogue, seule la correction est proposée, avec `{fix_context}` pour prompt. Un catalogue
-invalide n'en propose aucune : le dialogue dit pourquoi.
+Without a catalogue, only the fix action is offered, with `{fix_context}` as its prompt. An invalid
+catalogue offers none, and the dialog says why. With or without a catalogue, the last action,
+**Free**, opens an empty prompt to write in the dialog; its id `free` is reserved.
 
-Avec ou sans catalogue, la dernière action, **Libre**, ouvre un prompt vide, à rédiger dans le
-dialogue : de quoi lancer dans Orca une session sur le modèle choisi sans y taper la commande `claude`.
-Son identifiant `free` est réservé : un catalogue qui le reprend est invalide.
+### Orca integration
 
-## Dépôt local : fetch et diff
+When the server runs under WSL and Orca is installed on Windows
+(`orca.exe` reachable through Windows interop), the dialog offers **Open in Orca**: it opens a new Orca
+tab on `--repo-dir` and starts a Claude Code session there with the prompt, model and effort chosen.
+The prompt goes through a short-lived file under `~/.cache/mr-dashboard/`, deleted by the session
+once started. Without Orca, the button is not offered and prompts are copied instead.
 
-Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut), worktree principal ou
-secondaire, sans jamais rien y extraire.
+## Local clone: fetch and diff
 
-- **Fetch** : `git fetch --prune origin` toutes les 5 minutes (`GIT_FETCH_INTERVAL`, en secondes, `0`
-  pour aucun), même sans page ouverte, et dès que la page voit une MR recevoir des commits, apparaître
-  ou disparaître, ou la branche du pipeline avancer. La case **Fetch auto** de l'en-tête suspend ces
-  fetchs automatiques, pour le serveur donc pour tous les onglets, jusqu'à ce qu'on la recoche ou que
-  le serveur redémarre. Tout fetch, même manuel ou sur changement, relance les 5 minutes ; comme pour
-  l'actualisation auto, une barre sous la case montre le temps qui reste avant le prochain. Le bouton
-  **git fetch** lance un fetch tout de suite ; à côté, l'heure du
-  dernier fetch, ou son échec en rouge (le survol donne le message de git et l'heure du dernier fetch
-  réussi). Les `origin/<branche>` restent ainsi à jour pendant une coupure
-  de GitLab : on peut relire et committer, puis pousser à son retour.
-- **diff** : chaque MR ouverte a un bouton qui affiche dans un nouvel onglet son diff depuis le point
-  où elle part de sa cible (`git diff origin/<cible>...origin/<branche>`, comme l'onglet *Changes* de
-  GitLab), calculé sur le dépôt local : il reste disponible pendant une coupure de GitLab. Une MR
-  mergée, même ancienne et sa branche supprimée, a le sien, retrouvé par ses commits
-  (`git diff <merge commit>^1...<dernier commit>`) ; une tête absente du clone, après un squash, vient
-  de `refs/merge-requests/<iid>/head`. Ni worktree ni branche locale : un simple `git diff`. Quand la
-  branche locale est strictement devant `origin/<branche>`, le diff part d'elle et ses commits non poussés
-  forment un dernier groupe **Non poussé**, après les pushs (un clic le sélectionne) : de quoi les relire
-  pendant une coupure de GitLab. Une branche locale en retard ou divergée est ignorée, `origin` fait foi.
-  Au-dessus des fichiers, les commits de la MR (sans ceux de la cible qu'elle a mergée) : un clic n'affiche que
-  ce commit, Maj+clic étend jusqu'à un autre (`git diff <premier>^1 <dernier>`), **Tout** revient au
-  diff complet ; la plage est dans l'adresse. Les commits sont groupés par push, d'après les versions
-  de la MR dans GitLab (sans GitLab, pas de groupes) : un clic sur un push, ou **Dernier push**, n'affiche
-  que les commits arrivés avec lui. **Nouveaux (n)** n'affiche que les commits arrivés depuis la dernière
-  lecture de ce diff dans le navigateur, numéros en couleur dans la liste.
-  La poignée entre la liste des commits et celle des fichiers règle leur répartition (retenue par le
-  navigateur) ; un double-clic la rétablit. Une plage qui contient un merge de la cible le signale :
-  son diff montre aussi ce que ce merge a apporté. Liste des
-  fichiers dans un panneau latéral toujours visible (nom, puis répertoire ; le fichier lu y est
-  surligné ; largeur réglable par son coin bas droit), côte à côte ou ligne à ligne (retenu dans le
-  navigateur), coloration syntaxique, thème du dashboard. Texte à la taille de celui du dashboard, réglage
-  A− / A+ de celui-ci compris, plus 25 % par défaut, ajustable de 80 à 300 % par ses propres **A− / A+**
-  (retenu dans le navigateur) : le zoom du navigateur vaut pour tout `localhost:8765` et
-  agrandirait aussi le dashboard. Au-delà de 5 Mo
-  de diff, la page renvoie vers GitLab. L'affichage vient de
-  [diff2html](https://github.com/rtfpessoa/diff2html) (MIT), copié dans `vendor/diff2html/` pour
-  marcher sans réseau ; pour le mettre à jour, y remplacer `diff2html-ui-slim.min.js` et
-  `diff2html.min.css` par ceux de `https://cdn.jsdelivr.net/npm/diff2html@<version>/bundles/`.
-- **Espace + glisser** : Espace maintenue au-dessus du diff, le code se saisit à la main et se déplace
-  sous la souris, dans les deux modes (en côte à côte, les deux colonnes ensemble) : une ligne longue se
-  lit sans aller chercher l'ascenseur au bas du fichier. Le geste garde l'axe de son départ, le fichier
-  à l'horizontale, la page à la verticale. Espace relâchée sans avoir glissé descend d'une page, comme
-  d'ordinaire (Maj+Espace remonte).
-- **Taille du diff** : l'en-tête rappelle le total des lignes ajoutées (+, en vert) et supprimées (−, en rouge) du diff affiché, somme des compteurs de la liste des fichiers.
-- **Gros diff** : au-delà de 2000 lignes modifiées (`LARGE_DIFF_LINES`), chaque fichier n'est coloré qu'à
-  l'approche de l'écran, l'en-tête le signale ; tout fichier de plus de 1000 lignes modifiées
-  (`LARGE_FILE_LINES`) s'ouvre replié derrière un bouton qui l'affiche. La coloration se fait par tranches,
-  sans figer le défilement, et la liste des fichiers suit le fichier lu une fois le défilement posé.
-- **Progression de la relecture**, dans l'en-tête (« Relu 42 % · reste 4630 lignes ») et en barre sous
-  celui-ci : part des lignes modifiées vues à l'écran une fois le défilement posé — ce qui n'a fait que
-  défiler ne compte pas —, ou de fichiers cochés « Viewed ». Retenue par le
-  navigateur pour le dernier commit de la MR et la plage de commits affichée : un push la remet à zéro.
-- **💬 Diff notes**, dans l'en-tête du diff, affiche les diff notes GitLab de la MR sous les lignes
-  commentées, résolues repliées. Une note posée sur un code qui a changé depuis, ou hors de la plage de
-  commits affichée, va dans « diff notes hors du diff affiché », en tête du diff. **‹ ›** passent d'une
-  diff note à la suivante. Désactivé — par défaut, choix retenu par le navigateur —, la page ne charge
-  rien de plus ; les commandes gardent leur place quel que soit son état.
-- **🗨 Commentaires** — dans l'en-tête du diff, ou à côté de **diff** dans le dashboard — ouvre dans un
-  onglet `comments.html`, les commentaires de la MR qui ne portent sur aucune ligne (rapports PIT,
-  Sonar, Trivy, revues…), avec leurs réponses. Commentaires et diff notes sont rendus comme dans
-  GitLab, d'après le HTML que GitLab en donne (`notes.js`, `notes.css`), débarrassé de tout ce qui
-  pourrait s'exécuter dans la page.
-  Les 30 dernières MR consultées y restent sauvegardées dans le navigateur : à la réouverture, la
-  sauvegarde s'affiche aussitôt (« commentaires du 08/10/2026 à 10:42 · mise à jour en cours… ») puis
-  laisse la place à la réponse de GitLab. GitLab lent (15 s) ou indisponible — maintenance, serveur
-  arrêté —, la sauvegarde reste affichée, bandeau orange ; Répondre et Résoudre attendent GitLab.
-- Un onglet par page et par MR : un lien vers le diff ou les commentaires d'une MR déjà ouverts — depuis
-  le dashboard, le diff ou les commentaires — ramène à leur onglet et le recharge, pour ne jamais
-  montrer une version périmée de la MR (`tabs.js`) ; la plage de commits et le défilement de l'onglet
-  repartent de zéro. Le clic du milieu et Ctrl+clic ouvrent toujours un nouvel onglet.
-- Le diff et les commentaires d'une MR ont le même en-tête — titre, auteur avec sa pastille du tableau,
-  branche source et cible —, précédé d'une étiquette **DIFF** ou **COMMENTAIRES**, reprise dans le
-  titre de l'onglet, pour savoir d'un coup d'œil laquelle des deux pages on regarde.
-- L'en-tête du diff et des commentaires indique quand la page a été chargée (« chargée à 14:32 · il
-  y a 5 min », la date en plus si c'était un autre jour), mis à jour chaque minute et en orange
-  au-delà de 30 min : F5 pour voir les derniers changements de la MR.
-- **✕ Fermer**, dans l'en-tête du diff et des commentaires, ferme l'onglet sans confirmation du
-  navigateur. Celui-ci ne laisse fermer qu'un onglet ouvert depuis le dashboard ou un lien ; pour un
-  onglet ouvert à la main, le bouton devient « Ctrl+W ».
-- Sur tout le diff (sans plage de commits) et un clone local à jour du dernier push : un clic sur un
-  numéro de ligne ouvre un éditeur dessous, Maj+clic l'étend à une plage ; **Publier dans GitLab**
-  (Ctrl+Entrée) y crée la discussion. Diff notes masquées, ce clic les affiche d'abord, la ligne cliquée
-  restant à sa place à l'écran. Sinon, une infobulle sur la ligne dit pourquoi commenter est impossible
-  et comment y remédier (**Tout**, ou **git fetch** dans le dashboard puis F5).
-- Au bas de chaque fil, commentaire comme diff note, **Répondre** ouvre une réponse à publier dans
-  GitLab (Ctrl+Entrée, Échap pour annuler), et **Résoudre** ou **Rouvrir** change son état ; le fil est
-  aussitôt relu dans GitLab et réaffiché à sa place.
-- Ce sont les seules écritures du serveur dans GitLab, sur une MR du projet suivi : `/gitlab/discussion`
-  ne transmet qu'un commentaire de ligne, `/gitlab/reply` une réponse à un fil, `/gitlab/resolve` son
-  état résolu ou non.
-- **GitLab injoignable** : une MR dont la mise à jour échoue garde ses derniers bons signaux, marqués
-  « Signaux anciens » (date et cause au survol). Nombre de commits, date du dernier commit et retard sur
-  la cible viennent alors du clone local, en gris italique, quand GitLab n'en a rien donné ou que le
-  dernier fetch est plus récent que ses données (`git_actions.py`, `/git/branch`) ; la date est celle du
-  commit, le clone ne sachant pas quand il a été poussé. Le volet d'activité des commits prend alors
-  ses commits du clone (`/git/commits`) et ses commentaires de la dernière ouverture du volet sur cette
-  MR, gardés dans le navigateur.
-- Un `git fetch` ou `git pull` lancé à la main pendant un fetch automatique peut répondre
-  « cannot lock ref » : le relancer.
+The server works on the local clone (`--repo-dir`, main or secondary worktree) and never checks
+anything out there.
 
-## Après une modification
+- **Fetch**: `git fetch --prune origin` every `--git-fetch-interval` seconds, even with no page open,
+  and as soon as the page sees a MR receive commits, appear or disappear, or the pipeline branch move.
+  **Auto-fetch** in the header suspends automatic fetches for the server, hence for every tab, until
+  re-ticked or until the server restarts. **git fetch** runs one now; next to it, the time of the last
+  fetch, or its failure in red. The `origin/<branch>` refs thus stay current during a GitLab outage.
+- **Diff**: each open MR has a button showing its diff in a new tab, from the point where it leaves
+  its target (`git diff origin/<target>...origin/<branch>`, like GitLab's *Changes* tab), computed on
+  the local clone, so it stays available during a GitLab outage. A merged MR, even old with its branch
+  deleted, has one too, found through its commits; a head missing from the clone after a squash comes
+  from `refs/merge-requests/<iid>/head`. When the local branch is strictly ahead of `origin/<branch>`,
+  its unpushed commits form a last **Not pushed** group.
+- **Commits and pushes**: above the files, the MR's commits: a click shows that commit alone,
+  Shift+click extends to another one, **All** returns to the full diff; the range is in the URL.
+  Commits are grouped by push, from the MR versions in GitLab. **Last push** shows only the commits it
+  brought; **New (n)** only those arrived since the last time this diff was read in the browser. A
+  range containing a merge of the target says so.
+- **Display**: file list in an always-visible side panel, side-by-side or line-by-line view
+  (remembered), syntax highlighting, the dashboard theme. Text size follows the dashboard's, plus 25 %
+  by default, adjustable from 80 to 300 % with the page's own **A− / A+**. Beyond 5 MB of diff, the page
+  links to GitLab instead.
+- **Space + drag**: hold Space over the diff to grab the code and move it with the mouse, so a long
+  line can be read without reaching for the scrollbar. Space released without dragging scrolls a page,
+  as usual.
+- **Large diffs**: beyond 2000 changed lines, each file is highlighted only when it approaches the
+  screen; any file of more than 1000 changed lines opens collapsed behind a button.
+- **Review progress**, in the header and as a bar below it: share of changed lines seen on screen
+  once scrolling settles, or in files ticked *Viewed*. Remembered per last commit and commit range: a
+  push resets it.
+- **💬 Diff notes** shows the MR's GitLab diff notes under the commented lines, resolved ones
+  collapsed; notes on code that has changed since go to a section at the top. **‹ ›** move from one to
+  the next. Off by default.
+- **🗨 Comments** opens `comments.html`: the MR's comments not attached to a line (CI reports,
+  reviews…), with their replies, rendered like in GitLab from the HTML GitLab provides, stripped of
+  anything executable. The last 30 MRs viewed are kept in the browser, so they show immediately and
+  survive a GitLab outage (orange banner).
+- **One tab per page and per MR**: a link to a diff or comments page already open brings back its tab
+  and reloads it. Middle-click and Ctrl+click still open a new tab.
+- **Commenting**: on the full diff, with a local clone up to date with the last push, a click on a line
+  number opens an editor below it, Shift+click extends it to a range; **Publish to GitLab** (Ctrl+Enter)
+  creates the discussion. Under each thread, **Reply**, and **Resolve** or **Reopen**.
+- **GitLab unreachable**: a MR whose refresh fails keeps its last good signals, flagged as stale.
+  Commit count, last commit date and lag behind the target then come from the local clone, in grey
+  italics.
+- A manual `git fetch` or `git pull` run during an automatic fetch may answer "cannot lock ref": run it
+  again.
 
-- `index.html`, `diff.html` et les fichiers qu'ils chargent (`ai.js`, `notes.js`…) sont relus à chaque
-  requête : les onglets ouverts se rechargent d'eux-mêmes dans les 30 s (`version.js`), ou dès qu'on y
-  revient, sauf pendant une saisie, et seulement si le serveur répond. Chaque JS et CSS est demandé avec
-  l'empreinte de son contenu (`?v=`) : seul un fichier modifié est retéléchargé, les autres sortent du
-  cache du navigateur, même serveur arrêté. Un nouveau fichier s'ajoute à `STATIC_FILES` de `server.py`.
-- `server.py`, `orca_launcher.py`, `ai_actions.py` ou `git_actions.py` : `stop.sh` puis `start.sh`, ou
-  `systemctl --user restart mr-dashboard@<profil>` si le serveur tourne en service systemd (`CLAUDE.md`).
-- Le serveur sert l'`index.html` du dépôt (ou du worktree) d'où il a été lancé : pour tester la
-  version d'un worktree, relancer le serveur depuis ce worktree.
+## Security model
+
+- The server listens on `127.0.0.1` only.
+- The GitLab and SonarQube tokens stay in the server process; the browser never sees them, and never
+  talks to GitLab or SonarQube directly.
+- Every request must carry a `Host` header of `localhost` or `127.0.0.1`, which defeats DNS rebinding
+  by a third-party page.
+- Only GET is relayed to GitLab and SonarQube; GraphQL is relayed over GET, on which GitLab rejects
+  mutations.
+- Local actions (POST) require the `X-MR-Dashboard: 1` header and an `Origin` of the dashboard itself.
+- The only writes to GitLab are a line discussion, a reply to a thread, and resolving or reopening a
+  thread, each on a MR of the tracked project and validated before being forwarded.
+- Comments and diff notes are rendered from GitLab's HTML after removing anything that could execute
+  in the page.
+
+See [SECURITY.md](SECURITY.md) to report a vulnerability.
+
+## Development
+
+- `index.html`, `diff.html`, `comments.html` and the files they load are reread on every request: open
+  tabs reload themselves within 30 s (`version.js`), except during typing. Each JS and CSS file is
+  requested with a hash of its content (`?v=`), so only modified files are downloaded again. A new
+  static file must be added to `STATIC_FILES` in `server.py`.
+- Changes to `server.py` or the Python modules it imports require restarting the server.
+- The server serves the files of the directory it was started from: to test a working copy, start the
+  server from it.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Third-party code
+
+The diff view uses [diff2html](https://github.com/rtfpessoa/diff2html) (MIT), vendored in
+`vendor/diff2html/` so that it works offline; its license is in
+[`vendor/diff2html/LICENSE.md`](vendor/diff2html/LICENSE.md). To update it, replace
+`diff2html-ui-slim.min.js` and `diff2html.min.css` with those of
+`https://cdn.jsdelivr.net/npm/diff2html@<version>/bundles/`.
+
+## License
+
+Copyright © 2026 Yann ROBERT. Released under the [MIT License](LICENSE).

@@ -40,8 +40,7 @@ Local actions, over POST:
                 category, including connection errors, 4xx and 5xx, and since startup
                 (see request_stats.py)
 
-Usage — usually through scripts/mr-dashboard/start.sh, which reads these options from a profile
-(scripts/mr-dashboard/profiles/<name>.conf):
+Usage:
     python3 mr-dashboard/server.py --gitlab-host https://gitlab.example.com --gitlab-project <group/project> \
         --pipeline-branch <branch> --sonar-host https://sonarqube.example.com --sonar-project <key> --sonar-job <job> --pit-job <job> --pit-marker <marker> \
         --repo-dir <local clone of the project> --git-fetch-interval 300 --port 8766
