@@ -96,7 +96,7 @@ if [[ "$SONAR_ENABLED" == true && -z "${SONAR_TOKEN:-}" ]]; then
 fi
 
 mkdir -p "$state_dir"
-setsid nohup python3 "$dashboard_dir/server.py" "${args[@]}" > "$log_file" 2>&1 < /dev/null &
+setsid nohup python3 "$dashboard_dir/mr_dashboard/server.py" "${args[@]}" > "$log_file" 2>&1 < /dev/null &
 echo $! > "$pid_file"
 disown
 

@@ -23,7 +23,7 @@ Python 3.11 or later, git, and a GitLab token in the `glab` configuration. Nothi
 build step:
 
 ```bash
-python3 server.py \
+python3 mr_dashboard/server.py \
     --gitlab-host https://gitlab.example.com \
     --gitlab-project group/project \
     --pipeline-branch main \
@@ -33,7 +33,7 @@ python3 server.py \
 ```
 
 Then open http://localhost:8765/. HTML, JS and CSS changes are picked up by open tabs within 30 s;
-Python changes require restarting the server. See the [README](README.md) for every option.
+Python changes require restarting the server. See the [README](../README.md) for every option.
 
 ## Style
 
@@ -62,5 +62,5 @@ Python changes require restarting the server. See the [README](README.md) for ev
 - Keep the security model intact (see [SECURITY.md](SECURITY.md)); report vulnerabilities privately,
   not in a pull request.
 
-By contributing, you agree that your contributions are licensed under the [MIT License](LICENSE), and
+By contributing, you agree that your contributions are licensed under the [MIT License](../LICENSE), and
 to follow the [Code of Conduct](CODE_OF_CONDUCT.md).

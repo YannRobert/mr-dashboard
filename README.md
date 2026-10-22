@@ -7,7 +7,7 @@ SonarQube, mutation testing, unresolved threads, lag behind the target branch) a
 notifications. It also offers an offline diff viewer built on the local clone, a comments page, and
 an **AI** button that prepares Claude Code prompts for a merge request.
 
-`server.py` serves the page (`index.html`) and relays the GitLab and SonarQube APIs, so that tokens
+`mr_dashboard/server.py` serves the page (`web/index.html`) and relays the GitLab and SonarQube APIs, so that tokens
 never reach the browser. It only listens on `127.0.0.1`.
 
 ## Prerequisites
@@ -23,7 +23,7 @@ never reach the browser. It only listens on `127.0.0.1`.
 ## Running
 
 ```bash
-python3 server.py \
+python3 mr_dashboard/server.py \
     --gitlab-host https://gitlab.example.com \
     --gitlab-project group/project \
     --pipeline-branch main \
@@ -38,7 +38,7 @@ python3 server.py \
 A project without SonarQube analysis or without mutation testing says so:
 
 ```bash
-python3 server.py \
+python3 mr_dashboard/server.py \
     --gitlab-host https://gitlab.example.com \
     --gitlab-project group/project \
     --pipeline-branch main \
@@ -277,25 +277,25 @@ anything out there.
 - Comments and diff notes are rendered from GitLab's HTML after removing anything that could execute
   in the page.
 
-See [SECURITY.md](SECURITY.md) to report a vulnerability.
+See [SECURITY.md](.github/SECURITY.md) to report a vulnerability.
 
 ## Development
 
-- `index.html`, `diff.html`, `comments.html` and the files they load are reread on every request: open
+- The page (`web/`): `index.html`, `diff.html`, `comments.html` and the files they load are reread on every request: open
   tabs reload themselves within 30 s (`version.js`), except during typing. Each JS and CSS file is
   requested with a hash of its content (`?v=`), so only modified files are downloaded again. A new
-  static file must be added to `STATIC_FILES` in `server.py`.
+  static file must be added to `STATIC_FILES` in `mr_dashboard/server.py`.
 - Changes to `server.py` or the Python modules it imports require restarting the server.
 - The server serves the files of the directory it was started from: to test a working copy, start the
   server from it.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](.github/CONTRIBUTING.md).
 
 ## Third-party code
 
 The diff view uses [diff2html](https://github.com/rtfpessoa/diff2html) (MIT), vendored in
-`vendor/diff2html/` so that it works offline; its license is in
-[`vendor/diff2html/LICENSE.md`](vendor/diff2html/LICENSE.md). To update it, replace
+`web/vendor/diff2html/` so that it works offline; its license is in
+[`web/vendor/diff2html/LICENSE.md`](web/vendor/diff2html/LICENSE.md). To update it, replace
 `diff2html-ui-slim.min.js` and `diff2html.min.css` with those of
 `https://cdn.jsdelivr.net/npm/diff2html@<version>/bundles/`.
 

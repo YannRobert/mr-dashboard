@@ -41,10 +41,10 @@ Local actions, over POST:
                 (see request_stats.py)
 
 Usage:
-    python3 mr-dashboard/server.py --gitlab-host https://gitlab.example.com --gitlab-project <group/project> \
+    python3 mr_dashboard/server.py --gitlab-host https://gitlab.example.com --gitlab-project <group/project> \
         --pipeline-branch <branch> --sonar-host https://sonarqube.example.com --sonar-project <key> --sonar-job <job> --pit-job <job> --pit-marker <marker> \
         --repo-dir <local clone of the project> --git-fetch-interval 300 --port 8766
-    python3 mr-dashboard/server.py --gitlab-host https://gitlab.example.com --gitlab-project <group/project> \
+    python3 mr_dashboard/server.py --gitlab-host https://gitlab.example.com --gitlab-project <group/project> \
         --pipeline-branch main --no-sonar --no-pit   # project without Sonar analysis or mutation testing
 
 No default points to a project: a forgotten option stops the server instead of making it track
@@ -88,7 +88,7 @@ UPSTREAM_TIMEOUT_S = 30
 UPSTREAM_IDLE_S = 30
 # The page loads 4 MRs in parallel, up to 3 requests each.
 UPSTREAM_MAX_IDLE_PER_HOST = 12
-STATIC_DIR = Path(__file__).resolve().parent
+STATIC_DIR = Path(__file__).resolve().parent.parent / "web"
 # Libraries served from the repository rather than a CDN: the diff page also works without network.
 STATIC_FILES = {
     "/vendor/diff2html/diff2html-ui-slim.min.js": "text/javascript; charset=utf-8",

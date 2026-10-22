@@ -26,7 +26,7 @@ Only the latest version on the default branch receives security fixes.
 
 ## Scope
 
-The security model is described in the [README](README.md#security-model). Of particular interest:
+The security model is described in the [README](../README.md#security-model). Of particular interest:
 anything that lets a page other than the dashboard read through the relay or trigger a local action,
 exposes a token to the browser, writes to GitLab beyond the documented actions, or executes content
 coming from GitLab in the page.
