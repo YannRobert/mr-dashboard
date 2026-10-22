@@ -85,7 +85,7 @@ Options given after the profile are passed to `server.py` and win over the profi
 | `--sonar-job` | unless `--no-sonar` | name of the CI job that runs the Sonar analysis |
 | `--no-sonar` | no | project without Sonar analysis: Sonar columns, data and notifications disappear |
 | `--pit-job` | unless `--no-pit` | name of the CI job that posts the mutation testing note |
-| `--pit-marker` | unless `--no-pit` | beginning of the mutation testing note posted on the MR |
+| `--pit-marker` | unless `--no-pit` | beginning of the mutation testing note posted on the MR — see [Mutation report format](#mutation-report-format) |
 | `--no-pit` | no | project without mutation testing: its column, data and notifications disappear |
 | `--git-fetch-interval` | no | seconds between two automatic `git fetch` of the local clone, `0` for none (default `300`) |
 | `--quiet` | no | do not log each request |
@@ -148,6 +148,78 @@ is blocking it, not the dashboard:
 1. site permission: icon left of the URL → *Notifications* → *Allow*;
 2. OS settings: notifications must be enabled for the browser, and *Do not disturb* / *Focus* off;
 3. untick and tick the box again to resend the test notification.
+
+## Mutation report format
+
+Mutation testing tools (PIT, Stryker, mutmut…) do not publish anything to GitLab by themselves: a CI
+job of your project posts the result as a note on the merge request, and the dashboard reads that
+note. To be read, the note must follow this format.
+
+- The note **starts with the marker** given by `--pit-marker`, for instance `<!-- mutation-report -->`.
+  An HTML comment does not show in GitLab. The CI job must update its note rather than add one on
+  every pipeline: the dashboard reads the first note that starts with the marker.
+- The note contains a **Markdown table** whose header names the columns below (case does not
+  matter), followed by the alignment row and **one row of values**:
+
+  | Column | Required | Value |
+  |---|---|---|
+  | `Mutants` | yes | mutants generated |
+  | `Killed` | yes | mutants detected by a test |
+  | `Survived` | yes | mutants no test detects |
+  | `No coverage` | yes | mutants on code no test runs |
+  | `Errors` | yes | mutants the tool could not run |
+  | `Test strength` | no | `Killed / (Killed + Survived)`, in %, or `n/a` |
+
+- Columns are read **by name**: their order is free, and other columns are ignored. In a cell, the
+  first number is read, so emoji and bold are allowed (`:x: **2**`, `94 %`).
+- When no mutant was generated (no production code changed), publish the table with `0` everywhere.
+- Anything else in the note (title, verdict, details) is free and ignored by the dashboard.
+
+```markdown
+<!-- mutation-report -->
+### Mutation testing
+
+| Mutants | Killed | Survived | No coverage | Errors | Test strength |
+|--:|--:|--:|--:|--:|--:|
+| 40 | 35 | :x: **2** | :warning: **3** | 0 | 94 % |
+```
+
+`--pit-job` names the CI job that publishes the note: while it runs, the score shown is the previous
+one, marked as refreshing; if it failed after the note was written, the score is marked as stale.
+
+### Publishing the note from GitLab CI
+
+The job below publishes `mutation-report.md`, written beforehand by your mutation testing step in the
+format above. It creates the note on the first pipeline of the merge request and updates it on the
+next ones. `GITLAB_API_TOKEN` is a project access token with the `api` scope, stored as a masked CI/CD
+variable: the job token (`CI_JOB_TOKEN`) cannot write notes.
+
+```yaml
+mutation_test:
+  stage: test
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  variables:
+    MARKER: "<!-- mutation-report -->"
+  script:
+    - ./run-mutation-testing.sh > mutation-report.md   # your tool, writing the table above
+    - |
+      notes="$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_IID/notes"
+      body="$(printf '%s\n%s' "$MARKER" "$(cat mutation-report.md)")"
+      id="$(curl -sf --header "PRIVATE-TOKEN: $GITLAB_API_TOKEN" "$notes?per_page=100" \
+        | jq -r --arg m "$MARKER" 'map(select(.body | startswith($m))) | first | .id // empty')"
+      if [ -n "$id" ]; then
+        curl -sf --request PUT --header "PRIVATE-TOKEN: $GITLAB_API_TOKEN" \
+          --data-urlencode "body=$body" "$notes/$id" > /dev/null
+      else
+        curl -sf --request POST --header "PRIVATE-TOKEN: $GITLAB_API_TOKEN" \
+          --data-urlencode "body=$body" "$notes" > /dev/null
+      fi
+  allow_failure: true
+```
+
+The image needs `curl` and `jq`. Then start the dashboard with `--pit-job mutation_test --pit-marker
+'<!-- mutation-report -->'`.
 
 ## AI actions
 

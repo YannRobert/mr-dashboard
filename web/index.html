@@ -2829,15 +2829,35 @@ function pitSignal(job, note, mr) {
   };
 }
 
+// Mutation report format: see "Mutation report format" in the README. The table is read by column name,
+// so a producer may reorder the columns or add others.
+const PIT_COLUMNS = {
+  mutants: "total",
+  killed: "killed",
+  survived: "survived",
+  "no coverage": "noCoverage",
+  errors: "errors",
+  "test strength": "strength",
+};
 function parsePitNote(body) {
-  const row = body.split("\n").find(line => /^\|\s*\d/.test(line));
-  if (!row) return null;
-  const cells = row.split("|").slice(1, -1).map(cell => {
-    const match = cell.match(/\d+(?:[.,]\d+)?/);
-    return match ? Number(match[0].replace(",", ".")) : null;
+  const cellsOf = line => line.split("|").slice(1, -1).map(cell => cell.trim());
+  const lines = body.split("\n").map(line => line.trim());
+  const headerIndex = lines.findIndex(line => line.startsWith("|")
+    && cellsOf(line).some(cell => cell.toLowerCase() === "mutants"));
+  // Header, alignment row, values.
+  const values = lines[headerIndex + 2];
+  if (headerIndex < 0 || !values?.startsWith("|")) return null;
+  const fields = cellsOf(lines[headerIndex]).map(name => {
+    const key = name.toLowerCase();
+    return PIT_COLUMNS[key];
   });
-  const [total, killed, survived, noCoverage, errors, strength] = cells;
-  return { total, killed, survived, noCoverage, errors, strength };
+  const counts = { strength: null };
+  cellsOf(values).forEach((cell, index) => {
+    const match = cell.match(/\d+(?:[.,]\d+)?/);
+    if (fields[index] && match) counts[fields[index]] = Number(match[0].replace(",", "."));
+  });
+  const required = ["total", "killed", "survived", "noCoverage", "errors"];
+  return required.every(field => Number.isFinite(counts[field])) ? counts : null;
 }
 
 // Without a Sonar analysis, three very different situations: the pipeline has no sonar job (not
