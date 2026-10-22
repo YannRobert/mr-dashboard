@@ -17,7 +17,7 @@ Actions locales, en POST :
     /orca/launch  ouvre dans Orca une session Claude Code avec le prompt d'une action du bouton AI
                 d'une MR : {"iid", "action", "prompt", "model", "effort"} (cf. orca_launcher.py), quand le serveur tourne
                 dans WSL et qu'Orca est installé ; GET /ai/actions en donne le catalogue (cf. ai_actions.py),
-                GET /orca/status?launch= dit si le terminal d'un lancement a lu son prompt
+                GET /orca/status?launch= dit si le shell, puis Claude Code, ont démarré dans l'onglet d'un lancement
     /git/fetch  git fetch du clone local, qui tourne aussi tout seul toutes les --git-fetch-interval
                 secondes ; GET /git/status en donne le dernier résultat (cf. git_actions.py)
     /git/auto   active ou suspend le fetch automatique : {"enabled": true|false}
@@ -419,11 +419,11 @@ def make_handler(
 
         def orca_status(self, query):
             try:
-                read = OrcaLauncher.prompt_read(query.get("launch", [""])[0])
+                progress = OrcaLauncher.progress(query.get("launch", [""])[0])
             except OrcaError as error:
                 self.send_json(400, {"message": str(error)})
                 return
-            self.send_json(200, {"read": read})
+            self.send_json(200, progress)
 
         def git_fetch(self, payload):
             signature = payload.get("signature") if isinstance(payload, dict) else None

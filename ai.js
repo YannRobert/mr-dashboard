@@ -40,7 +40,8 @@ window.MrAi = (() => {
       "dialog.orca.opened": "Onglet ouvert dans Orca, en attente du démarrage de Claude Code…",
       "dialog.orca.unconfirmed": "Orca n'a pas confirmé à temps : bascule sur Orca, l'onglet s'y ouvre dès que sa fenêtre est au premier plan. En attente du démarrage de Claude Code…",
       "dialog.orca.read": "Session Claude Code démarrée dans Orca",
-      "dialog.orca.unread": p => `Claude Code n'a pas démarré en ${p.seconds} s : regarde dans Orca`,
+      "dialog.orca.noShell": p => `Le shell du terminal n'a pas démarré en ${p.seconds} s, WSL injoignable ? Regarde dans Orca`,
+      "dialog.orca.unread": p => `Le shell a démarré, mais pas Claude Code en ${p.seconds} s : regarde dans Orca`,
       "dialog.orca.failed": p => `Échec : ${p.message}`,
     },
     en: {
@@ -80,7 +81,8 @@ window.MrAi = (() => {
       "dialog.orca.opened": "Tab opened in Orca, waiting for Claude Code to start…",
       "dialog.orca.unconfirmed": "Orca did not confirm in time: switch to Orca, the tab opens as soon as its window is in front. Waiting for Claude Code to start…",
       "dialog.orca.read": "Claude Code session started in Orca",
-      "dialog.orca.unread": p => `Claude Code did not start within ${p.seconds} s: check Orca`,
+      "dialog.orca.noShell": p => `The terminal shell did not start within ${p.seconds} s, WSL unreachable? Check Orca`,
+      "dialog.orca.unread": p => `The shell started, but not Claude Code within ${p.seconds} s: check Orca`,
       "dialog.orca.failed": p => `Failed: ${p.message}`,
     },
   };
@@ -404,23 +406,25 @@ window.MrAi = (() => {
   const PROMPT_READ_TIMEOUT_S = 90;
   const PROMPT_READ_POLL_MS = 1000;
 
-  async function promptRead(launch) {
+  // {shell, claude} au démarrage de Claude Code, ou au dernier état connu une fois le délai passé.
+  async function sessionProgress(launch) {
     const deadline = Date.now() + PROMPT_READ_TIMEOUT_S * 1000;
-    while (Date.now() < deadline) {
+    let progress = { shell: false, claude: false };
+    while (Date.now() < deadline && !progress.claude) {
       await new Promise(resolve => setTimeout(resolve, PROMPT_READ_POLL_MS));
-      const body = await request(`orca/status?launch=${encodeURIComponent(launch)}`);
-      if (body.read) return true;
+      progress = await request(`orca/status?launch=${encodeURIComponent(launch)}`);
     }
-    return false;
+    return progress;
   }
 
-  // Étape du lancement Orca (ordered, launched, failed), avec le titre de l'onglet une fois connu, que la
-  // page qui a des sons (index.html) fait entendre ; les autres ignorent l'événement.
+  // Étape du lancement Orca (ordered, launched, unreachable, lostContact, aborted), avec ce que la voix dit
+  // après sa réplique : celle de l'action à l'ordre, le titre de l'onglet ensuite. La page qui a des sons
+  // (index.html) la fait entendre ; les autres ignorent l'événement.
   function announce(
     step,
-    title = null
+    subject = null
   ) {
-    document.dispatchEvent(new CustomEvent("mr-dashboard:orca", { detail: { step, title } }));
+    document.dispatchEvent(new CustomEvent("mr-dashboard:orca", { detail: { step, subject } }));
   }
 
   // Le serveur ouvre un onglet Orca sur le worktree principal, qui lance Claude Code avec le prompt affiché.
@@ -428,7 +432,11 @@ window.MrAi = (() => {
     const status = part("ai-copied");
     part("ai-orca").disabled = true;
     status.textContent = t("dialog.orca.opening");
-    announce("ordered");
+    const action = (catalog?.actions ?? []).find(candidate => candidate.id === dialog.dataset.action);
+    announce(
+      "ordered",
+      action?.voice
+    );
     try {
       const body = await request(
         "orca/launch",
@@ -445,12 +453,17 @@ window.MrAi = (() => {
         }
       );
       status.textContent = t(body.confirmed ? "dialog.orca.opened" : "dialog.orca.unconfirmed", body);
-      const read = await promptRead(body.launch);
-      status.textContent = read ? t("dialog.orca.read") : t("dialog.orca.unread", { seconds: PROMPT_READ_TIMEOUT_S });
-      announce(read ? "launched" : "failed", body.title);
+      const progress = await sessionProgress(body.launch);
+      const outcome = progress.claude ? "launched" : progress.shell ? "aborted" : "lostContact";
+      const message = { launched: "dialog.orca.read", aborted: "dialog.orca.unread", lostContact: "dialog.orca.noShell" }[outcome];
+      status.textContent = t(message, { seconds: PROMPT_READ_TIMEOUT_S });
+      announce(
+        outcome,
+        body.title
+      );
     } catch (error) {
       status.textContent = t("dialog.orca.failed", { message: error.message });
-      announce("failed");
+      announce("unreachable");
     } finally {
       part("ai-orca").disabled = false;
     }

@@ -25,7 +25,8 @@ COMMAND_TIMEOUT_S = 60
 # ligne de commande Windows. Le terminal le lit, et la session Claude Code le supprime une fois démarrée,
 # par un hook SessionStart qu'apportent ses réglages propres (fichier voisin, passé par --settings) ;
 # un fichier jamais supprimé (shell ou claude en échec au démarrage) est purgé au lancement suivant,
-# passé ce délai.
+# passé ce délai. Un fichier témoin, que le shell du terminal supprime avant tout, distingue un shell
+# qui n'a jamais démarré (WSL injoignable) d'un claude qui n'a pas démarré.
 PROMPT_DIR = Path.home() / ".cache" / "mr-dashboard"
 PROMPT_MAX_AGE_S = 24 * 3600
 # Identifiant d'un lancement : le nom de son fichier de prompt, sans extension.
@@ -114,6 +115,8 @@ class OrcaLauncher:
             prompt
         )
         settings_file = self._write_settings(prompt_file)
+        shell_file = prompt_file.with_suffix(".shell")
+        shell_file.touch(mode=0o600)
         model_option = f"--model {shlex.quote(model)} " if model else ""
         effort_option = f"--effort {shlex.quote(effort)} " if effort else ""
         self._raise_orca()
@@ -125,7 +128,7 @@ class OrcaLauncher:
                 "terminal", "create",
                 "--worktree", "path:" + self._windows_path(self._repo_root),
                 "--title", title,
-                "--command", f"[ -f '{prompt_file}' ] && claude --settings '{settings_file}' {model_option}{effort_option}\"$(cat '{prompt_file}')\"",
+                "--command", f"rm -f '{shell_file}'; [ -f '{prompt_file}' ] && claude --settings '{settings_file}' {model_option}{effort_option}\"$(cat '{prompt_file}')\"",
                 "--focus",
                 "--json",
             ])
@@ -136,12 +139,14 @@ class OrcaLauncher:
         return {"worktree": str(self._repo_root), "confirmed": True, "launch": prompt_file.stem}
 
     @staticmethod
-    def prompt_read(launch):
-        """Vrai quand la session Claude Code du lancement a démarré : son hook SessionStart supprime le
-        fichier du prompt. La création de l'onglet, que confirme Orca, ne le garantit pas."""
+    def progress(launch):
+        """{shell, claude} : vrais quand le shell du terminal, puis la session Claude Code du lancement, ont
+        démarré, chacun supprimant son fichier (le témoin, puis le prompt par le hook SessionStart). La
+        création de l'onglet, que confirme Orca, ne garantit ni l'un ni l'autre."""
         if not LAUNCH_ID.fullmatch(launch):
             raise OrcaError("lancement inconnu")
-        return not (PROMPT_DIR / f"{launch}.md").exists()
+        claude = not (PROMPT_DIR / f"{launch}.md").exists()
+        return {"shell": claude or not (PROMPT_DIR / f"{launch}.shell").exists(), "claude": claude}
 
     def _write_prompt(
             self,

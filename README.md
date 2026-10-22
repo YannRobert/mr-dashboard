@@ -180,6 +180,7 @@ tab = "… !{iid}"   # titre de l'onglet Orca (défaut : label)
 when = "to-fix"    # facultatif : seulement quand la MR a quelque chose à corriger
 model = "sonnet"   # facultatif : modèle présélectionné pour Orca, alias (fable, opus, sonnet, haiku) ou version (claude-opus-4-8)
 effort = "low"     # facultatif : niveau d'effort présélectionné pour Orca (low, medium, high, xhigh ou max)
+voice = "…"        # facultatif : réplique anglaise dite après « Yes sir! » au lancement dans Orca, sons activés
 prompt = """
 …
 """

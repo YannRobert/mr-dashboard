@@ -155,7 +155,17 @@
   .load-panel[hidden] { display: none; }
   header .sound-test { position: relative; display: inline-flex; }
   header .sound-test[hidden] { display: none; }
-  .sound-panel { min-width: 18rem; display: grid; gap: 0.4rem; }
+  /* Une colonne par groupe de sons, côte à côte tant que la fenêtre les tient, sans dépasser l'écran. */
+  .sound-panel {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 0.8rem 1rem; align-items: start;
+    width: min(50rem, calc(100vw - 2rem)); max-height: calc(100vh - 6rem); overflow-y: auto;
+  }
+  /* Fenêtre étroite : ancré au bouton, le panneau déborderait à gauche ; il se cale sur la fenêtre. */
+  @media (max-width: 75rem) {
+    .sound-panel { position: fixed; top: 6rem; left: 1rem; right: 1rem; width: auto; max-height: calc(100vh - 7rem); }
+  }
+  .sound-group { display: grid; gap: 0.4rem; }
+  .sound-panel #sound-test-status { grid-column: 1 / -1; margin: 0; }
   .sound-panel button {
     display: grid; grid-template-columns: 1.6em 1fr; column-gap: 0.4rem; align-items: center; text-align: left;
     padding: 0.4rem 0.55rem; border: 1px solid var(--border); border-radius: 0.5rem;
@@ -163,7 +173,7 @@
   }
   .sound-panel button:hover { border-color: var(--accent); }
   .sound-panel button > span:first-child { grid-row: span 2; font-size: 1.1rem; text-align: center; }
-  .sound-panel h4 { margin: 0.3rem 0 0; color: var(--muted); font-size: var(--fs-small); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+  .sound-panel h4 { margin: 0 0 0.1rem; color: var(--muted); font-size: var(--fs-small); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
 .sound-panel small { color: var(--muted); font-size: var(--fs-small); }
   .load-panel h4 { margin: 0 0 0.5rem; font-size: 0.85rem; }
   .load-panel table { width: 100%; border-collapse: collapse; font-size: var(--fs-small); }
@@ -669,17 +679,25 @@
     <div class="sound-test" id="sound-test">
       <button type="button" id="sound-test-button" class="icon-button" aria-expanded="false" aria-controls="sound-panel" aria-label="Écouter les sons" data-i18n-aria-label="soundTest" data-i18n-title="soundTest"><span aria-hidden="true">🔊</span></button>
       <div class="load-panel sound-panel" id="sound-panel" hidden>
+        <section class="sound-group">
         <h4 data-i18n="soundTest.positive">Bonnes nouvelles</h4>
         <button type="button" data-sound="merged"><span aria-hidden="true">🔀</span><b data-i18n="soundTest.merged">Arpège</b><small data-i18n="soundTest.mergedWhen"></small></button>
         <button type="button" data-sound="bell"><span aria-hidden="true">🔔</span><b data-i18n="soundTest.bell">Cloche</b><small data-i18n="soundTest.bellWhen"></small></button>
         <button type="button" data-sound="ding"><span aria-hidden="true">🎵</span><b data-i18n="soundTest.ding">Ding</b><small data-i18n="soundTest.dingWhen"></small></button>
+        </section>
+        <section class="sound-group">
         <h4 data-i18n="soundTest.negative">Mauvaises nouvelles</h4>
         <button type="button" data-sound="broken"><span aria-hidden="true">🔴</span><b data-i18n="soundTest.broken">Sirène</b><small data-i18n="soundTest.brokenWhen"></small></button>
         <button type="button" data-sound="alert"><span aria-hidden="true">⚠</span><b data-i18n="soundTest.alert">Alerte</b><small data-i18n="soundTest.alertWhen"></small></button>
+        </section>
+        <section class="sound-group">
         <h4 data-i18n="soundTest.actions">Tes actions</h4>
-        <button type="button" data-sound="orcaOrdered"><span aria-hidden="true">📻</span><b data-i18n="soundTest.orcaOrdered">Radio « Yes sir! »</b><small data-i18n="soundTest.orcaOrderedWhen"></small></button>
-        <button type="button" data-sound="orcaLaunched"><span aria-hidden="true">🎖</span><b data-i18n="soundTest.orcaLaunched">Radio « Mission accomplished! »</b><small data-i18n="soundTest.orcaLaunchedWhen"></small></button>
-        <button type="button" data-sound="orcaFailed"><span aria-hidden="true">📵</span><b data-i18n="soundTest.orcaFailed">Radio « Negative! »</b><small data-i18n="soundTest.orcaFailedWhen"></small></button>
+        <button type="button" data-sound="orcaOrdered"><span aria-hidden="true">📻</span><b data-i18n="soundTest.orcaOrdered"></b><small data-i18n="soundTest.orcaOrderedWhen"></small></button>
+        <button type="button" data-sound="orcaLaunched"><span aria-hidden="true">🎖</span><b data-i18n="soundTest.orcaLaunched"></b><small data-i18n="soundTest.orcaLaunchedWhen"></small></button>
+        <button type="button" data-sound="orcaUnreachable"><span aria-hidden="true">📵</span><b data-i18n="soundTest.orcaUnreachable"></b><small data-i18n="soundTest.orcaUnreachableWhen"></small></button>
+        <button type="button" data-sound="orcaLostContact"><span aria-hidden="true">📡</span><b data-i18n="soundTest.orcaLostContact"></b><small data-i18n="soundTest.orcaLostContactWhen"></small></button>
+        <button type="button" data-sound="orcaAborted"><span aria-hidden="true">✖</span><b data-i18n="soundTest.orcaAborted"></b><small data-i18n="soundTest.orcaAbortedWhen"></small></button>
+        </section>
         <p id="sound-test-status" hidden></p>
       </div>
     </div>
@@ -1055,11 +1073,15 @@ const I18N = {
     "soundTest.mergedWhen": "Une MR est mergée, la tienne ou celle d'un autre",
     "soundTest.actions": "Tes actions",
     "soundTest.orcaOrdered": "Radio « Yes sir! »",
-    "soundTest.orcaOrderedWhen": "Tu cliques « Ouvrir dans Orca »",
-    "soundTest.orcaLaunched": "Radio « Mission accomplished! »",
-    "soundTest.orcaLaunchedWhen": "La session Claude Code a démarré dans Orca",
-    "soundTest.orcaFailed": "Radio « Negative! »",
-    "soundTest.orcaFailedWhen": "Le lancement dans Orca échoue, ou Claude Code n'y démarre pas",
+    "soundTest.orcaOrderedWhen": "Tu cliques « Ouvrir dans Orca », suivi de la réplique de l'action",
+    "soundTest.orcaLaunched": "Radio « Operation underway! »",
+    "soundTest.orcaLaunchedWhen": "La session Claude Code a démarré dans Orca, suivi du titre de l'onglet",
+    "soundTest.orcaUnreachable": "Radio « No response from command! »",
+    "soundTest.orcaUnreachableWhen": "Orca ne répond pas ou refuse d'ouvrir l'onglet",
+    "soundTest.orcaLostContact": "Radio « We've lost contact! »",
+    "soundTest.orcaLostContactWhen": "L'onglet est ouvert, mais son shell WSL ne démarre pas",
+    "soundTest.orcaAborted": "Radio « Mission aborted! »",
+    "soundTest.orcaAbortedWhen": "Le shell a démarré, mais pas Claude Code",
     "soundTest.played": "Son envoyé au système. Rien entendu ? Onglet coupé (clic droit sur l'onglet), son du site (icône à gauche de l'adresse), puis sortie et volume du navigateur dans le mélangeur de volume du système.",
     "soundTest.blocked": p => `Son bloqué par le navigateur (état audio : ${p.state}).`,
     "soundTest.error": p => `Son impossible : ${p.message}`,
@@ -1355,12 +1377,16 @@ const I18N = {
     "soundTest.merged": "Arpeggio",
     "soundTest.mergedWhen": "An MR is merged, yours or someone else's",
     "soundTest.actions": "Your actions",
-    "soundTest.orcaOrdered": "Radio « Yes sir! »",
-    "soundTest.orcaOrderedWhen": "You click “Open in Orca”",
-    "soundTest.orcaLaunched": "Radio « Mission accomplished! »",
-    "soundTest.orcaLaunchedWhen": "The Claude Code session started in Orca",
-    "soundTest.orcaFailed": "Radio « Negative! »",
-    "soundTest.orcaFailedWhen": "Starting in Orca fails, or Claude Code does not start there",
+    "soundTest.orcaOrdered": "Radio “Yes sir!”",
+    "soundTest.orcaOrderedWhen": "You click “Open in Orca”, followed by the action's line",
+    "soundTest.orcaLaunched": "Radio “Operation underway!”",
+    "soundTest.orcaLaunchedWhen": "The Claude Code session started in Orca, followed by the tab title",
+    "soundTest.orcaUnreachable": "Radio “No response from command!”",
+    "soundTest.orcaUnreachableWhen": "Orca does not answer or refuses to open the tab",
+    "soundTest.orcaLostContact": "Radio “We've lost contact!”",
+    "soundTest.orcaLostContactWhen": "The tab is open, but its WSL shell does not start",
+    "soundTest.orcaAborted": "Radio “Mission aborted!”",
+    "soundTest.orcaAbortedWhen": "The shell started, but not Claude Code",
     "soundTest.played": "Sound sent to the system. Heard nothing? Muted tab (right-click the tab), site sound (icon left of the address), then the browser's output and level in the system volume mixer.",
     "soundTest.blocked": p => `Sound blocked by the browser (audio state: ${p.state}).`,
     "soundTest.error": p => `Sound unavailable: ${p.message}`,
@@ -3695,12 +3721,14 @@ function radio(
 // Réponse parlée qui suit un son, par la synthèse vocale du navigateur : voix anglaise, grave et rapide,
 // une réplique tirée au hasard. Elle ne passe pas par Web Audio, donc ni par le gain ni par la mesure de sonie.
 const SOUND_VOICES = {
-  orcaOrdered: { delay: 300, lines: ["Yes sir!", "Roger that!", "Affirmative!", "Right away!", "Moving out!"] },
-  orcaLaunched: { delay: 450, lines: ["Mission accomplished!", "Objective secured!", "We're in position!", "Job's done!"] },
-  orcaFailed: { delay: 650, lines: ["Negative!", "Unable to comply!", "Mission failed!", "We've lost contact!"] },
+  orcaOrdered: { delay: 300, lines: ["Yes sir!", "Roger that!", "Affirmative!", "On it!"] },
+  orcaLaunched: { delay: 450, lines: ["Operation underway!", "In position!", "Boots on the ground!", "Engaging!"] },
+  orcaUnreachable: { delay: 650, lines: ["No response from command!", "Request denied!"] },
+  orcaLostContact: { delay: 650, lines: ["We've lost contact!", "Radio silence!"] },
+  orcaAborted: { delay: 650, lines: ["Mission aborted!", "Mission failed!"] },
 };
 
-// subject, dit après la réplique : le titre d'un onglet Orca (« Review MR !330 »), le « ! » de GitLab en moins
+// subject, dit après la réplique : celle d'une action, ou le titre d'un onglet Orca (« Review MR !330 »), le « ! » de GitLab en moins
 // et MR épelé, sans quoi la voix anglaise lit « Mister ».
 function speakAfter(
   name,
@@ -3765,8 +3793,9 @@ const SOUNDS = {
     [[1400, 0.15], [1870, 0.27]],
     0.4
   ),
-  // Grésillement prolongé puis bourdon grave qui descend, radio coupée : le lancement Orca a échoué.
-  orcaFailed: (ctx, output) => {
+  // Grésillement prolongé puis bourdon grave qui descend, radio coupée : le lancement Orca a échoué, la
+  // réplique dit à quelle étape.
+  orcaUnreachable: (ctx, output) => {
     crackle(
       ctx,
       output,
@@ -3778,6 +3807,9 @@ const SOUNDS = {
       { from: 220, to: 90, at: 0.25, duration: 0.35 }
     );
   },
+  orcaLostContact: (ctx, output) => SOUNDS.orcaUnreachable(ctx, output),
+  orcaAborted: (ctx, output) => SOUNDS.orcaUnreachable(ctx, output),
+
   merged: (ctx, output) => [[523, 0], [659, 0.09], [784, 0.18], [1046, 0.27]].forEach(([frequency, at], i, notes) => tone(
     ctx,
     output,
@@ -5865,11 +5897,17 @@ if (window.AudioContext) {
   ["pointerdown", "keydown"].forEach(type => window.addEventListener(type, unlockAudio, true));
   window.addEventListener("pagehide", forgetSoundTab);
   // Joués dans cet onglet, où l'on vient de cliquer « Ouvrir dans Orca » : le navigateur l'autorise.
-  const orcaSounds = { ordered: "orcaOrdered", launched: "orcaLaunched", failed: "orcaFailed" };
+  const orcaSounds = {
+    ordered: "orcaOrdered",
+    launched: "orcaLaunched",
+    unreachable: "orcaUnreachable",
+    lostContact: "orcaLostContact",
+    aborted: "orcaAborted",
+  };
   document.addEventListener("mr-dashboard:orca", e => {
     if (state.sound) playSound(
       orcaSounds[e.detail.step],
-      e.detail.title
+      e.detail.subject
     );
   });
   if (readSound()) setSound(true);

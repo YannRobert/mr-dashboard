@@ -11,6 +11,8 @@ demande : un prompt modifié s'essaie sans redémarrer le serveur ni commiter. C
     when = "to-fix"     facultatif : action proposée seulement quand la MR a quelque chose à corriger
     model = "sonnet"    facultatif : modèle présélectionné pour la session Orca, alias ou version précise
     effort = "low"      facultatif : niveau d'effort présélectionné pour la session Orca, parmi EFFORTS
+    voice = "…"         facultatif : réplique anglaise que la voix du dashboard ajoute à « Yes sir! » quand
+                        l'action est lancée dans Orca
 
 Sans fichier, le catalogue se réduit à la correction, avec le prompt calculé par la page. Avec ou sans,
 il finit par l'action libre, au prompt vide, à rédiger dans le dialogue.
@@ -24,12 +26,13 @@ from claude_models import ALIASES, EFFORTS, SAFE_ID
 
 CATALOG_PATH = Path(".mr-dashboard") / "ai-actions.toml"
 DEFAULT_ACTIONS = [
-    {"id": "fix", "label": None, "tab": "Fix MR !{iid}", "prompt": "{fix_context}", "when": "to-fix", "model": None, "effort": None},
+    {"id": "fix", "label": None, "tab": "Fix MR !{iid}", "prompt": "{fix_context}", "when": "to-fix", "model": None, "effort": None, "voice": None},
 ]
 # Prompt rédigé dans le dialogue : un modèle au choix, sans taper la commande claude dans Orca.
-FREE_ACTION = {"id": "free", "label": None, "tab": "Claude MR !{iid}", "prompt": "", "when": None, "model": None, "effort": None}
+FREE_ACTION = {"id": "free", "label": None, "tab": "Claude MR !{iid}", "prompt": "", "when": None, "model": None, "effort": None, "voice": None}
 WHEN_VALUES = {"to-fix"}
 MAX_TAB_CHARS = 80
+MAX_VOICE_CHARS = 80
 
 
 class AiActionsError(Exception):
@@ -114,7 +117,7 @@ class AiActions:
         for key in ("id", "label", "prompt"):
             if not isinstance(entry.get(key), str) or not entry[key].strip():
                 raise AiActionsError(f"{where} : {key} manquant")
-        unknown = set(entry) - {"id", "label", "tab", "prompt", "when", "model", "effort"}
+        unknown = set(entry) - {"id", "label", "tab", "prompt", "when", "model", "effort", "voice"}
         if unknown:
             raise AiActionsError(f"{where} : clé inconnue : {', '.join(sorted(unknown))}")
         when = entry.get("when")
@@ -130,6 +133,9 @@ class AiActions:
         tab = entry.get("tab", entry["label"])
         if not isinstance(tab, str) or "\n" in tab or len(tab) > MAX_TAB_CHARS:
             raise AiActionsError(f"{where} : tab doit tenir sur une ligne de {MAX_TAB_CHARS} caractères au plus")
+        voice = entry.get("voice")
+        if voice is not None and (not isinstance(voice, str) or "\n" in voice or len(voice) > MAX_VOICE_CHARS):
+            raise AiActionsError(f"{where} : voice doit tenir sur une ligne de {MAX_VOICE_CHARS} caractères au plus")
         return {
             "id": entry["id"],
             "label": entry["label"],
@@ -138,4 +144,5 @@ class AiActions:
             "when": when,
             "model": model,
             "effort": effort,
+            "voice": voice,
         }
