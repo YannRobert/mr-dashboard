@@ -887,7 +887,7 @@ def main():
     sonar_token = os.environ.get("SONAR_TOKEN")
     orca = OrcaLauncher.detect(args.repo_dir)
     stats = RequestStats(TTL_S)
-    git = GitActions.detect(
+    git = GitActions(
         args.repo_dir,
         args.git_fetch_interval,
         lambda failed: stats.record("git", "git" if failed else None)
@@ -923,7 +923,7 @@ def main():
             settings,
             orca,
             git,
-            AiActions.detect(args.repo_dir),
+            AiActions(args.repo_dir),
             stats,
             AvatarColors(AVATAR_COLORS_PATH)
         )

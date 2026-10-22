@@ -4,9 +4,8 @@ Orca tourne sous Windows, ce serveur dans WSL : on pilote Orca par sa CLI (orca.
 WSL par l'interop Windows). Le terminal qu'Orca ouvre sur un worktree \\\\wsl.localhost\\… est un bash
 WSL placé dans ce worktree, qui y tape la commande de démarrage telle quelle.
 
-Le terminal s'ouvre toujours sur le worktree principal, comme les autres sessions : c'est Claude qui,
-d'après le prompt, travaille dans le worktree de la MR. Tous les onglets restent ainsi au même endroit
-dans Orca.
+Le terminal s'ouvre toujours sur le dépôt suivi (--repo-dir) : c'est Claude qui, d'après le prompt,
+travaille dans le worktree de la MR. Tous les onglets restent ainsi au même endroit dans Orca.
 """
 import base64
 import json
@@ -73,11 +72,11 @@ class OrcaLauncher:
     def __init__(
             self,
             orca,
-            repo_root,
+            repo_dir,
             distro
     ):
         self._orca_exe = orca
-        self._repo_root = repo_root
+        self._repo_dir = repo_dir
         self._distro = distro
 
     @classmethod
@@ -87,15 +86,9 @@ class OrcaLauncher:
         distro = os.environ.get("WSL_DISTRO_NAME")
         if not orca or not distro:
             return None
-        common_dir = subprocess.run(
-            ["git", "-C", str(repo_dir), "rev-parse", "--path-format=absolute", "--git-common-dir"],
-            capture_output=True,
-            text=True,
-            check=True
-        ).stdout.strip()
         return cls(
             orca,
-            Path(common_dir).parent,
+            repo_dir,
             distro
         )
 
@@ -126,7 +119,7 @@ class OrcaLauncher:
         try:
             self._orca([
                 "terminal", "create",
-                "--worktree", "path:" + self._windows_path(self._repo_root),
+                "--worktree", "path:" + self._windows_path(self._repo_dir),
                 "--title", title,
                 "--command", f"rm -f '{shell_file}'; [ -f '{prompt_file}' ] && claude --settings '{settings_file}' {model_option}{effort_option}\"$(cat '{prompt_file}')\"",
                 "--focus",
@@ -135,8 +128,8 @@ class OrcaLauncher:
         except OrcaError as error:
             if not error.unconfirmed:
                 raise
-            return {"worktree": str(self._repo_root), "confirmed": False, "launch": prompt_file.stem}
-        return {"worktree": str(self._repo_root), "confirmed": True, "launch": prompt_file.stem}
+            return {"worktree": str(self._repo_dir), "confirmed": False, "launch": prompt_file.stem}
+        return {"worktree": str(self._repo_dir), "confirmed": True, "launch": prompt_file.stem}
 
     @staticmethod
     def progress(launch):

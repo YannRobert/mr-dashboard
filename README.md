@@ -169,7 +169,7 @@ proposée que si un onglet du dashboard a mis ses données à jour dans la demi-
 charge les indicateurs CI et les threads dont son prompt est fait.
 
 Le catalogue est le fichier `.mr-dashboard/ai-actions.toml`, commité à la racine du projet suivi et lu
-dans son worktree principal. Il est relu à chaque ouverture du dialogue : un prompt modifié s'essaie
+dans `REPO_DIR`, le worktree depuis lequel le dashboard est lancé par défaut. Il est relu à chaque ouverture du dialogue : un prompt modifié s'essaie
 sans redémarrer ni commiter. Une action par bloc `[[action]]`, dans l'ordre du dialogue :
 
 ```toml
@@ -202,8 +202,8 @@ Son identifiant `free` est réservé : un catalogue qui le reprend est invalide.
 
 ## Dépôt local : fetch et diff
 
-Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut), toujours dans son
-**worktree principal**, d'où qu'il soit lancé.
+Le serveur agit sur le clone local du projet (`REPO_DIR`, ce dépôt par défaut), worktree principal ou
+secondaire, sans jamais rien y extraire.
 
 - **Fetch** : `git fetch --prune origin` toutes les 5 minutes (`GIT_FETCH_INTERVAL`, en secondes, `0`
   pour aucun), même sans page ouverte, et dès que la page voit une MR recevoir des commits, apparaître

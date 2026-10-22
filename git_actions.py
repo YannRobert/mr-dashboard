@@ -6,8 +6,8 @@ distantes restent à jour même sans page ouverte, et restent en place pendant u
 quand il sert une page de maintenance à la place du dépôt — on peut alors relire et committer sur
 origin/<branche>, puis pousser à son retour.
 
-Fetch et diff se font dans le worktree principal, retrouvé depuis n'importe quel worktree du clone,
-sans jamais rien y extraire : il porte le travail en cours.
+Fetch et diff se font dans le dépôt suivi (--repo-dir), worktree principal ou secondaire, sans jamais
+rien y extraire : il porte le travail en cours.
 """
 import os
 import re
@@ -40,11 +40,14 @@ class GitActions:
 
     def __init__(
             self,
-            repo_root,
+            repo_dir,
             fetch_interval_s,
             on_remote_call
     ):
-        self._repo_root = repo_root
+        self._repo_dir = repo_dir
+        # Chemin donné par git, une fois pour toutes : dans un worktree secondaire, .git est un fichier
+        # et FETCH_HEAD est dans le répertoire commun du clone.
+        self._fetch_head = Path(self._git_output(["rev-parse", "--path-format=absolute", "--git-path", "FETCH_HEAD"]))
         self._fetch_interval_s = fetch_interval_s
         # Appelé à chaque commande qui interroge le dépôt distant, avec son échec ou non.
         self._on_remote_call = on_remote_call
@@ -62,25 +65,6 @@ class GitActions:
         # la repousse d'un intervalle.
         self._next_due = 0.0
         self._next_at = None
-
-    @classmethod
-    def detect(
-            cls,
-            repo_dir,
-            fetch_interval_s,
-            on_remote_call
-    ):
-        common_dir = subprocess.run(
-            ["git", "-C", str(repo_dir), "rev-parse", "--path-format=absolute", "--git-common-dir"],
-            capture_output=True,
-            text=True,
-            check=True
-        ).stdout.strip()
-        return cls(
-            Path(common_dir).parent,
-            fetch_interval_s,
-            on_remote_call
-        )
 
     def start_periodic_fetch(self):
         if self._fetch_interval_s <= 0:
@@ -317,7 +301,7 @@ class GitActions:
     def _last_fetch_at(self):
         """Date du dernier fetch qui a abouti, même lancé hors du serveur : celle de FETCH_HEAD."""
         try:
-            mtime = (self._repo_root / ".git" / "FETCH_HEAD").stat().st_mtime
+            mtime = self._fetch_head.stat().st_mtime
         except OSError:
             return None
         return datetime.fromtimestamp(mtime, timezone.utc).isoformat()
@@ -332,7 +316,7 @@ class GitActions:
         try:
             completed = subprocess.run(
                 [
-                    "git", "-C", str(self._repo_root), "diff", "--no-color", "--no-ext-diff", "--find-renames",
+                    "git", "-C", str(self._repo_dir), "diff", "--no-color", "--no-ext-diff", "--find-renames",
                     *revisions,
                 ],
                 capture_output=True,
@@ -391,7 +375,7 @@ class GitActions:
         remote = args[0] in REMOTE_COMMANDS
         try:
             completed = subprocess.run(
-                ["git", "-C", str(self._repo_root), *args],
+                ["git", "-C", str(self._repo_dir), *args],
                 capture_output=True,
                 text=True,
                 env=GIT_ENV,

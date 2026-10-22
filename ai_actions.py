@@ -1,6 +1,6 @@
 """Catalogue des actions du bouton AI d'une MR, propre au projet suivi.
 
-Le projet le décrit dans CATALOG_PATH, fichier commité à la racine de son clone et relu à chaque
+Le projet le décrit dans CATALOG_PATH, fichier commité à la racine du dépôt suivi (--repo-dir) et relu à chaque
 demande : un prompt modifié s'essaie sans redémarrer le serveur ni commiter. Chaque action :
 
     [[action]]
@@ -17,7 +17,6 @@ demande : un prompt modifié s'essaie sans redémarrer le serveur ni commiter. C
 Sans fichier, le catalogue se réduit à la correction, avec le prompt calculé par la page. Avec ou sans,
 il finit par l'action libre, au prompt vide, à rédiger dans le dialogue.
 """
-import subprocess
 import tomllib
 from pathlib import Path
 
@@ -43,17 +42,6 @@ class AiActions:
 
     def __init__(self, repo_root):
         self._path = repo_root / CATALOG_PATH
-
-    @classmethod
-    def detect(cls, repo_dir):
-        """Le catalogue se lit dans le worktree principal du clone, comme Orca y ouvre ses sessions."""
-        common_dir = subprocess.run(
-            ["git", "-C", str(repo_dir), "rev-parse", "--path-format=absolute", "--git-common-dir"],
-            capture_output=True,
-            text=True,
-            check=True
-        ).stdout.strip()
-        return cls(Path(common_dir).parent)
 
     def catalog(self):
         """{"source", "actions", "models", "efforts"} : source vaut None pour le catalogue par défaut, faute de
