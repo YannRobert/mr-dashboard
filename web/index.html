@@ -349,7 +349,6 @@
   table.mrs tbody tr.stalled td:first-child { box-shadow: inset 3px 0 0 var(--red-dot); }
   .commit-mood { margin-left: 0.3em; cursor: help; }
   .commit-age { color: var(--muted); font-size: 0.8em; }
-  .last-actor-other { color: var(--text); font-weight: 600; }
   table.mrs thead th {
     position: sticky; z-index: 1; background: var(--surface);
     font-size: var(--fs-small); font-weight: 600; color: var(--muted); white-space: nowrap;
@@ -4912,7 +4911,7 @@ function lastActorLine(
 ) {
   if (!note || !mr.author || note.author.username === mr.author.username) return "";
   const title = t(`${key}.title`, { name: note.author.name, date: formatDate(note.createdAt) });
-  return `<div class="commit-age last-actor-other" title="${escapeHtml(title)}">${escapeHtml(t(key, { name: note.author.name.split(/\s+/)[0] }))}</div>`;
+  return `<div class="commit-age" title="${escapeHtml(title)}">${escapeHtml(t(key, { name: note.author.name.split(/\s+/)[0] }))}</div>`;
 }
 
 function activityCell(mr) {
