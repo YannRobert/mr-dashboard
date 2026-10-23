@@ -1928,6 +1928,7 @@ async function refresh() {
     for (const mr of mrs) {
       mr.graphql = graphqlNodes.get(String(mr.iid));
       mr.diffStats = mr.graphql?.diffStatsSummary;
+      keepLastActors(mr);
     }
     snapshot.mrs = mrs;
     snapshot.branchPipeline = branchPipeline;
@@ -2353,10 +2354,11 @@ const GRAPHQL_MR_FIELDS = `
   resolvableDiscussionsCount
   resolvedDiscussionsCount`;
 // Latest comments and pushes ("added N commits" system notes) with their author: tell whether
-// the last one came from someone else than the MR author.
+// the last one came from someone else than the MR author. No comment body (tool reports weigh
+// tens of kilobytes); system notes by their first line only, enough to recognize a push.
 const GRAPHQL_OPEN_MR_FIELDS = `${GRAPHQL_MR_FIELDS}
-  lastComments: notes(filter: ONLY_COMMENTS, last: ${LAST_NOTES_SAMPLE}) { nodes { body createdAt author { username name } } }
-  lastActivity: notes(filter: ONLY_ACTIVITY, last: ${LAST_NOTES_SAMPLE}) { nodes { body createdAt author { username name } } }
+  lastComments: notes(filter: ONLY_COMMENTS, last: ${LAST_NOTES_SAMPLE}) { nodes { id createdAt author { username name } } }
+  lastActivity: notes(filter: ONLY_ACTIVITY, last: ${LAST_NOTES_SAMPLE}) { nodes { bodyFirstLineHtml createdAt author { username name } } }
   headPipeline { id jobs(retried: false) { nodes { id name status startedAt finishedAt webPath } } }`;
 // A merged MR has no pipeline left to follow; its oldest commit dates the start of development.
 const GRAPHQL_MERGED_MR_FIELDS = `${GRAPHQL_MR_FIELDS}
@@ -2548,6 +2550,7 @@ async function loadSignals(mr) {
     signals.previousPipeline = previousPipeline;
     const job = name => jobs.filter(j => j.name === name).sort((a, b) => b.id - a.id)[0];
     if (pitTracked()) signals.pit = pitSignal(job(state.config.pitJob), pitNote, mr);
+    signals.pitNoteId = pitNote?.id ?? null;
     if (sonarTracked()) signals.sonar = await sonarSignal(job(state.config.sonarJob), mr);
   } catch (error) {
     signals.error = error.message;
@@ -3249,7 +3252,7 @@ function lastCommitCell(mr) {
   const commitAge = isCommitGapWorthShowing(commits)
     ? `<div class="commit-age">${escapeHtml(t("date.commitAge", { age: relative(commits.authorDate) }))}</div>`
     : "";
-  return `<span${local} title="${escapeHtml(tooltip)}">${relative(pushDate)}</span>${badge}${commitAge}${lastActorLine(mr, lastPush(mr), "lastPush")}`;
+  return `<span${local} title="${escapeHtml(tooltip)}">${relative(pushDate)}</span>${badge}${commitAge}${lastActorLine(mr, mr.lastPush, "lastPush")}`;
 }
 
 function isCommitGapWorthShowing(commits) {
@@ -4889,19 +4892,26 @@ function blockedByPills(mr) {
   return pills("blockedBy", "orange", signals.blockedBy) + pills("blocks", "red", signals.blocks);
 }
 
-// Last human comment, tool reports (bots, PIT score) left out; null when unknown.
+// The comments without the bots' ones, and the last push. Taken out of mr.graphql, whose raw
+// notes only serve here.
+function keepLastActors(mr) {
+  mr.lastComments = (mr.graphql?.lastComments?.nodes ?? [])
+    .filter(n => !BOT_USERNAME.test(n.author.username))
+    .map(n => ({ id: Number(n.id.split("/").pop()), createdAt: n.createdAt, author: n.author }));
+  const push = (mr.graphql?.lastActivity?.nodes ?? []).filter(n => /^(<p>)?added \d+ commits?\b/.test(n.bodyFirstLineHtml)).at(-1);
+  mr.lastPush = push ? { createdAt: push.createdAt, author: push.author } : null;
+  if (mr.graphql) {
+    delete mr.graphql.lastComments;
+    delete mr.graphql.lastActivity;
+  }
+}
+
+// The mutation score is a tool report, even when published under a personal account: recognized
+// by the id of its note, loaded with the signals.
 function lastHumanComment(mr) {
-  const pitMarker = pitTracked() ? state.config.pitMarker : "";
-  return (mr.graphql?.lastComments?.nodes ?? [])
-    .filter(n => !BOT_USERNAME.test(n.author.username) && !(pitMarker && n.body.startsWith(pitMarker)))
-    .at(-1) ?? null;
+  const pitNoteId = signalsOf(mr).pitNoteId;
+  return (mr.lastComments ?? []).filter(n => n.id !== pitNoteId).at(-1) ?? null;
 }
-
-function lastPush(mr) {
-  return (mr.graphql?.lastActivity?.nodes ?? []).filter(n => /^added \d+ commits?\b/.test(n.body)).at(-1) ?? null;
-}
-
-const byOther = (mr, note) => Boolean(note && mr.author && note.author.username !== mr.author.username);
 
 // Shown only when someone else than the author acted last: a fact, the reader judges what follows from it.
 function lastActorLine(
