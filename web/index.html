@@ -349,6 +349,7 @@
   table.mrs tbody tr.stalled td:first-child { box-shadow: inset 3px 0 0 var(--red-dot); }
   .commit-mood { margin-left: 0.3em; cursor: help; }
   .commit-age { color: var(--muted); font-size: 0.8em; }
+  .last-actor-other { color: var(--text); font-weight: 600; }
   table.mrs thead th {
     position: sticky; z-index: 1; background: var(--surface);
     font-size: var(--fs-small); font-weight: 600; color: var(--muted); white-space: nowrap;
@@ -924,7 +925,7 @@ const COLUMNS = [
   { key: "last_commit", firstDir: "desc", cellClass: "nowrap",
     value: lastCommitDate, render: lastCommitCell },
   { key: "activity", firstDir: "desc", cellClass: "nowrap",
-    value: mr => mr.updated_at, render: mr => dateCell(mr.updated_at, "date.activity") },
+    value: mr => mr.updated_at, render: activityCell },
   { key: "created", firstDir: "desc", cellClass: "nowrap", value: mr => mr.created_at, render: mr => dateCell(mr.created_at, "date.created") },
   // Merged MRs view: calendar durations, nights and weekends included.
   { key: "merged", firstDir: "desc", cellClass: "nowrap", value: mr => mr.merged_at, render: mr => dateCell(mr.merged_at, "date.merged") },
@@ -1287,6 +1288,10 @@ const I18N = {
     "approved.title": p => `Approuvée par ${p.names}`,
     "changesRequested": p => (p.n > 1 ? `Changements demandés ×${p.n}` : "Changements demandés"),
     "changesRequested.title": p => `Changements demandés par ${p.names}`,
+    "lastPush": p => `par ${p.name}`,
+    "lastPush.title": p => `Dernier push par ${p.name}, le ${p.date}`,
+    "lastComment": p => `par ${p.name}`,
+    "lastComment.title": p => `Dernier commentaire par ${p.name}, le ${p.date}`,
     "commits.title": "Commits de la MR",
     "local.title": p => `D'après le clone local, au fetch du ${p.date} : GitLab ne répond pas`,
     "ca.title": p => `Activité des commits de !${p.iid}`,
@@ -1598,6 +1603,10 @@ const I18N = {
     "approved.title": p => `Approved by ${p.names}`,
     "changesRequested": p => (p.n > 1 ? `Changes requested ×${p.n}` : "Changes requested"),
     "changesRequested.title": p => `Changes requested by ${p.names}`,
+    "lastPush": p => `by ${p.name}`,
+    "lastPush.title": p => `Last push by ${p.name}, on ${p.date}`,
+    "lastComment": p => `by ${p.name}`,
+    "lastComment.title": p => `Last comment by ${p.name}, on ${p.date}`,
     "commits.title": "MR commits",
     "local.title": p => `From the local clone, as of the fetch of ${p.date}: GitLab is not answering`,
     "ca.title": p => `Commit activity of !${p.iid}`,
@@ -2330,6 +2339,7 @@ function drawFreshness(
   ).join("");
 }
 
+const LAST_NOTES_SAMPLE = 10;
 // A single GraphQL query, in pages of 100, for all open MRs: the size (the REST API only
 // gives the number of files), the commits, the last push, the approvals, the thread
 // counters and the head pipeline's jobs — that many fewer REST requests for each MR.
@@ -2343,7 +2353,11 @@ const GRAPHQL_MR_FIELDS = `
   reviewers { nodes { name mergeRequestInteraction { reviewState } } }
   resolvableDiscussionsCount
   resolvedDiscussionsCount`;
+// Latest comments and pushes ("added N commits" system notes) with their author: tell whether
+// the last one came from someone else than the MR author.
 const GRAPHQL_OPEN_MR_FIELDS = `${GRAPHQL_MR_FIELDS}
+  lastComments: notes(filter: ONLY_COMMENTS, last: ${LAST_NOTES_SAMPLE}) { nodes { body createdAt author { username name } } }
+  lastActivity: notes(filter: ONLY_ACTIVITY, last: ${LAST_NOTES_SAMPLE}) { nodes { body createdAt author { username name } } }
   headPipeline { id jobs(retried: false) { nodes { id name status startedAt finishedAt webPath } } }`;
 // A merged MR has no pipeline left to follow; its oldest commit dates the start of development.
 const GRAPHQL_MERGED_MR_FIELDS = `${GRAPHQL_MR_FIELDS}
@@ -3236,7 +3250,7 @@ function lastCommitCell(mr) {
   const commitAge = isCommitGapWorthShowing(commits)
     ? `<div class="commit-age">${escapeHtml(t("date.commitAge", { age: relative(commits.authorDate) }))}</div>`
     : "";
-  return `<span${local} title="${escapeHtml(tooltip)}">${relative(pushDate)}</span>${badge}${commitAge}`;
+  return `<span${local} title="${escapeHtml(tooltip)}">${relative(pushDate)}</span>${badge}${commitAge}${lastActorLine(mr, lastPush(mr), "lastPush")}`;
 }
 
 function isCommitGapWorthShowing(commits) {
@@ -4874,6 +4888,35 @@ function blockedByPills(mr) {
     .map(other => " " + pill(tone, t(key, { iid: other.iid }), t(`${key}.title`, other), other.web_url))
     .join("");
   return pills("blockedBy", "orange", signals.blockedBy) + pills("blocks", "red", signals.blocks);
+}
+
+// Last human comment, tool reports (bots, PIT score) left out; null when unknown.
+function lastHumanComment(mr) {
+  const pitMarker = pitTracked() ? state.config.pitMarker : "";
+  return (mr.graphql?.lastComments?.nodes ?? [])
+    .filter(n => !BOT_USERNAME.test(n.author.username) && !(pitMarker && n.body.startsWith(pitMarker)))
+    .at(-1) ?? null;
+}
+
+function lastPush(mr) {
+  return (mr.graphql?.lastActivity?.nodes ?? []).filter(n => /^added \d+ commits?\b/.test(n.body)).at(-1) ?? null;
+}
+
+const byOther = (mr, note) => Boolean(note && mr.author && note.author.username !== mr.author.username);
+
+// Shown only when someone else than the author acted last: a fact, the reader judges what follows from it.
+function lastActorLine(
+  mr,
+  note,
+  key
+) {
+  if (!note || !mr.author || note.author.username === mr.author.username) return "";
+  const title = t(`${key}.title`, { name: note.author.name, date: formatDate(note.createdAt) });
+  return `<div class="commit-age last-actor-other" title="${escapeHtml(title)}">${escapeHtml(t(key, { name: note.author.name.split(/\s+/)[0] }))}</div>`;
+}
+
+function activityCell(mr) {
+  return dateCell(mr.updated_at, "date.activity") + lastActorLine(mr, lastHumanComment(mr), "lastComment");
 }
 
 function changesRequestedPill(mr) {
