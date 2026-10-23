@@ -4526,20 +4526,7 @@ function commentsLink(mr) {
 }
 
 function openGitDiff(mr) {
-  const query = new URLSearchParams({
-    iid: mr.iid,
-    title: mr.title.replace(/^Draft:\s*/i, ""),
-    branch: mr.source_branch,
-    target: mr.target_branch,
-    url: mr.web_url,
-    author: mr.author?.name ?? "",
-    lang: state.lang,
-  });
-  if (mr.state === "merged") {
-    query.set("head", mr.sha);
-    query.set("merge", mr.merge_commit_sha);
-  }
-  MrTabs.open(`diff.html?${query}`, "diff", mr.iid);
+  MrTabs.open(`diff.html?${new URLSearchParams({ iid: mr.iid })}`, "diff", mr.iid);
 }
 
 // ---------- Local repository fetch ----------

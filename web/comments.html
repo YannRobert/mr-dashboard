@@ -292,19 +292,7 @@
     gitlab.hidden = false;
     // Same diff as from the dashboard: a merged MR is found by its commits, its branch may be gone.
     if (mr.state === "merged" && !mr.mergeCommitSha) return;
-    const query = new URLSearchParams({
-      iid,
-      title: mr.title.replace(/^Draft:\s*/i, ""),
-      branch: mr.sourceBranch,
-      target: mr.targetBranch,
-      url: mr.webUrl,
-      author: authorName ?? "",
-      lang,
-    });
-    if (mr.state === "merged") {
-      query.set("head", mr.diffHeadSha);
-      query.set("merge", mr.mergeCommitSha);
-    }
+    const query = new URLSearchParams({ iid });
     const diff = document.getElementById("diff-link");
     diff.textContent = texts.diff;
     diff.title = texts.diffTitle;

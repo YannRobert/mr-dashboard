@@ -403,7 +403,7 @@
       loading: "Calcul du diff sur le dépôt local…",
       empty: "Aucune différence avec la branche cible.",
       failed: p => `Diff impossible : ${p}`,
-      invalid: "Lien incomplet : il manque la branche ou sa cible.",
+      invalid: "MR introuvable : le lien n'a pas de numéro de MR, ou GitLab ne la donne pas.",
       commits: n => `${n} commit${n > 1 ? "s" : ""}`,
       all: "Tout",
       allTitle: "Tout le diff de la MR, depuis le point où elle part de sa cible",
@@ -494,7 +494,7 @@ unpushedTitle: "Clic : les commits locaux, que GitLab ne voit pas encore",
       loading: "Computing the diff on the local repository…",
       empty: "No difference with the target branch.",
       failed: p => `Could not compute the diff: ${p}`,
-      invalid: "Incomplete link: the branch or its target is missing.",
+      invalid: "MR not found: the link has no MR number, or GitLab does not return it.",
       commits: n => `${n} commit${n > 1 ? "s" : ""}`,
       all: "All",
       allTitle: "The whole MR diff, from where it leaves its target",
@@ -569,7 +569,7 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
     },
   };
   const params = new URLSearchParams(location.search);
-  const lang = params.get("lang") in TEXTS ? params.get("lang") : savedLang();
+  const lang = savedLang();
 
   // Dashboard language, kept by its FR / EN button: the URL usually provides it.
   function savedLang() {
@@ -582,19 +582,21 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
   }
 
   const texts = TEXTS[lang];
+  // The URL carries only the MR number: the rest is read from GitLab (loadMr), always current.
   const mr = {
     iid: params.get("iid") ?? "",
-    title: params.get("title") ?? "",
-    branch: params.get("branch") ?? "",
-    target: params.get("target") ?? "",
-    url: params.get("url") ?? "",
-    author: params.get("author") ?? "",
+    title: "",
+    branch: "",
+    target: "",
+    url: "",
+    author: "",
     // Merged MR: its last commit and its merge commit, as the source branch may be gone.
-    head: params.get("head") ?? "",
-    merge: params.get("merge") ?? "",
+    head: "",
+    merge: "",
   };
   MrTabs.claim("diff", mr.iid);
   showLoadedAt(document.getElementById("loaded-at"), lang);
+  let mrError = null;
   let diffText = null;
   // MR commits, oldest to newest; displayed range as indices, null for the whole diff.
   let commits = null;
@@ -623,7 +625,23 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
   // Current comment thread of the ‹ › navigation, as an index in diff order; -1: none yet.
   let currentNote = -1;
   // File filter, kept from one diff render to the next (format, commit range, notes).
-  const fileFilter = { text: "", exclude: false };
+  // Filter in the URL: a reload reopens the diff with the same one.
+  const fileFilter = { text: params.get("filter") ?? "", exclude: params.get("exclude") === "1" };
+
+  function writeFilterToUrl() {
+    const url = new URL(location.href);
+    if (fileFilter.text.trim()) {
+      url.searchParams.set("filter", fileFilter.text);
+    } else {
+      url.searchParams.delete("filter");
+    }
+    if (fileFilter.exclude) {
+      url.searchParams.set("exclude", "1");
+    } else {
+      url.searchParams.delete("exclude");
+    }
+    history.replaceState(null, "", url);
+  }
   // Clears the filter of the displayed diff; null until a file list is drawn.
   let clearFileFilter = null;
   // Files shown with line wrapping, by path: the choice survives diff renders.
@@ -1011,6 +1029,7 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
     const apply = () => {
       mode.textContent = fileFilter.exclude ? texts.filterExclude : texts.filterInclude;
       mode.setAttribute("aria-pressed", String(fileFilter.exclude));
+      writeFilterToUrl();
       applyFileFilter(title, lines);
     };
     // Navigable threads change with the filter: ‹ › navigation restarts from the first.
@@ -1999,19 +2018,22 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
     element.hidden = false;
   }
 
-  // A tab opened before the URL carried the author asks GitLab for it; without GitLab, the header does without.
-  async function loadAuthor() {
-    if (!mr.author && mr.iid) {
-      try {
-        const { gitlabProject: path } = await config();
-        mr.author = (await GitlabNotes.graphql(`{ project(fullPath: ${JSON.stringify(path)}) {
-          mergeRequest(iid: ${JSON.stringify(String(mr.iid))}) { author { name } }
-        } }`)).project?.mergeRequest?.author?.name ?? "";
-      } catch (ignored) {
-        return;
+  async function loadMr() {
+    if (!mr.iid) return;
+    try {
+      const detail = JSON.parse(await fetchText(`gitlab/projects/${await gitlabProject()}/merge_requests/${encodeURIComponent(mr.iid)}`));
+      mr.title = detail.title.replace(/^Draft:\s*/i, "");
+      mr.branch = detail.source_branch;
+      mr.target = detail.target_branch;
+      mr.url = detail.web_url;
+      mr.author = detail.author?.name ?? "";
+      if (detail.state === "merged" && detail.merge_commit_sha) {
+        mr.head = detail.sha;
+        mr.merge = detail.merge_commit_sha;
       }
+    } catch (error) {
+      mrError = error.message;
     }
-    if (mr.author) renderAuthor();
   }
 
   async function loadPushes() {
@@ -2089,7 +2111,7 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
     const comments = document.getElementById("comments-link");
     comments.textContent = texts.comments;
     comments.title = texts.commentsTitle;
-    comments.href = `comments.html?${new URLSearchParams({ iid: mr.iid, lang })}`;
+    comments.href = `comments.html?${new URLSearchParams({ iid: mr.iid })}`;
     comments.dataset.iid = mr.iid;
     const close = document.getElementById("close-tab");
     close.textContent = texts.close;
@@ -2160,7 +2182,7 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
 
   async function load() {
     if (!mr.branch || !mr.target) {
-      showMessage(texts.invalid, true);
+      showMessage(mrError ? `${texts.invalid} (${mrError})` : texts.invalid, true);
       return;
     }
     try {
@@ -2362,11 +2384,13 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
     const button = e.target.closest("[data-note-step]");
     if (button) goToNote(Number(button.dataset.noteStep));
   });
-  renderHeader();
-  loadAuthor();
   renderNotesToggle();
-  initAi();
-  load();
+  loadMr().then(() => {
+    renderHeader();
+    if (mr.author) renderAuthor();
+    initAi();
+    load();
+  });
 </script>
 </body>
 </html>
