@@ -1029,7 +1029,7 @@ const $ = id => document.getElementById(id);
 
 // English on the first visit, the browser language for those who already used the dashboard, then
 // the choice of the FR / EN button; ?lang= wins for the page without changing that choice. The
-// "Correct with IA" prompt stays in French whatever the language: it does not go through t().
+// "Correct with IA" prompt stays in English whatever the language: it does not go through t().
 const pluralEn = n => (n === 1 ? "" : "s");
 
 const I18N = {
@@ -4763,35 +4763,35 @@ function saveAiFixContexts() {
   MrAi.saveFixContexts(Object.fromEntries(state.mrs.filter(mr => !signalsOf(mr).loading).map(mr => [mr.iid, aiFixContext(mr)])));
 }
 
-// Feeds the prompt only: in French whatever the interface language, like aiFixPrompt.
+// Feeds the prompt only: in English whatever the interface language, like aiFixPrompt.
 function qualityDefects(s) {
   const defects = [];
-  if (s.pipeline?.status === "failed") defects.push(`le pipeline #${s.pipeline.id} est en échec${linkFr(s.pipeline.web_url)}`);
+  if (s.pipeline?.status === "failed") defects.push(`pipeline #${s.pipeline.id} failed${detailLink(s.pipeline.web_url)}`);
   if (sonarUsable(s.sonar)) {
     const sonar = s.sonar;
-    if (sonar.issues > 0) defects.push(`${sonar.issues} issue${plural(sonar.issues)} Sonar ouverte${plural(sonar.issues)}${linkFr(sonar.links?.issues)}`);
-    if (sonar.gate && sonar.gate !== "OK") defects.push(`Quality Gate Sonar ${sonar.gate}`);
-    if (sonar.coverage != null && sonar.coverage < 100) defects.push(`couverture du nouveau code à ${formatPercentFr(sonar.coverage)}, objectif 100 %${linkFr(sonar.links?.coverage)}`);
+    if (sonar.issues > 0) defects.push(`${sonar.issues} open Sonar issue${pluralEn(sonar.issues)}${detailLink(sonar.links?.issues)}`);
+    if (sonar.gate && sonar.gate !== "OK") defects.push(`Sonar Quality Gate ${sonar.gate}`);
+    if (sonar.coverage != null && sonar.coverage < 100) defects.push(`new code coverage at ${formatPercentEn(sonar.coverage)}, target 100%${detailLink(sonar.links?.coverage)}`);
   }
   const pit = s.pit;
   if (pit?.state === "ok") {
-    if (pit.survived > 0) defects.push(`${pit.survived} mutant${plural(pit.survived)} PIT survivant${plural(pit.survived)}${linkFr(pit.link)}`);
-    if (pit.noCoverage > 0) defects.push(`${pit.noCoverage} mutant${plural(pit.noCoverage)} PIT non couvert${plural(pit.noCoverage)}${linkFr(pit.link)}`);
-    if (pit.errors > 0) defects.push(`${pit.errors} mutant${plural(pit.errors)} PIT en erreur${linkFr(pit.link)}`);
+    if (pit.survived > 0) defects.push(`${pit.survived} surviving PIT mutant${pluralEn(pit.survived)}${detailLink(pit.link)}`);
+    if (pit.noCoverage > 0) defects.push(`${pit.noCoverage} uncovered PIT mutant${pluralEn(pit.noCoverage)}${detailLink(pit.link)}`);
+    if (pit.errors > 0) defects.push(`${pit.errors} PIT mutant${pluralEn(pit.errors)} in error${detailLink(pit.link)}`);
   }
   return defects;
 }
 
 // Link to an indicator's detail: the fixer goes straight to it, instead of searching for it.
-const linkFr = url => url ? ` : ${url}` : "";
+const detailLink = url => url ? `: ${url}` : "";
 
 // Only the indicators the tracked project produces: requiring one less mutant from a project without PIT
 // would send the fixer after an impossible goal.
 function perfectIndicators() {
   return [
-    "pipeline vert",
-    ...(sonarTracked() ? ["0 issue Sonar", "Quality Gate OK", "100 % de couverture du nouveau code"] : []),
-    ...(pitTracked() ? ["aucun mutant survivant, non couvert ou en erreur"] : []),
+    "green pipeline",
+    ...(sonarTracked() ? ["0 Sonar issues", "Quality Gate OK", "100% new code coverage"] : []),
+    ...(pitTracked() ? ["no surviving, uncovered or failing mutant"] : []),
   ];
 }
 
@@ -4801,48 +4801,48 @@ function aiFixPrompt(mr) {
   const unresolved = s.threads?.unresolved ?? 0;
   const running = s.sonar?.refreshing || s.pit?.refreshing || PENDING_JOB_STATUSES.has(s.pipeline?.status);
   const behind = s.behind?.count ?? 0;
-  const parts = [`Sur la MR !${mr.iid} (\`${mr.source_branch}\` → \`${mr.target_branch}\`) :`];
+  const parts = [`On MR !${mr.iid} (\`${mr.source_branch}\` → \`${mr.target_branch}\`):`];
   // Fixes first, on the values of the last finished pipeline: updating the branch does not
   // fix any indicator, and waiting for the pipeline following the update would delay the
   // fixes just as much. Everything then goes out in a single push, hence a single pipeline.
   if (defects.length) {
     parts.push(
-      "Corrige les indicateurs qualité imparfaits relevés par le dernier pipeline terminé, sans attendre de nouveau pipeline :\n" +
+      "Fix the imperfect quality indicators reported by the last finished pipeline, without waiting for a new pipeline:\n" +
       defects.map(d => `- ${d}`).join("\n") +
-      (running ? "\n(un pipeline est en cours : n'attends pas sa fin, vérifie seulement dans le code qu'un point n'est pas déjà corrigé sur la branche)" : "")
+      (running ? "\n(a pipeline is running: do not wait for it to end, only check in the code that a point is not already fixed on the branch)" : "")
     );
   }
   // The count alone does not say what to do: the prompt says where to read the threads and that they ask for
   // fixes to the MR itself.
   if (unresolved > 0) {
     parts.push(
-      `La MR a ${unresolved} thread${plural(unresolved)} non résolu${plural(unresolved)} (commentaires de revue et diff notes) : ` +
-      `lis-les (\`glab api projects/:id/merge_requests/${mr.iid}/discussions\`, threads \`resolvable\` non \`resolved\`) ` +
-      "et corrige le code de la MR selon chacun, dans la mesure du possible et du raisonnable. Réponds ensuite dans " +
-      "chaque thread : ce qui a été corrigé et comment, ou pourquoi le point n'est pas retenu ; résous ceux que tu as corrigés."
+      `The MR has ${unresolved} unresolved thread${pluralEn(unresolved)} (review comments and diff notes): ` +
+      `read them (\`glab api projects/:id/merge_requests/${mr.iid}/discussions\`, \`resolvable\` threads not \`resolved\`) ` +
+      "and fix the MR's code according to each one, as far as possible and reasonable. Then reply in " +
+      "each thread, in the language the thread is written in: what was fixed and how, or why the point is not taken; resolve the ones you fixed."
     );
   }
   if (behind > 0 || mr.has_conflicts) {
-    const late = behind > 0 ? ` (${behind} commit${plural(behind)} de retard)` : "";
+    const late = behind > 0 ? ` (${behind} commit${pluralEn(behind)} behind)` : "";
     parts.push(
-      `${defects.length || unresolved > 0 ? "Ensuite, mets" : "Mets"} à jour la branche de la MR en y mergeant \`origin/${mr.target_branch}\`${late}` +
-      (mr.has_conflicts ? ", et résous les conflits que GitLab signale avec la cible." : ".")
+      `${defects.length || unresolved > 0 ? "Then update" : "Update"} the MR branch by merging \`origin/${mr.target_branch}\` into it${late}` +
+      (mr.has_conflicts ? ", and resolve the conflicts GitLab reports with the target." : ".")
     );
   }
   // The title and description, written at the start of development, do not follow by themselves the changes
   // of direction made since, nor those of this fix.
   parts.push(
-    `Relis enfin le titre et la description de la MR (\`glab mr view ${mr.iid}\`) : s'ils ne décrivent plus ` +
-    `ce que fait la MR une fois tes corrections faites, mets-les à jour (\`glab mr update ${mr.iid}\`), ` +
-    "sans toucher à ce qui est encore juste."
+    `Finally, reread the MR title and description (\`glab mr view ${mr.iid}\`): if they no longer describe ` +
+    `what the MR does once your fixes are made, update them (\`glab mr update ${mr.iid}\`), ` +
+    "without touching what is still accurate."
   );
   // Any change to the MR — update, fix, reply to a thread — reruns the CI and may
   // degrade an indicator that was perfect so far: the verification loop therefore applies in every case.
   // How to read the indicators is project-specific: its action catalogue specifies it.
   parts.push(
-    "Pousse le tout en une fois sur la branche de la MR, attends la fin du pipeline du commit poussé, puis " +
-    `relis l'état des indicateurs. Tant qu'ils ne sont pas parfaits (${perfectIndicators().join(", ")}), ` +
-    "effectue les corrections nécessaires, pousse-les en une fois et recommence."
+    "Push everything at once to the MR branch, wait for the pipeline of the pushed commit to end, then " +
+    `reread the indicators. As long as they are not perfect (${perfectIndicators().join(", ")}), ` +
+    "make the necessary fixes, push them at once and start again."
   );
   return parts.join("\n\n");
 }
@@ -5721,7 +5721,7 @@ function compactDuration(ms) {
 const formatDate = formatDateTime;
 const formatPercent = value => (value / 100).toLocaleString(locale(), { style: "percent", maximumFractionDigits: 1 });
 // Fixed French forms, for the prompt and the French translations.
-const formatPercentFr = value => value.toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " %";
+const formatPercentEn = value => value.toLocaleString("en-US", { maximumFractionDigits: 1 }) + "%";
 const plural = n => (n > 1 ? "s" : "");
 
 function escapeHtml(value) {
