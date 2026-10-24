@@ -1,6 +1,6 @@
 // Anonymization mode, for screenshots that can be shown outside the team: on screen only, people's
 // names become fictitious names, titles and messages become lorem ipsum, branches lorem slugs,
-// labels lorem words, MR numbers are shifted, the project becomes « demo/project », comment
+// labels lorem words, MR numbers are shifted, the project becomes "demo/project", comment
 // bodies become lorem ipsum, and link addresses, which the browser shows on hover, become a
 // neutral address. The page data does not change: actions, links and filters keep working on
 // the real values, and turning the mode off restores the original display without reloading. Shared by
@@ -191,7 +191,7 @@ window.Anonymizer = (() => {
       known.set(key, catalog[index]);
     }
     const fake = known.get(key);
-    // « DOE » is written in capitals: so is its fake name.
+    // "DOE" is written in capitals: so is its fake name.
     return real.length > 1 && real === real.toUpperCase() ? fake.toUpperCase() : fake;
   }
 
@@ -221,7 +221,7 @@ window.Anonymizer = (() => {
     addReplacement(`!${number}`, `!${number + 100 + hash("iid", "") % 800}`, 2);
   }
 
-  // Label: one lorem word per word, including the scope of a « scope::value » label.
+  // Label: one lorem word per word, including the scope of a "scope::value" label.
   function addLabel(label) {
     const fake = label.split("::").map(part => {
       const next = generator("label", part);
@@ -251,7 +251,7 @@ window.Anonymizer = (() => {
   function addText(text) {
     if (text.trim().length < MIN_TEXT_LENGTH || !/\s/.test(text.trim())) return;
     addReplacement(text, fakeText(text));
-    // The table shows titles without « Draft: », and a commit message by its first line.
+    // The table shows titles without "Draft:", and a commit message by its first line.
     const firstLine = text.split("\n")[0];
     addReplacement(firstLine, fakeLine(firstLine));
     const withoutDraft = firstLine.replace(/^Draft:\s*/i, "");
@@ -327,7 +327,7 @@ window.Anonymizer = (() => {
     harvest(page.data(), "", "", kept, new WeakSet());
     const keys = [...replacements.keys()].sort((a, b) => b.length - a.length)
       .map(key => key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-    // Never mid-word: « Jean » does not touch « Jeanne ».
+    // Never mid-word: "Jean" does not touch "Jeanne".
     pattern = keys.length ? new RegExp(`(?<![\\p{L}\\p{N}_])(?:${keys.join("|")})(?![\\p{L}\\p{N}_])`, "gu") : null;
   }
 

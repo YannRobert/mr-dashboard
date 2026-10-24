@@ -67,8 +67,8 @@ window.GitlabNotes = (() => {
     return doc.body.innerHTML;
   }
 
-  // Id of a note or thread, from its GraphQL id: « gid://gitlab/DiffNote/123 »
-  // gives 123, « gid://gitlab/Discussion/<sha> » the thread SHA.
+  // Id of a note or thread, from its GraphQL id: "gid://gitlab/DiffNote/123"
+  // gives 123, "gid://gitlab/Discussion/<sha>" the thread SHA.
   const noteId = gid => Number(String(gid).split("/").pop());
   const discussionId = gid => String(gid).split("/").pop();
 

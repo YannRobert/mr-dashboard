@@ -37,11 +37,11 @@ window.Avatars = (() => {
 
   const initials = name => name.split(/\s+/).map(part => part[0] ?? "").join("").slice(0, 2).toUpperCase();
 
-  // « Jane DOE », « doe », « jane.doe »: same words, ignoring case, accents and order.
+  // "Jane DOE", "doe", "jane.doe": same words, ignoring case, accents and order.
   const words = text => text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase()
     .split(/[\s._-]+/).filter(Boolean).sort().join(" ");
 
-  // GitLab name of a git author, already known from the MR table: the git name is free-form (« doe »), the
+  // GitLab name of a git author, already known from the MR table: the git name is free-form ("doe"), the
   // local part of the email usually follows first and last name. Unknown: their git name.
   function gitlabName(name, email) {
     slots ??= readSlots();

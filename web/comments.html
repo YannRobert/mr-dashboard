@@ -257,7 +257,7 @@
     return String(text).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   }
 
-  // « 3 h », « 2 j »: enough to place a comment in the MR's life.
+  // "3 h", "2 d": enough to place a comment in the MR's life.
   function age(iso) {
     const minutes = Math.max(0, Math.round((Date.now() - new Date(iso)) / 60000));
     if (minutes < 60) return `${minutes} min`;

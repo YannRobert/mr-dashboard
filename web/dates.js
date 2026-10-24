@@ -7,7 +7,7 @@ window.formatDateTime = iso => {
 };
 
 // Page load time in element, to judge whether what it shows may have changed since:
-// « chargée à 14:32 · il y a 5 min », refreshed every minute, flagged (stale class) beyond
+// "loaded at 14:32 · 5 min ago", refreshed every minute, flagged (stale class) beyond
 // STALE_MINUTES. at replaces the page opening time when what it shows dates from before (saved copy)
 // or after (update).
 window.showLoadedAt = (() => {

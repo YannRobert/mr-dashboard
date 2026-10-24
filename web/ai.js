@@ -222,7 +222,7 @@ window.MrAi = (() => {
     part("ai-copy").textContent = t("dialog.copy");
   }
 
-  // Alias: the version it points to today, if Claude Code provides it (« Opus (5.5) »).
+  // Alias: the version it points to today, if Claude Code provides it ("Opus (5.5)").
   function modelLabel(model) {
     if (!model.alias) return model.label;
     const version = model.version?.startsWith(model.label) ? model.version.slice(model.label.length).trim() : model.version;
@@ -270,7 +270,7 @@ window.MrAi = (() => {
     return catalog;
   }
 
-  // « to-fix » actions are offered only to an MR that has something to fix.
+  // "to-fix" actions are offered only to an MR that has something to fix.
   const actionsFor = toFix => (catalog?.actions ?? []).filter(action => action.when !== "to-fix" || toFix);
 
   // An unreadable catalog keeps the button: the dialog says why no action is offered.
