@@ -31,6 +31,31 @@ it, or opens a new Orca tab and starts Claude Code with it\*.
 `mr_dashboard/server.py` serves the page (`web/index.html`) and relays the GitLab and SonarQube APIs, so that tokens
 never reach the browser. It only listens on `127.0.0.1`.
 
+## Try it without a GitLab
+
+The demo runs the dashboard on an invented project, Folio's online bookshop, with its own fake GitLab and
+SonarQube: no server, no token, nothing to configure beyond Python 3 and git.
+
+```bash
+python3 demo/run.py
+```
+
+It opens `http://localhost:8775/`: fourteen open merge requests and seven merged in the last weeks, each with its
+pipeline, quality gate, mutation report and review threads, and a real git repository behind them for the diffs.
+
+They cover the cases a real project meets: a conflict, a hotfix for a release branch, a merge request waiting
+for another, forgotten ones whose Sonar analysis is gone or expired, review comments of several paragraphs with
+quotes, code, suggestions, task lists and a screenshot. One of them reprices the whole catalogue, 25 files and
+about 10,000 changed lines, one file of 15,000 lines, to try the diff on large files and large changes.
+
+While it runs, the team keeps working, one change every minute and a half or so (`--activity`, in seconds): a
+pipeline ends, approvals come in, main breaks and recovers, a fix is pushed and a merge request merged, which is
+what notifications and sounds are for. The fake GitLab's page `http://127.0.0.1:8776/demo` breaks GitLab and
+brings it back, to see the dashboard through an outage.
+
+Comments, replies and resolved threads are kept until the demo stops. Every start builds the project afresh,
+dated relative to that moment, in a temporary directory removed on exit.
+
 ## Prerequisites
 
 - **Python 3.11 or later** (`tomllib`). Standard library only: nothing to install, no build step.
