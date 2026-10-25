@@ -2,10 +2,31 @@
 
 Created and maintained by [Yann ROBERT](https://github.com/YannRobert)
 
-A local dashboard of the open merge requests of a GitLab project, with their CI signals (pipeline,
-SonarQube, mutation testing, unresolved threads, lag behind the target branch) and browser
-notifications. It also offers an offline diff viewer built on the local clone, a comments page, and
-an **AI** button that prepares Claude Code prompts for a merge request.
+A local dashboard for the development workflow of a GitLab project's merge requests, from the first
+push to the merge, for authors and reviewers alike. Each open merge request shows its CI signals
+(pipeline, SonarQube, mutation testing, unresolved threads, lag behind the target branch) and its
+review activity: commits, comments, who pushed or commented last.
+
+- Authors see what is left to do on their merge requests: a failed pipeline, a quality gate, a
+  mutation score, the threads to answer.
+- Reviewers see which merge request is ready for them, and read only what changed since their last
+  review.
+- Browser notifications tell you when your merge request breaks or gets approved, and when the main
+  branch's pipeline fails.
+
+It also offers a diff viewer built on the local clone, where threads are opened, answered and
+resolved, a comments page, and an **AI** button that prepares Claude Code prompts for a merge
+request.
+
+Made for agentic development, where coding agents write the code across several worktrees and
+nobody keeps an IDE open on each of them. The diff of every merge request comes from the local
+clone, without checking anything out, so neither the author nor the reviewer opens an IDE to read
+it. The **AI** button turns the fix of what is red, and the actions the project defines, such as a
+review or an explanation, into a prompt already filled in for that merge request: one click copies
+it, or opens a new Orca tab and starts Claude Code with it\*.
+
+\* For now, Orca is supported only with the dashboard running under WSL and Orca on Windows: see
+[Orca integration](#orca-integration).
 
 `mr_dashboard/server.py` serves the page (`web/index.html`) and relays the GitLab and SonarQube APIs, so that tokens
 never reach the browser. It only listens on `127.0.0.1`.
