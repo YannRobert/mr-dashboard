@@ -175,7 +175,7 @@ class FakeGitlabHandler(BaseHTTPRequestHandler):
             discussion = self.discussion(mr, discussion_match.group(1))
             return self.send_json(200, project.rest_discussion(mr, discussion)) if discussion else self.send_json(404, {"message": "404 Not found"})
         if rest == "/approvals":
-            return self.send_json(200, {"approved_by": [{"user": project.user(username)} for username, _ in mr.spec.approvals]})
+            return self.send_json(200, {"approved_by": [{"user": project.user(username)} for username, _ in mr.approvals]})
         if rest == "/reviewers":
             return self.send_json(200, [{
                 "user": project.user(reviewer),

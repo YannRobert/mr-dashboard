@@ -884,3 +884,17 @@ BRANCHES = {
         ]),
     ]),
 }
+
+
+# Commits pushed while the demo runs (see dataset.ACTIVITY), by merge request: built with the rest, dated at the
+# start, and published when the activity gets to them.
+LATER = {
+    42: [
+        Commit("chloe", "Wrap each copy, not each line", edits=[
+            ("storefront/gift_wrap.py", '    """One wrapping per book when asked for, whatever the quantity of each."""\n',
+             '    """One wrapping per copy when asked for: copies are often offered to different people."""\n'),
+            ("storefront/gift_wrap.py", "    return GIFT_WRAP_CENTS * len(lines)\n",
+             "    return GIFT_WRAP_CENTS * sum(quantity for _, quantity in lines)\n"),
+        ]),
+    ],
+}

@@ -99,6 +99,7 @@ class MergeRequestState:
     notes: list = field(default_factory=list)
     discussions: list = field(default_factory=list)
     pipelines: list = field(default_factory=list)
+    approvals: list = field(default_factory=list)
 
     @property
     def merged(self):
@@ -241,7 +242,8 @@ class Project:
                 dataset.MERGE_REQUESTS[iid],
                 branch,
                 repository.branches[iid],
-                branch.created_at
+                branch.created_at,
+                approvals=list(dataset.MERGE_REQUESTS[iid].approvals)
             )
         self.main_pipelines = []
         self._build_pipelines()
@@ -585,7 +587,7 @@ class Project:
         last = mr.record.pushes[-1]
         commits = self.mr_commits(mr)
         additions, deletions, files = self.repository.diff_stats(last.base, last.head)
-        approved = [username for username, _ in mr.spec.approvals]
+        approved = [username for username, _ in mr.approvals]
         threads = [discussion for discussion in mr.discussions if discussion.notes[0].resolvable]
         node = {
             "iid": str(mr.iid),
@@ -673,6 +675,84 @@ class Project:
             "position": {"positionType": "text"} if note.position else None,
             "bodyHtml": self.html(note.body),
         }
+
+    # ---------- Live changes (see activity.py) ----------
+
+    def start_pipeline(self, ref, sha, source, user, plan, mr=None):
+        """A pipeline that starts now: its first job running, the others waiting."""
+        now = self.now()
+        jobs = []
+        for index, (name, stage, _) in enumerate(plan):
+            jobs.append(Job(self._next_job, name, stage, "running" if index == 0 else "created", started=now if index == 0 else None))
+            self._next_job += 1
+        run = PipelineRun(self._take_pipeline_id(), ref, sha, source, now, "running", jobs, user)
+        (mr.pipelines if mr else self.main_pipelines).append(run)
+        return run
+
+    def finish_pipeline(self, run, plan, failed_job=None, mr=None):
+        """Ends a running pipeline now: its jobs ran one after the other until now, as long as the plan says."""
+        end = self.now()
+        durations = {name: minutes for name, _, minutes in plan}
+        state = "done"
+        for job in run.jobs:
+            if state == "failed":
+                job.status, job.started, job.finished = "skipped", None, None
+                continue
+            job.status = "failed" if job.name == failed_job else "success"
+            state = "failed" if job.name == failed_job else state
+        timed = [job for job in run.jobs if job.status != "skipped"]
+        for job in reversed(timed):
+            job.finished = end
+            job.started = end + durations[job.name] / 60
+            end = job.started
+        run.created = max(run.created, end)
+        run.status = "failed" if failed_job else "success"
+        if mr and mr.spec.mutation and any(job.name == self.dataset.PIT_JOB and job.status == "success" for job in run.jobs):
+            self._report_mutation(mr)
+
+    def _report_mutation(self, mr):
+        """The mutation testing job edits its note, or writes it the first time."""
+        discussion = next((discussion for discussion in mr.discussions if discussion.id == self._discussion_id(mr.iid, "mutation")), None)
+        if discussion:
+            discussion.notes[0].at = self.now()
+            return
+        note = Note(self._take_note_id(), self.dataset.BOT, self.now(), self._mutation_body(mr.spec.mutation))
+        mr.notes.append(note)
+        mr.discussions.append(Discussion(self._discussion_id(mr.iid, "mutation"), [note]))
+
+    def push(self, mr):
+        """Publishes the commits the scenario keeps for later on the merge request, and starts its pipeline."""
+        push = self.repository.publish_later(mr.iid, self.now())
+        count = len(push.commits)
+        lines = "\n".join(f"* {self.repository.commit(sha).short} - {self.repository.commit(sha).title}" for sha in push.commits)
+        self._system_note(mr, mr.spec.author, f"added {count} commit{'s' if count > 1 else ''}\n\n{lines}")
+        return self.start_pipeline(mr.branch.name, push.head, "merge_request_event", mr.spec.author, self.dataset.JOBS, mr)
+
+    def approve(self, mr, username):
+        mr.approvals.append((username, self.now()))
+        self._system_note(mr, username, "approved this merge request")
+
+    def merge(self, mr, username):
+        """Merges into the target and starts the target's pipeline."""
+        sha = self.repository.merge_now(mr.iid, username, self.now())
+        mr.branch.merged_at = self.now()
+        mr.branch.merged_by = username
+        return self.start_pipeline(mr.branch.target, sha, "push", username, MAIN_JOBS)
+
+    def reply(self, mr, number, username, body, resolve=False):
+        """A reply in the scenario's thread number, possibly resolving it."""
+        discussion = next(discussion for discussion in mr.discussions if discussion.id == self._discussion_id(mr.iid, number))
+        first = discussion.notes[0]
+        note = Note(self._take_note_id(), username, self.now(), body, position=first.position, resolvable=first.resolvable)
+        mr.notes.append(note)
+        discussion.notes.append(note)
+        if resolve:
+            self.resolve(discussion, True)
+
+    def _system_note(self, mr, username, body):
+        note = Note(self._take_note_id(), username, self.now(), body, system=True)
+        mr.notes.append(note)
+        mr.discussions.append(Discussion(self._discussion_id(mr.iid, f"note-{note.id}"), [note]))
 
     # ---------- Writes ----------
 

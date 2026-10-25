@@ -47,7 +47,9 @@ for another, a forgotten one whose Sonar analysis expired, review comments of se
 code, suggestions, task lists and a screenshot.
 One of them reprices the whole catalogue, 25 files and about 10,000 changed lines, one file of 15,000 lines,
 to try the diff on large files and large changes.
-Comments, replies and resolved threads are kept until the demo stops. Every start builds the project afresh,
+While it runs, the team keeps working, one change every minute and a half or so (`--activity`, in
+seconds): a pipeline ends, approvals come in, main breaks and recovers, a fix is pushed and a merge request
+merged, which is what notifications and sounds are for. Comments, replies and resolved threads are kept until the demo stops. Every start builds the project afresh,
 dated relative to that moment, in a temporary directory removed on exit.
 
 ## Prerequisites

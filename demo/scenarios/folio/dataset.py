@@ -448,4 +448,21 @@ MERGE_REQUESTS = {
     ),
 }
 
+# What the team does while the demo runs, one step every --activity seconds or so (see fakegitlab/activity.py):
+# a pipeline ends, approvals come in, main breaks and recovers, Chloé fixes the gift wrapping after Dmitri's
+# review, and Alice's merge request is merged.
+ACTIVITY = (
+    ("finish", 43),
+    ("approve", 41, "dmitri"),
+    ("main", "failed"),
+    ("push", 42),
+    ("reply", 42, 0, "chloe", "Done with your line, thanks: the test passes now. Resolving.", True),
+    ("finish", 42),
+    ("main", "success"),
+    ("approve", 53, "bruno"),
+    ("merge", 53, "alice"),
+    ("finish main",),
+)
+
 assert set(MERGE_REQUESTS) == set(history.BRANCHES)
+assert set(history.LATER) <= {step[1] for step in ACTIVITY if step[0] == "push"}

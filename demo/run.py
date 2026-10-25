@@ -6,7 +6,9 @@ GitLab and SonarQube, then the dashboard pointed at them.
     python3 demo/run.py --gitlab-only         # only the fake GitLab, for a dashboard started by hand
 
 The project, its team and its merge requests are invented (the scenario's dataset.py and history.py) and placed
-relative to the moment the demo starts. Nothing is kept: every start begins afresh, in a temporary directory
+relative to the moment the demo starts. The team keeps working while it runs (--activity): pipelines end,
+approvals come in, main breaks and recovers, a merge request is merged, so that the refreshes, notifications and
+sounds have something to show. Nothing is kept: every start begins afresh, in a temporary directory
 that holds the repository, its clone and the dashboard's glab configuration.
 """
 import argparse
@@ -22,6 +24,7 @@ import webbrowser
 from pathlib import Path
 
 from fakegitlab import repository, server as fakegitlab
+from fakegitlab.activity import Activity
 
 DEMO_DIR = Path(__file__).resolve().parent
 SERVER = DEMO_DIR.parent / "mr_dashboard" / "server.py"
@@ -31,6 +34,7 @@ DEFAULT_SCENARIO = "folio"
 # in the browser never shows up in a screenshot of the demo, and both can run side by side.
 DEFAULT_PORT = 8775
 DEFAULT_GITLAB_PORT = 8776
+DEFAULT_ACTIVITY_S = 90
 # The dashboard only reads a token from a glab configuration host whose name contains "gitlab".
 TOKEN_HOST = "gitlab.demo"
 DEMO_TOKEN = "demo"
@@ -47,6 +51,7 @@ def main():
     parser.add_argument("--scenario", choices=scenarios(), default=DEFAULT_SCENARIO, help="project to serve (default: %(default)s)")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="dashboard's port (default: %(default)s)")
     parser.add_argument("--gitlab-port", type=int, default=DEFAULT_GITLAB_PORT, help="fake GitLab's port (default: %(default)s)")
+    parser.add_argument("--activity", type=int, default=DEFAULT_ACTIVITY_S, help="average seconds between two changes by the team, 0 for none (default: %(default)s)")
     parser.add_argument("--gitlab-only", action="store_true", help="only start the fake GitLab")
     parser.add_argument("--no-open", action="store_true", help="do not open the browser")
     parser.add_argument("--quiet", action="store_true", help="do not log every request")
@@ -74,6 +79,8 @@ def main():
             )
         except OSError as error:
             sys.exit(f"Port {args.gitlab_port} unavailable for the fake GitLab ({error.strerror}): try --gitlab-port.")
+        if args.activity:
+            Activity(gitlab.project, args.activity, args.quiet).start()
         glab_config = work_dir / "glab-config.yml"
         glab_config.write_text(GLAB_CONFIG, encoding="utf-8")
         command = [

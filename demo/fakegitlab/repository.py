@@ -75,8 +75,10 @@ def build(
     branches = {iid: BranchRecord(branch.name, branch.target) for iid, branch in history.BRANCHES.items()}
     for _, _, action in sorted(_events(history), key=lambda event: (-event[0], event[1])):
         action(builder, branches)
+    later = {iid: builder.later(branches[iid], commits) for iid, commits in history.LATER.items()}
     origin = root / "origin.git"
-    git(root, "clone", "--quiet", "--bare", str(work), str(origin))
+    # A mirror, so that the later commits, kept under refs/demo/later, come along.
+    git(root, "clone", "--quiet", "--mirror", str(work), str(origin))
     for iid, branch in history.BRANCHES.items():
         record = branches[iid]
         git(origin, "update-ref", f"refs/merge-requests/{iid}/head", record.pushes[-1].head)
@@ -89,7 +91,9 @@ def build(
     return Repository(
         origin,
         clone,
-        branches
+        branches,
+        later,
+        builder
     )
 
 
@@ -183,6 +187,20 @@ class _Builder:
         git(self.work, "add", "--all")
         git(self.work, "commit", "--quiet", "--message", commit.title, env=self._identity(commit.author, hours_before))
 
+    def later(self, record, commits):
+        """Commits made on a branch now but published later: kept under refs/demo/later, the branch left as is."""
+        self._checkout(record.name)
+        published = self.rev(record.name)
+        for commit in commits:
+            self.commit(record.name, commit, 0)
+        head = self.rev(record.name)
+        git(self.work, "update-ref", f"refs/demo/later/{record.name}", head)
+        git(self.work, "reset", "--quiet", "--hard", published)
+        return head
+
+    def identity(self, username, hours_before):
+        return self._identity(username, hours_before)
+
     def merge(self, record, iid, merger, hours_before, squash=False):
         self._checkout(record.target)
         identity = self._identity(merger, hours_before)
@@ -230,12 +248,43 @@ class Repository:
             self,
             origin,
             clone,
-            branches
+            branches,
+            later=None,
+            builder=None
     ):
         self.origin = origin
         self.clone = clone
         self.branches = branches
+        self.later = later or {}
+        self._builder = builder
         self._commits = {}
+
+    def publish_later(self, iid, hours_before):
+        """Pushes the later commits of a merge request: its branch and its merge request ref move to them."""
+        record = self.branches[iid]
+        head = self.later.pop(iid)
+        previous = record.pushes[-1].head
+        git(self.origin, "update-ref", f"refs/heads/{record.name}", head)
+        git(self.origin, "update-ref", f"refs/merge-requests/{iid}/head", head)
+        start = self.tip(record.target)
+        push = PushRecord(hours_before, head, start, self.merge_base(head, start),
+                          git(self.origin, "rev-list", "--reverse", f"{previous}..{head}").stdout.split())
+        record.pushes.append(push)
+        return push
+
+    def merge_now(self, iid, username, hours_before):
+        """Merges a merge request into its target with a merge commit, as GitLab does on the server: no checkout."""
+        record = self.branches[iid]
+        target = self.tip(record.target)
+        head = record.pushes[-1].head
+        tree = git(self.origin, "merge-tree", "--write-tree", target, head).stdout.split()[0]
+        message = f"Merge branch '{record.name}' into '{record.target}'\n\nSee merge request !{iid}"
+        commit = git(self.origin, "commit-tree", tree, "-p", target, "-p", head, "-m", message,
+                     env=self._builder.identity(username, hours_before)).stdout.strip()
+        git(self.origin, "update-ref", f"refs/heads/{record.target}", commit)
+        git(self.origin, "update-ref", "-d", f"refs/heads/{record.name}")
+        record.merge_commit = commit
+        return commit
 
     def commit(self, sha):
         if sha not in self._commits:
