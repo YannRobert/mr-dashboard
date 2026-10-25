@@ -296,6 +296,8 @@ reloaded; **Original prompt** restores it.
 - **Effort** selects the effort level: `claude --effort` (from *Low* to *Max*), Codex's
   `-c model_reasoning_effort` (from *Low* to *Ultra*) or `pi --thinking` (from *Off* to *Max*). Only the levels the chosen model supports are listed, the recommended one
   flagged; a model without effort levels greys the list out.
+- **Copy command** copies the agent's command line with the model, the effort level and the prompt, quoted
+  for bash and zsh, to paste into a terminal open on the repository.
 - **Open in** is greyed out while a launch runs, until its agent starts. Within two minutes of a session
   started for the same prompt, agent and target, it first asks whether to start another one.
 - **Close**, Escape or a click outside the dialog close it. The button has a red outline when the MR
@@ -339,7 +341,8 @@ catalogue offers none, and the dialog says why. With or without a catalogue, the
 ### Where sessions open
 
 `--launch-in` (`LAUNCH_IN` in a profile) names where the dialog's **Open in …** button can open a new tab on
-`--repo-dir` and start the chosen agent there with the prompt, model and effort chosen. Given several
+`--repo-dir`, or in the MR's worktree when one has its branch checked out (`git worktree list`), and start the
+chosen agent there with the prompt, model and effort chosen. Given several
 times (`--launch-in orca --launch-in terminal:terminator`, or `LAUNCH_IN=(orca terminal:terminator)` in a
 profile), it offers them in the menu beside **Open in**, in that order: the session opens where you pick at
 the last moment, should one of them fail you, and the browser remembers the choice. Each time the dialog

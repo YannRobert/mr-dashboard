@@ -20,6 +20,9 @@ window.MrAi = (() => {
       "dialog.aria": p => `Prompt pour ${p.agent}`,
       "dialog.close": "Fermer",
       "dialog.copy": "Copier",
+      "dialog.copyCommand": "Copier la commande",
+      "dialog.copyCommand.title": p => `Copie la commande qui lance ${p.agent} avec ce prompt, ce modèle et cet effort, à coller dans un terminal ouvert sur le dépôt`,
+      "dialog.copiedCommand": "Commande copiée",
       "dialog.copied": "Copié",
       "dialog.launch": p => `Ouvrir dans ${p.target}`,
       "dialog.launch.title": p => `Lance ${p.agent} avec ce prompt dans un nouvel onglet de ${p.target}, dans le worktree de la MR s'il existe, sinon à la racine du dépôt`,
@@ -71,6 +74,9 @@ window.MrAi = (() => {
       "dialog.aria": p => `Prompt for ${p.agent}`,
       "dialog.close": "Close",
       "dialog.copy": "Copy",
+      "dialog.copyCommand": "Copy command",
+      "dialog.copyCommand.title": p => `Copy the command that starts ${p.agent} with this prompt, model and effort, to paste into a terminal open on the repository`,
+      "dialog.copiedCommand": "Command copied",
       "dialog.copied": "Copied",
       "dialog.launch": p => `Open in ${p.target}`,
       "dialog.launch.title": p => `Start ${p.agent} with this prompt in a new ${p.target} tab, in the MR's worktree if there is one, else at the root of the repository`,
@@ -199,6 +205,7 @@ window.MrAi = (() => {
         <label class="ai-model" id="ai-model-label" hidden><span id="ai-model-name"></span> <select id="ai-model"></select></label>
         <label class="ai-model" id="ai-effort-label" hidden><span id="ai-effort-name"></span> <select id="ai-effort"></select></label>
         <span class="ai-launch" id="ai-launch-group" hidden><button type="button" id="ai-launch" class="with-icon"><span class="ai-icon" id="ai-launch-icon"></span><span id="ai-launch-label"></span></button><select id="ai-target"></select></span>
+        <button type="button" id="ai-copy-command"></button>
         <button type="button" id="ai-copy" class="primary"></button>
       </div>`;
     document.body.append(dialog);
@@ -230,6 +237,7 @@ window.MrAi = (() => {
     part("ai-effort").addEventListener("change", keepEffort);
     part("ai-reset").addEventListener("click", resetDraft);
     part("ai-copy").addEventListener("click", copy);
+    part("ai-copy-command").addEventListener("click", copyCommand);
     part("ai-launch").addEventListener("click", launchSession);
     part("ai-agent").addEventListener("change", () => {
       try {
@@ -324,6 +332,9 @@ window.MrAi = (() => {
     part("ai-reset").textContent = t("dialog.reset");
     part("ai-reset").title = t("dialog.reset.title");
     part("ai-copy").textContent = t("dialog.copy");
+    part("ai-copy-command").textContent = t("dialog.copyCommand");
+    part("ai-copy-command").title = t("dialog.copyCommand.title");
+    part("ai-copy-command").hidden = !agent();
   }
 
   // Alias: the version it points to today, if Claude Code provides it ("Opus (5.5)").
@@ -491,6 +502,7 @@ window.MrAi = (() => {
   function syncSendButtons() {
     const empty = !dialog.dataset.action || !promptToSend();
     part("ai-copy").disabled = empty;
+    part("ai-copy-command").disabled = empty;
     // Greyed out while a launch runs, until its agent starts: a second click would open a second tab.
     part("ai-launch").disabled = empty || launching || !launchTarget();
   }
@@ -540,18 +552,44 @@ window.MrAi = (() => {
   const promptToSend = () => part("ai-text").value.trimEnd();
 
   async function copy() {
-    const text = promptToSend();
+    await copyText(promptToSend());
+    part("ai-copied").textContent = t("dialog.copied");
+  }
+
+  // The agent's command line with the chosen model, level and the prompt, quoted for bash and zsh, as the server
+  // would start it (see agents.py), to paste into a terminal open on the repository.
+  async function copyCommand() {
+    const chosen = agent();
+    const model = part("ai-model").value;
+    const effort = part("ai-effort").value;
+    const words = [
+      chosen.program,
+      ...(model ? chosen.modelOption.map(word => word.replace("{model}", model)) : []),
+      ...(effort ? chosen.effortOption.map(word => word.replace("{effort}", effort)) : []),
+      promptToSend(),
+    ];
+    await copyText(words.map(shellQuote).join(" "));
+    part("ai-copied").textContent = t("dialog.copiedCommand");
+  }
+
+  // A word as the shell reads it back: as is when made of safe characters, else between single quotes.
+  const shellQuote = word => (/^[A-Za-z0-9_./:=@%+,-]+$/.test(word) ? word : `'${word.replaceAll("'", "'\\''")}'`);
+
+  async function copyText(text) {
     try {
       await navigator.clipboard.writeText(text);
     } catch (ignored) {
-      // Fallback copy, which only copies the selection: the cursor then returns where it was.
-      const box = part("ai-text");
-      const { selectionStart, selectionEnd } = box;
-      box.setSelectionRange(0, text.length);
+      // Fallback copy, which only copies a selection: through a hidden text box, the dialog's left as it was.
+      const box = document.createElement("textarea");
+      box.value = text;
+      box.setAttribute("readonly", "");
+      box.style.position = "fixed";
+      box.style.opacity = "0";
+      dialog.append(box);
+      box.select();
       document.execCommand("copy");
-      box.setSelectionRange(selectionStart, selectionEnd);
+      box.remove();
     }
-    part("ai-copied").textContent = t("dialog.copied");
   }
 
   // The prompt file disappears once the agent starts (see launches.py): the only proof it runs, since the

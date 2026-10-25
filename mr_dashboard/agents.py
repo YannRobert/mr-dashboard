@@ -64,12 +64,20 @@ class Agent:
     def find(self, model_id):
         return next((model for model in self.models() if model["id"] == model_id), None)
 
+    # How the command line names the model and the effort level: arguments where {model} and {effort} are replaced.
+    MODEL_OPTION = ()
+    EFFORT_OPTION = ()
+
     def options(self, model, effort):
         """The command line options of the model and the effort level, both already checked against the menus."""
-        return []
+        return [*(part.format(model=model) for part in (self.MODEL_OPTION if model else ())),
+                *(part.format(effort=effort) for part in (self.EFFORT_OPTION if effort else ()))]
 
     def describe(self):
-        return {"id": self.id, "name": self.name, "models": self.models(), "efforts": list(self.efforts(None))}
+        """The agent as the dialog's menus and its command copy need it."""
+        return {"id": self.id, "name": self.name, "program": self.program, "models": self.models(),
+                "efforts": list(self.efforts(None)), "modelOption": list(self.MODEL_OPTION),
+                "effortOption": list(self.EFFORT_OPTION)}
 
 
 class ClaudeCode(Agent):
@@ -86,8 +94,8 @@ class ClaudeCode(Agent):
         choice = self.find(model) if model else None
         return choice["efforts"] if choice else claude_models.EFFORTS
 
-    def options(self, model, effort):
-        return [*(["--model", model] if model else []), *(["--effort", effort] if effort else [])]
+    MODEL_OPTION = ("--model", "{model}")
+    EFFORT_OPTION = ("--effort", "{effort}")
 
 
 class Codex(Agent):
@@ -128,8 +136,8 @@ class Codex(Agent):
         common = set.intersection(*lists) if lists else set()
         return [level for level in (self.models()[0]["efforts"] if lists else []) if level in common]
 
-    def options(self, model, effort):
-        return [*(["-m", model] if model else []), *(["-c", f"model_reasoning_effort={effort}"] if effort else [])]
+    MODEL_OPTION = ("-m", "{model}")
+    EFFORT_OPTION = ("-c", "model_reasoning_effort={effort}")
 
 
 class Pi(Agent):
@@ -170,8 +178,8 @@ class Pi(Agent):
         choice = self.find(model) if model else None
         return choice["efforts"] if choice else PI_THINKING
 
-    def options(self, model, effort):
-        return [*(["--model", model] if model else []), *(["--thinking", effort] if effort else [])]
+    MODEL_OPTION = ("--model", "{model}")
+    EFFORT_OPTION = ("--thinking", "{effort}")
 
 
 AGENTS = (ClaudeCode(), Codex(), Pi())
