@@ -289,10 +289,12 @@ reloaded; **Original prompt** restores it.
     cache Claude Code maintains itself (`~/.claude/cache/model-catalog/`, reread every time the dialog
     opens), so new models show up without changing anything here; without that cache, only the aliases
     are offered.
-  - Pi (`pi --model`): the models of `pi --list-models`.
-  - Codex lists no models offline: its sessions run on the model of its configuration.
-- **Effort** selects the effort level: `claude --effort` (from *Low* to *Max*) or `pi --thinking`
-  (from *Off* to *Max*). Only the levels the chosen model supports are listed, the recommended one
+  - Codex (`codex -m`): the models of its catalogue, `codex debug models`, but those it hides.
+  - Pi (`pi --model`): the models of `pi --list-models`, grouped by provider.
+
+  Codex's and Pi's lists are read again after 24 hours, or when the server restarts.
+- **Effort** selects the effort level: `claude --effort` (from *Low* to *Max*), Codex's
+  `-c model_reasoning_effort` (from *Low* to *Ultra*) or `pi --thinking` (from *Off* to *Max*). Only the levels the chosen model supports are listed, the recommended one
   flagged; a model without effort levels greys the list out.
 - **Open in** is greyed out while a launch runs, until its agent starts. Within two minutes of a session
   started for the same prompt, agent and target, it first asks whether to start another one.
