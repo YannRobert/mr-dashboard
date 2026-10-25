@@ -6,6 +6,7 @@ them, plus "provider" for an agent that groups its models by provider). An agent
 configuration.
 """
 import json
+import os
 import re
 import shlex
 import shutil
@@ -20,6 +21,10 @@ MODELS_TIMEOUT_S = 10
 # How long a model list read from an agent's command is reused: models change seldom, and the agent refreshes its
 # own catalogue. A failed reading is not kept, and a restart of the server reads again.
 MODELS_CACHE_S = 24 * 3600
+# A failed reading is tried again after this delay only, so that a broken agent does not slow every dialog down.
+MODELS_RETRY_S = 600
+# Looking an agent up in the user's login shell, whose PATH may hold more than the server's (nvm, ~/.local/bin).
+LOOKUP_TIMEOUT_S = 5
 # A model of `codex debug models`, as `codex -m` takes it.
 CODEX_MODEL = re.compile(r"^[A-Za-z0-9._-]+$")
 # A model of `pi --list-models`: provider and model, as `pi --model provider/id` takes it.
@@ -40,18 +45,30 @@ class Agent:
         self._lock = threading.Lock()
         self._models = None
         self._models_at = 0
+        self._installed = None
 
     def installed(self):
-        return shutil.which(self.program) is not None
+        """Whether the program is on the server's PATH or on that of the user's login shell, the one its tab runs:
+        an agent installed through nvm or in ~/.local/bin is often only on the latter. Asked once."""
+        if self._installed is None:
+            self._installed = shutil.which(self.program) is not None or self._in_login_shell()
+        return self._installed
+
+    def _in_login_shell(self):
+        try:
+            # Interactive too: nvm and the like set the PATH in ~/.zshrc or ~/.bashrc, which a login shell alone skips.
+            result = subprocess.run([os.environ.get("SHELL") or "/bin/sh", "-l", "-i", "-c", f"command -v {shlex.quote(self.program)}"],
+                                    stdin=subprocess.DEVNULL, capture_output=True, timeout=LOOKUP_TIMEOUT_S, check=False)
+        except (OSError, subprocess.TimeoutExpired):
+            return False
+        return result.returncode == 0
 
     def _cached(self, read):
-        """The model list read(), kept MODELS_CACHE_S; an empty reading is retried next time."""
+        """The model list read(), kept MODELS_CACHE_S; an empty reading is kept MODELS_RETRY_S only."""
         with self._lock:
-            if self._models is None or time.time() - self._models_at > MODELS_CACHE_S:
-                models = read()
-                if not models:
-                    return []
-                self._models, self._models_at = models, time.time()
+            age = time.time() - self._models_at
+            if self._models is None or age > (MODELS_CACHE_S if self._models else MODELS_RETRY_S):
+                self._models, self._models_at = read(), time.time()
             return self._models
 
     def models(self):
@@ -82,10 +99,14 @@ class Agent:
 
 class ClaudeCode(Agent):
     """Claude Code deletes the prompt file itself once started, through a SessionStart hook (see launches.py): the
-    surest sign that it runs."""
+    surest sign that it runs. Always offered, as before other agents came: if the tab's shell does not find it,
+    the dialog says the agent did not start."""
 
     def __init__(self):
         super().__init__("claude", "Claude Code", "claude")
+
+    def installed(self):
+        return True
 
     def models(self):
         return claude_models.choices()

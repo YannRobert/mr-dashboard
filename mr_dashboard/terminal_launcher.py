@@ -1,10 +1,10 @@
-"""Opens in a terminal of the user's choice a Claude Code session in charge of an AI button action on a MR.
+"""Opens in a terminal of the user's choice a coding agent's session in charge of an AI button action on a MR.
 
 The terminal is named, never guessed: a preset of PRESETS, or a command template of the user's own. Either opens
-a new tab (or window, for terminals without tabs) on the tracked repository (--repo-dir), running the user's
+a new tab (or window, for terminals without tabs) on the MR's worktree or the tracked repository, running the user's
 login shell, which starts the agent with the prompt and, once it exits, stays open as an ordinary shell.
 
-A template is a command line where {dir} is the tracked repository, {title} the tab's title and {command} the
+A template is a command line where {dir} is the folder of the tab (the MR's worktree or the tracked repository), {title} the tab's title and {command} the
 command line to run, given as a single argument: for instance "mlterm --title {title} -e sh -c {command}".
 """
 import os
@@ -115,7 +115,8 @@ class TerminalLauncher:
         stays open as an ordinary shell."""
         shell = os.environ.get("SHELL") or "/bin/sh"
         script = f"printf '\\033]0;%s\\007' {shlex.quote(title)}; {agent_command}; exec {shlex.quote(shell)} -l"
-        argv = [shell, "-l", "-c", script]
+        # Login and interactive, as in any tab: the PATH then holds what ~/.zshrc or ~/.bashrc adds (nvm and the like).
+        argv = [shell, "-l", "-i", "-c", script]
         values = {
             "dir": str(folder),
             "title": title,

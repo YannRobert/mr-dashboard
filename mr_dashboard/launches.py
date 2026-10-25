@@ -38,7 +38,7 @@ class LaunchError(Exception):
 
 class Launch:
     """The files of one launch, written by prepare(). Files are never deleted here on error: the tab may have
-    been created anyway, and its shell would then read them too late. Without the prompt, claude does not start
+    been created anyway, and its shell would then read them too late. Without the prompt, the agent does not start
     at all rather than start with no instructions."""
 
     def __init__(
@@ -68,7 +68,10 @@ class Launch:
         reserves (zsh's prompt is its PS1)."""
         if self._agent is not None and self._agent.id != "claude":
             agent = agents.command(self._agent, self._agent.options(self._model, self._effort))
-            return (f"rm -f '{self.shell_file}'; [ -f '{self.prompt_file}' ] && {{ mr_dashboard_prompt=\"$(cat '{self.prompt_file}')\"; "
+            # The prompt is only taken once the agent is found: otherwise it stays, and the page says the agent did
+            # not start.
+            return (f"rm -f '{self.shell_file}'; [ -f '{self.prompt_file}' ] && command -v {shlex.quote(self._agent.program)} >/dev/null "
+                    f"&& {{ mr_dashboard_prompt=\"$(cat '{self.prompt_file}')\"; "
                     f"rm -f '{self.prompt_file}' '{self.settings_file}'; {agent} \"$mr_dashboard_prompt\"; }}")
         model_option = f"--model {shlex.quote(self._model)} " if self._model else ""
         effort_option = f"--effort {shlex.quote(self._effort)} " if self._effort else ""
@@ -96,6 +99,9 @@ def prepare(
         if time.time() - stale.stat().st_mtime > PROMPT_MAX_AGE_S:
             stale.unlink(missing_ok=True)
     prompt_file = PROMPT_DIR / f"MR{iid}-{secrets.token_hex(4)}.md"
+    # A prompt starting with - or @ would be read as an option, or a file for Pi: a line break before it avoids that.
+    if prompt[:1] in ("-", "@"):
+        prompt = "\n" + prompt
     prompt_file.write_text(prompt, encoding="utf-8")
     prompt_file.chmod(0o600)
     settings_file = prompt_file.with_suffix(".settings.json")

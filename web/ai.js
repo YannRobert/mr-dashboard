@@ -161,7 +161,9 @@ window.MrAi = (() => {
     params = {}
   ) {
     const text = TEXTS[lang][key];
-    return typeof text === "function" ? text({ target: launchTarget()?.name, agent: agent()?.name ?? "Claude Code", ...params }) : text;
+    // Without a target that can open a tab now, the first one offered still names the button and its tooltips.
+    const target = launchTarget() ?? launchTargets()[0];
+    return typeof text === "function" ? text({ target: target?.name, agent: agent()?.name ?? "Claude Code", ...params }) : text;
   }
 
   function escapeHtml(value) {
@@ -268,6 +270,9 @@ window.MrAi = (() => {
     return agents.find(candidate => candidate.id === picked) ?? agents.find(candidate => candidate.id === saved) ?? agents[0] ?? null;
   }
 
+  // A single target shows no menu, unless it cannot open a tab now: the menu then says why.
+  const targetMenuShown = () => launchTargets().length > 1 || launchTargets().some(target => unavailable[target.id]);
+
   // The launch target picked in the menu, else the one picked last time, else the first offered, among those that can
   // open a tab now; null without any.
   function launchTarget() {
@@ -328,7 +333,7 @@ window.MrAi = (() => {
     part("ai-effort-name").textContent = t("dialog.effort");
     syncEfforts(part("ai-effort").value);
     // With a menu, the button reads "Open in" and the menu beside it names the target.
-    part("ai-launch-label").textContent = t(launchTargets().length > 1 ? "dialog.launch.in" : "dialog.launch");
+    part("ai-launch-label").textContent = t(targetMenuShown() ? "dialog.launch.in" : "dialog.launch");
     part("ai-reset").textContent = t("dialog.reset");
     part("ai-reset").title = t("dialog.reset.title");
     part("ai-copy").textContent = t("dialog.copy");
@@ -444,7 +449,7 @@ window.MrAi = (() => {
       const label = reason ? t("dialog.target.unavailable", { name: target.name, reason }) : target.name;
       return `<option value="${escapeHtml(target.id)}"${target.id === chosen?.id ? " selected" : ""}${reason ? " disabled" : ""}>${escapeHtml(label)}</option>`;
     }).join("");
-    part("ai-target").hidden = targets.length < 2;
+    part("ai-target").hidden = !targetMenuShown();
     // Shown even when no target can open a tab now: the greyed-out button and its menu say why.
     part("ai-launch-group").hidden = !targets.length;
     // The agent, its model and level only matter for a launch. They stay in place for every agent, greyed out on
@@ -566,7 +571,9 @@ window.MrAi = (() => {
       chosen.program,
       ...(model ? chosen.modelOption.map(word => word.replace("{model}", model)) : []),
       ...(effort ? chosen.effortOption.map(word => word.replace("{effort}", effort)) : []),
-      promptToSend(),
+      // As the server does (see launches.py): a line break before a prompt starting with - or @, which would
+      // otherwise be read as an option or a file.
+      /^[-@]/.test(promptToSend()) ? `\n${promptToSend()}` : promptToSend(),
     ];
     await copyText(words.map(shellQuote).join(" "));
     part("ai-copied").textContent = t("dialog.copiedCommand");

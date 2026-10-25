@@ -1,4 +1,4 @@
-"""Opens in herdr, the terminal multiplexer for coding agents, a Claude Code session in charge of an AI button action
+"""Opens in herdr, the terminal multiplexer for coding agents, a coding agent's session in charge of an AI button action
 on a MR.
 
 herdr is driven through its CLI, which talks to the running herdr session: a new tab on the tracked repository
@@ -13,6 +13,7 @@ import launches
 from launches import LaunchError
 
 COMMAND_TIMEOUT_S = 30
+STATUS_TIMEOUT_S = 3
 
 
 class HerdrLauncher:
@@ -34,13 +35,14 @@ class HerdrLauncher:
         return cls(herdr, repo_dir) if herdr else None
 
     def unavailable(self):
-        """Why herdr cannot open a tab now, or None: its server must be running."""
+        """Why herdr cannot open a tab now, or None: only when its status says its server is not running. A status
+        that does not come in time leaves herdr offered, without holding the dialog."""
         try:
             result = subprocess.run([self._herdr_exe, "status", "server"], capture_output=True, text=True,
-                                    encoding="utf-8", timeout=COMMAND_TIMEOUT_S, check=False)
+                                    encoding="utf-8", timeout=STATUS_TIMEOUT_S, check=False)
         except (OSError, subprocess.TimeoutExpired):
-            return "not answering"
-        return None if "status: running" in result.stdout else "not running"
+            return None
+        return "not running" if "status: not running" in result.stdout else None
 
     def launch(
             self,

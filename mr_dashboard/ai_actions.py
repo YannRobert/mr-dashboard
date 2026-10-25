@@ -6,13 +6,13 @@ reread on every request: an edited prompt can be tried without restarting the se
     [[action]]
     id = "…"            identifier, unique within the file
     label = "…"         label of the choice in the dialog
-    tab = "… !{iid}"    title of the Orca tab, {iid} replaced by the MR number (default: label)
+    tab = "… !{iid}"    title of the session's tab, {iid} replaced by the MR number (default: label)
     prompt = "…"        prompt, whose variables the page replaces (see README)
     when = "to-fix"     optional: action offered only when the MR has something to fix
-    model = "sonnet"    optional: model preselected for the Orca session, an alias or a specific version
-    effort = "low"      optional: effort level preselected for the Orca session, one of EFFORTS
+    model = "sonnet"    optional: Claude Code's model preselected for the session, an alias or a specific version
+    effort = "low"      optional: Claude Code's effort level preselected for the session, one of EFFORTS
     voice = "…"         optional: English line the dashboard voice appends to "Yes sir!" when the action
-                        is launched in Orca
+                        is launched
 
 Without the file, the catalog comes down to the fix action, with the prompt computed by the page. Either way,
 it ends with the free action, with an empty prompt to write in the dialog.
@@ -21,14 +21,13 @@ import tomllib
 from pathlib import Path
 
 import agents
-import claude_models
 from claude_models import ALIASES, EFFORTS, SAFE_ID
 
 CATALOG_PATH = Path(".mr-dashboard") / "ai-actions.toml"
 DEFAULT_ACTIONS = [
     {"id": "fix", "label": None, "tab": "Fix MR !{iid}", "prompt": "{fix_context}", "when": "to-fix", "model": None, "effort": None, "voice": None},
 ]
-# Prompt written in the dialog: any model, without typing the claude command in Orca.
+# Prompt written in the dialog: any agent and model, without typing the agent's command in its tab.
 FREE_ACTION = {"id": "free", "label": None, "tab": "Claude MR !{iid}", "prompt": "", "when": None, "model": None, "effort": None, "voice": None}
 WHEN_VALUES = {"to-fix"}
 MAX_TAB_CHARS = 80

@@ -9,8 +9,8 @@ them in a menu, the first one chosen until the user picks another.
     terminal:<template>  a terminal, as a command template of your own opens it (see terminal_launcher.py)
 
 Each target has an id (its --launch-in value), a name, shown on the button, unavailable(), why it cannot open a tab
-now (None when it can), and launch(iid, title, prompt, model,
-effort), which opens a tab running the agent and returns what launches.Launch.result gives.
+now (None when it can), and launch(iid, title, prompt, model, effort, agent, worktree), which opens a tab running
+the agent, in the MR's worktree when given, and returns what launches.Launch.result gives.
 """
 import os
 from concurrent.futures import ThreadPoolExecutor

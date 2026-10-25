@@ -30,7 +30,9 @@ dialog.ai-prompt textarea {
   font: 0.9rem/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   color: var(--text); background: var(--surface-2, var(--bg)); border: 1px solid var(--border); border-radius: 0.5rem;
 }
-dialog.ai-prompt .actions { display: flex; justify-content: flex-end; align-items: center; gap: 0.6rem; margin-top: 0.8rem; }
+dialog.ai-prompt .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 0.6rem; margin-top: 0.8rem; }
+/* On a narrow window the row wraps, never a button's label. */
+dialog.ai-prompt .actions button, dialog.ai-prompt .actions label { white-space: nowrap; }
 dialog.ai-prompt .actions button[hidden] { display: none; }
 /* Close on the left, away from the prompt actions, grouped on the right. */
 dialog.ai-prompt .actions .dismiss { margin-right: auto; }
