@@ -28,6 +28,20 @@ PAGE = """<!doctype html>
 <body><h1>Demo GitLab</h1><p>In a real GitLab, this link opens <code>{path}</code>.</p>
 <p>The demo GitLab only answers MisteR Dashboard's API requests: its merge requests exist nowhere else.</p></body></html>
 """
+# What GitLab's front proxy answers while GitLab itself is down.
+OUTAGE_PAGE = """<!doctype html>
+<html><head><title>GitLab is not responding (502)</title></head>
+<body><h1>502</h1><h3>Whoops, GitLab is taking too much time to respond.</h3>
+<p>Try refreshing the page, or going back and attempting the action again.</p></body></html>
+"""
+CONTROL_PAGE = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Demo GitLab controls</title>
+<style>body {{ font: 16px/1.5 system-ui, sans-serif; max-width: 40rem; margin: 4rem auto; padding: 0 1rem; }}
+button {{ font: inherit; padding: 0.5rem 1rem; margin-right: 0.5rem; }}</style></head>
+<body><h1>Demo GitLab</h1><p>GitLab is <strong>{state}</strong>.</p>
+<form method="post"><button formaction="/demo/outage">Break GitLab</button><button formaction="/demo/recovery">Bring GitLab back</button></form>
+<p>While GitLab is down, its API answers 502 and the dashboard's git fetches fail; SonarQube stays up.</p></body></html>
+"""
 
 
 class FakeGitlabServer(ThreadingHTTPServer):
@@ -70,7 +84,11 @@ class FakeGitlabHandler(BaseHTTPRequestHandler):
         query = parse_qs(target.query)
         project = self.server.project
         try:
-            if target.path.startswith("/api/v4/"):
+            if target.path == "/demo":
+                self.send_body(200, CONTROL_PAGE.format(state="down" if project.outage else "up").encode(), "text/html; charset=utf-8")
+            elif project.outage and (target.path.startswith(("/api/v4/", "/api/graphql")) or not target.path.startswith("/api/")):
+                self.send_body(502, OUTAGE_PAGE.encode(), "text/html; charset=utf-8")
+            elif target.path.startswith("/api/v4/"):
                 self.gitlab_get(target.path[len("/api/v4/"):], query)
             elif target.path == "/api/graphql":
                 with project.lock:
@@ -89,9 +107,24 @@ class FakeGitlabHandler(BaseHTTPRequestHandler):
             self.not_served()
 
     def do_POST(self):
+        path = urlsplit(self.path).path
+        if path in ("/demo/outage", "/demo/recovery"):
+            project = self.server.project
+            with project.lock:
+                project.outage = path == "/demo/outage"
+                project.repository.set_reachable(not project.outage)
+            self.send_response(303)
+            self.send_header("Location", "/demo")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        if self.server.project.outage:
+            return self.send_body(502, OUTAGE_PAGE.encode(), "text/html; charset=utf-8")
         self.write("POST")
 
     def do_PUT(self):
+        if self.server.project.outage:
+            return self.send_body(502, OUTAGE_PAGE.encode(), "text/html; charset=utf-8")
         self.write("PUT")
 
     # ---------- GitLab REST ----------

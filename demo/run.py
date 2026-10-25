@@ -8,7 +8,8 @@ GitLab and SonarQube, then the dashboard pointed at them.
 The project, its team and its merge requests are invented (the scenario's dataset.py and history.py) and placed
 relative to the moment the demo starts. The team keeps working while it runs (--activity): pipelines end,
 approvals come in, main breaks and recovers, a merge request is merged, so that the refreshes, notifications and
-sounds have something to show. Nothing is kept: every start begins afresh, in a temporary directory
+sounds have something to show. The fake GitLab's page /demo breaks GitLab and brings it back, to show the
+dashboard during an outage. Nothing is kept: every start begins afresh, in a temporary directory
 that holds the repository, its clone and the dashboard's glab configuration.
 """
 import argparse
@@ -99,7 +100,7 @@ def main():
             "--port", str(args.port),
         ]
         command += ["--quiet"] if args.quiet else []
-        print(f"Demo GitLab: {gitlab.base_url}", flush=True)
+        print(f"Demo GitLab: {gitlab.base_url}, controls (GitLab outage) at {gitlab.base_url}/demo", flush=True)
         if args.gitlab_only:
             print("Dashboard: SONAR_TOKEN=demo no_proxy=127.0.0.1 " + " ".join(command[1:]))
             wait_forever()

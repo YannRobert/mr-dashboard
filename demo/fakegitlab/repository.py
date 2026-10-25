@@ -259,6 +259,15 @@ class Repository:
         self._builder = builder
         self._commits = {}
 
+    def set_reachable(self, reachable):
+        """Moves the bare repository aside, or back: the clone's fetches fail meanwhile, as during a GitLab
+        outage, while the fake GitLab keeps reading it at its other path."""
+        down = self.origin.with_name("origin.git-down")
+        if reachable and self.origin == down:
+            self.origin = down.rename(down.with_name("origin.git"))
+        elif not reachable and self.origin != down:
+            self.origin = self.origin.rename(down)
+
     def publish_later(self, iid, hours_before):
         """Pushes the later commits of a merge request: its branch and its merge request ref move to them."""
         record = self.branches[iid]

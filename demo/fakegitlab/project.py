@@ -233,6 +233,8 @@ class Project:
         self.path = dataset.PROJECT_PATH
         self.web_url = f"{base_url}/{self.path}"
         self.lock = threading.Lock()
+        # GitLab down (see the control page /demo): the API answers 502 and the repository is out of reach.
+        self.outage = False
         self._next_pipeline = FIRST_PIPELINE_ID
         self._next_job = FIRST_JOB_ID
         self.mrs = {}
