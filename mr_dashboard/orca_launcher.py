@@ -9,8 +9,8 @@ Orca is driven through its CLI, in one of two set-ups:
 
 Either way, the terminal types the startup command as is: a POSIX shell command, which bash and zsh run.
 
-The terminal always opens on the tracked repository (--repo-dir): it is Claude that, following the prompt,
-works in the MR's worktree. All tabs thus stay in the same place in Orca.
+The terminal opens in the MR's worktree when one has its branch checked out and Orca knows it, else on the
+tracked repository (--repo-dir).
 """
 import base64
 import json
@@ -95,9 +95,11 @@ class OrcaLauncher:
             prompt,
             model=None,
             effort=None,
-            agent=None
+            agent=None,
+            worktree=None
     ):
-        """Opens the tab and returns {worktree, confirmed, launch}."""
+        """Opens the tab, in the MR's worktree when given and Orca knows it, else at the root of the repository, and
+        returns {worktree, confirmed, launch}."""
         launch = launches.prepare(
             iid,
             prompt,
@@ -106,29 +108,34 @@ class OrcaLauncher:
             agent
         )
         self._raise_orca()
-        try:
-            self._orca([
-                "terminal", "create",
-                "--worktree", "path:" + self._worktree_path(),
-                "--title", title,
-                "--command", launch.shell_command(),
-                "--focus",
-                "--json",
-            ])
-        except LaunchError as error:
-            if NOT_A_PROJECT in str(error):
-                raise LaunchError(f"Orca does not know {self._worktree_path()}: add it to Orca as a project, "
-                                  f"or run orca repo add --path {shlex.quote(self._worktree_path())}") from error
-            if not error.unconfirmed:
-                raise
-            return launch.result(self._repo_dir, confirmed=False)
-        return launch.result(self._repo_dir, confirmed=True)
+        folders = [worktree, self._repo_dir] if worktree and worktree != self._repo_dir else [self._repo_dir]
+        for folder in folders:
+            try:
+                self._orca([
+                    "terminal", "create",
+                    "--worktree", "path:" + self._orca_path(folder),
+                    "--title", title,
+                    "--command", launch.shell_command(),
+                    "--focus",
+                    "--json",
+                ])
+            except LaunchError as error:
+                # Orca opens no tab in a folder it does not know: the root of the repository then, if not tried yet.
+                if NOT_A_PROJECT in str(error) and folder != folders[-1]:
+                    continue
+                if NOT_A_PROJECT in str(error):
+                    raise LaunchError(f"Orca does not know {self._orca_path(folder)}: add it to Orca as a project, "
+                                      f"or run orca repo add --path {shlex.quote(self._orca_path(folder))}") from error
+                if not error.unconfirmed:
+                    raise
+                return launch.result(folder, confirmed=False)
+            return launch.result(folder, confirmed=True)
 
-    def _worktree_path(self):
-        """The tracked repository as Orca sees it: a Windows path to the WSL file system, or the Linux path."""
+    def _orca_path(self, folder):
+        """A folder as Orca sees it: a Windows path to the WSL file system, or the Linux path."""
         if not self._distro:
-            return str(self._repo_dir)
-        return f"\\\\wsl.localhost\\{self._distro}" + str(self._repo_dir).replace("/", "\\")
+            return str(folder)
+        return f"\\\\wsl.localhost\\{self._distro}" + str(folder).replace("/", "\\")
 
     def _raise_orca(self):
         """Best effort, on Windows only: on failure, the creation happens as soon as the user switches to Orca.

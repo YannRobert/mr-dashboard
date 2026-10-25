@@ -49,9 +49,11 @@ class HerdrLauncher:
             prompt,
             model=None,
             effort=None,
-            agent=None
+            agent=None,
+            worktree=None
     ):
-        """Opens the tab and returns {worktree, confirmed, launch}."""
+        """Opens the tab, in the MR's worktree when given, else at the root of the repository, and returns
+        {worktree, confirmed, launch}."""
         launch = launches.prepare(
             iid,
             prompt,
@@ -59,11 +61,12 @@ class HerdrLauncher:
             effort,
             agent
         )
+        folder = worktree or self._repo_dir
         workspace = self._workspace()
         if workspace:
-            reply = self._herdr(["tab", "create", "--workspace", workspace, "--cwd", str(self._repo_dir), "--label", title, "--focus"])
+            reply = self._herdr(["tab", "create", "--workspace", workspace, "--cwd", str(folder), "--label", title, "--focus"])
         else:
-            reply = self._herdr(["workspace", "create", "--cwd", str(self._repo_dir), "--label", self._repo_dir.name, "--focus"])
+            reply = self._herdr(["workspace", "create", "--cwd", str(folder), "--label", self._repo_dir.name, "--focus"])
             # A new workspace's first tab takes the session's title, as later tabs do.
             tab = (reply or {}).get("result", {}).get("tab", {}).get("tab_id")
             if tab:
@@ -73,7 +76,7 @@ class HerdrLauncher:
         except (KeyError, TypeError) as error:
             raise LaunchError(f"herdr: no pane in its answer: {json.dumps(reply)[:200]}") from error
         self._herdr(["pane", "run", pane, launch.shell_command()])
-        return launch.result(self._repo_dir, confirmed=True)
+        return launch.result(folder, confirmed=True)
 
     def _workspace(self):
         """The workspace of the tracked repository: the one labelled with its folder's name, which the first launch

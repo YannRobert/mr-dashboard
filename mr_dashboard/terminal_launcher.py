@@ -75,9 +75,11 @@ class TerminalLauncher:
             prompt,
             model=None,
             effort=None,
-            agent=None
+            agent=None,
+            worktree=None
     ):
-        """Opens the tab and returns {worktree, confirmed, launch}."""
+        """Opens the tab, in the MR's worktree when given, else at the root of the repository, and returns
+        {worktree, confirmed, launch}."""
         launch = launches.prepare(
             iid,
             prompt,
@@ -85,7 +87,8 @@ class TerminalLauncher:
             effort,
             agent
         )
-        argv = self._command(title, launch.shell_command())
+        folder = worktree or self._repo_dir
+        argv = self._command(title, launch.shell_command(), folder)
         try:
             process = subprocess.Popen(
                 argv,
@@ -100,21 +103,21 @@ class TerminalLauncher:
             status = process.wait(timeout=FAILURE_WAIT_S)
         except subprocess.TimeoutExpired:
             process.stderr.close()
-            return launch.result(self._repo_dir, confirmed=True)
+            return launch.result(folder, confirmed=True)
         message = process.stderr.read().decode("utf-8", "replace").strip()
         process.stderr.close()
         if status != 0:
             raise LaunchError(f"{self.name}: {message or f'exit status {status}'}")
-        return launch.result(self._repo_dir, confirmed=True)
+        return launch.result(folder, confirmed=True)
 
-    def _command(self, title, agent_command):
+    def _command(self, title, agent_command, folder):
         """The terminal's command line: the user's login shell sets the tab's title, starts the agent, then
         stays open as an ordinary shell."""
         shell = os.environ.get("SHELL") or "/bin/sh"
         script = f"printf '\\033]0;%s\\007' {shlex.quote(title)}; {agent_command}; exec {shlex.quote(shell)} -l"
         argv = [shell, "-l", "-c", script]
         values = {
-            "dir": str(self._repo_dir),
+            "dir": str(folder),
             "title": title,
             "command": shlex.join(argv),
             "distro": os.environ.get("WSL_DISTRO_NAME", ""),

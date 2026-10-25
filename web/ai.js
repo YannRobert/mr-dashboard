@@ -22,7 +22,7 @@ window.MrAi = (() => {
       "dialog.copy": "Copier",
       "dialog.copied": "Copié",
       "dialog.launch": p => `Ouvrir dans ${p.target}`,
-      "dialog.launch.title": p => `Lance ${p.agent} avec ce prompt dans un nouvel onglet de ${p.target}, sur le worktree principal`,
+      "dialog.launch.title": p => `Lance ${p.agent} avec ce prompt dans un nouvel onglet de ${p.target}, dans le worktree de la MR s'il existe, sinon à la racine du dépôt`,
       "dialog.launch.in": "Ouvrir dans",
       "dialog.launch.again": "Lancer une autre session ?",
       "dialog.target.unavailable": p => `${p.name} (${{ "not running": "pas lancé", "not answering": "ne répond pas", "no session": "aucune session" }[p.reason] ?? p.reason})`,
@@ -73,7 +73,7 @@ window.MrAi = (() => {
       "dialog.copy": "Copy",
       "dialog.copied": "Copied",
       "dialog.launch": p => `Open in ${p.target}`,
-      "dialog.launch.title": p => `Start ${p.agent} with this prompt in a new ${p.target} tab, on the main worktree`,
+      "dialog.launch.title": p => `Start ${p.agent} with this prompt in a new ${p.target} tab, in the MR's worktree if there is one, else at the root of the repository`,
       "dialog.launch.in": "Open in",
       "dialog.launch.again": "Start another session?",
       "dialog.target.unavailable": p => `${p.name} (${p.reason})`,
@@ -580,7 +580,7 @@ window.MrAi = (() => {
     document.dispatchEvent(new CustomEvent("mr-dashboard:launch", { detail: { step, subject } }));
   }
 
-  // The server opens a tab of the launch target on the main worktree, which starts Claude Code with the
+  // The server opens a tab of the launch target, in the MR's worktree or at the repository root, which starts the agent with the
   // displayed prompt.
   const launchKey = () => `${draftKey()} ${agent()?.id} ${launchTarget()?.id}`;
 
@@ -621,6 +621,8 @@ window.MrAi = (() => {
             model: part("ai-model").value || null,
             effort: part("ai-effort").value || null,
             target: launchTarget().id,
+            // The server opens the session in the worktree of this branch, when there is one.
+            branch: current.mr.source_branch ?? null,
             agent: agent()?.id ?? "claude",
           }),
         }

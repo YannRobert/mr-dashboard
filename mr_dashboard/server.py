@@ -16,7 +16,8 @@ before forwarding it.
 Local actions, over POST:
     /launch       starts a coding agent with the prompt of a MR's AI button action, in a tab of one of the
                 launch targets (see launch_targets.py): {"iid", "action", "prompt", "agent", "model", "effort",
-                "target"}, agent being an installed agent's id (default: claude, see agents.py) and target a
+                "target", "branch"}, the session opening in the worktree of the MR's branch when there is
+                one, agent being an installed agent's id (default: claude, see agents.py) and target a
                 launch target's id (default: the first one);
                 GET /ai/actions returns the catalog (see ai_actions.py),
                 GET /launch/status?launch= tells whether the shell, then the agent, started in a launch's tab,
@@ -396,6 +397,7 @@ def make_handler(
                 model = payload.get("model")
                 effort = payload.get("effort")
                 target_id = payload.get("target")
+                branch = payload.get("branch")
                 agent = agents.find(str(payload.get("agent") or "claude"))
             except (ValueError, KeyError, TypeError):
                 self.send_json(400, {"message": "invalid request"})
@@ -432,7 +434,9 @@ def make_handler(
                     prompt,
                     model,
                     effort,
-                    agent
+                    agent,
+                    # The MR's worktree, found by the server from its branch: a path from the page is never trusted.
+                    git.worktree_of(str(branch)) if branch else None
                 )
             except LaunchError as error:
                 self.send_json(502, {"message": str(error)})
