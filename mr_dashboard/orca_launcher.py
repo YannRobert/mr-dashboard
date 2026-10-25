@@ -52,11 +52,9 @@ if (-not [OrcaWindow]::SetForegroundWindow($window)) { exit 1 }
 """
 
 
-# Kept for the server, which still reports Orca's errors under this name.
-OrcaError = LaunchError
-
-
 class OrcaLauncher:
+
+    name = "Orca"
 
     def __init__(
             self,
@@ -113,8 +111,6 @@ class OrcaLauncher:
                 raise
             return launch.result(self._repo_dir, confirmed=False)
         return launch.result(self._repo_dir, confirmed=True)
-
-    progress = staticmethod(launches.progress)
 
     def _worktree_path(self):
         """The tracked repository as Orca sees it: a Windows path to the WSL file system, or the Linux path."""
