@@ -24,6 +24,8 @@ window.MrAi = (() => {
       "dialog.launch": p => `Ouvrir dans ${p.target}`,
       "dialog.launch.title": p => `Lance ${p.agent} avec ce prompt dans un nouvel onglet de ${p.target}, sur le worktree principal`,
       "dialog.launch.in": "Ouvrir dans",
+      "dialog.launch.again": "Lancer une autre session ?",
+      "dialog.launch.recent": p => `${p.agent} a déjà démarré dans ${p.target} pour ce prompt il y a ${p.seconds} s : clique à nouveau pour lancer une autre session.`,
       "dialog.target.title": "Où lancer la session : choisi ici au dernier moment, retenu par le navigateur",
       "dialog.agent": "Agent",
       "dialog.agent.title": "Agent de code qui reçoit le prompt, retenu par le navigateur",
@@ -71,6 +73,8 @@ window.MrAi = (() => {
       "dialog.launch": p => `Open in ${p.target}`,
       "dialog.launch.title": p => `Start ${p.agent} with this prompt in a new ${p.target} tab, on the main worktree`,
       "dialog.launch.in": "Open in",
+      "dialog.launch.again": "Start another session?",
+      "dialog.launch.recent": p => `${p.agent} already started in ${p.target} for this prompt ${p.seconds} s ago: click again to start another session.`,
       "dialog.target.title": "Where to start the session: picked here at the last moment, remembered by the browser",
       "dialog.agent": "Agent",
       "dialog.agent.title": "Coding agent the prompt goes to, remembered by the browser",
@@ -129,6 +133,12 @@ window.MrAi = (() => {
   // Edited prompts, chosen models and effort levels, per MR and per action, until the page reloads: a
   // dialog closed by mistake, or another action tried, does not lose what was changed in it.
   const drafts = new Map();
+  // A session launched lately, by MR, action, agent and target: { at, armed }. A second launch of the same within
+  // RELAUNCH_CONFIRM_S asks for a second click, so that a click on a tab slow to show does not open two.
+  const launched = new Map();
+  const RELAUNCH_CONFIRM_S = 120;
+  const RELAUNCH_ARMED_S = 5;
+  let launching = false;
   const models = new Map();
   const efforts = new Map();
 
@@ -456,7 +466,9 @@ window.MrAi = (() => {
   // Nothing to copy or launch while the prompt is empty: the free action's one, when opened.
   function syncSendButtons() {
     const empty = !dialog.dataset.action || !promptToSend();
-    for (const id of ["ai-launch", "ai-copy"]) part(id).disabled = empty;
+    part("ai-copy").disabled = empty;
+    // Greyed out while a launch runs, until its agent starts: a second click would open a second tab.
+    part("ai-launch").disabled = empty || launching;
   }
 
   // Model chosen for the action, kept like its prompt; the catalog's one need not be.
@@ -527,11 +539,26 @@ window.MrAi = (() => {
 
   // The server opens a tab of the launch target on the main worktree, which starts Claude Code with the
   // displayed prompt.
+  const launchKey = () => `${draftKey()} ${agent()?.id} ${launchTarget()?.id}`;
+
   async function launchSession() {
     const status = part("ai-copied");
+    const recent = launched.get(launchKey());
+    const ago = recent ? Math.round((Date.now() - recent.at) / 1000) : Infinity;
+    if (ago < RELAUNCH_CONFIRM_S && !(recent.armed && Date.now() - recent.armed < RELAUNCH_ARMED_S * 1000)) {
+      recent.armed = Date.now();
+      part("ai-launch-label").textContent = t("dialog.launch.again");
+      status.textContent = t("dialog.launch.recent", { seconds: ago });
+      setTimeout(applyTexts, RELAUNCH_ARMED_S * 1000);
+      return;
+    }
+    launched.delete(launchKey());
+    applyTexts();
+    launching = true;
     part("ai-launch").disabled = true;
     // The messages keep naming the target launched in, even if the menu changes meanwhile.
     const target = { target: launchTarget().name, agent: agent()?.name ?? "Claude Code" };
+    const key = launchKey();
     status.textContent = t("dialog.launch.opening");
     const action = (catalog?.actions ?? []).find(candidate => candidate.id === dialog.dataset.action);
     announce(
@@ -560,6 +587,7 @@ window.MrAi = (() => {
       const outcome = progress.agent ? "launched" : progress.shell ? "aborted" : "lostContact";
       const message = { launched: "dialog.launch.read", aborted: "dialog.launch.unread", lostContact: "dialog.launch.noShell" }[outcome];
       status.textContent = t(message, { seconds: PROMPT_READ_TIMEOUT_S, ...target });
+      if (outcome === "launched") launched.set(key, { at: Date.now(), armed: 0 });
       announce(
         outcome,
         body.title
@@ -568,7 +596,8 @@ window.MrAi = (() => {
       status.textContent = t("dialog.launch.failed", { message: error.message });
       announce("unreachable");
     } finally {
-      part("ai-launch").disabled = false;
+      launching = false;
+      syncSendButtons();
     }
   }
 

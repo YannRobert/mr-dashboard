@@ -293,6 +293,8 @@ reloaded; **Original prompt** restores it.
 - **Effort** selects the effort level: `claude --effort` (from *Low* to *Max*) or `pi --thinking`
   (from *Off* to *Max*). Only the levels the chosen model supports are listed, the recommended one
   flagged; a model without effort levels greys the list out.
+- **Open in** is greyed out while a launch runs, until its agent starts. Within two minutes of a session
+  started for the same prompt, agent and target, it first asks whether to start another one.
 - **Close**, Escape or a click outside the dialog close it. The button has a red outline when the MR
   has something to fix: branch behind or in conflict, imperfect quality indicator, unresolved thread.
 
