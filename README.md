@@ -28,7 +28,8 @@ nobody keeps an IDE open on each of them. The diff of every merge request comes 
 clone, without checking anything out, so neither the author nor the reviewer opens an IDE to read
 it. The **AI** button turns the fix of what is red, and the actions the project defines, such as a
 review or an explanation, into a prompt already filled in for that merge request: one click copies
-it, or opens a new Orca tab and starts Claude Code with it (see [Orca integration](#orca-integration)).
+it, or opens a new tab in Orca, herdr or your terminal and starts Claude Code with it (see
+[Where sessions open](#where-sessions-open)).
 
 `mr_dashboard/server.py` serves the page (`web/index.html`) and relays the GitLab and SonarQube APIs, so that tokens
 never reach the browser. It only listens on `127.0.0.1`.
@@ -66,7 +67,8 @@ dated relative to that moment, in a temporary directory removed on exit.
   (`~/.config/glab-cli/config.yml`): run `glab auth login --hostname gitlab.example.com` once.
 - **`SONAR_TOKEN`** in the environment of the shell that starts the server, if the project uses
   SonarQube. Without it, the Sonar badges stay grey.
-- Optional: [Orca](#orca-integration) and Claude Code, for the AI button's launch action.
+- Optional: Claude Code, with [Orca, herdr or a terminal](#where-sessions-open), for the AI button's launch
+  action.
 
 ## Running
 
@@ -123,7 +125,7 @@ Options given after the profile are passed to `server.py` and win over the profi
 | `--gitlab-host` | yes | GitLab server URL, such as `https://gitlab.example.com` |
 | `--gitlab-project` | yes | project path, not encoded (`group/project`) |
 | `--pipeline-branch` | yes | branch whose latest pipeline is shown below the MR table |
-| `--repo-dir` | yes | local git clone of the tracked project: git actions run there, Orca sessions open there, `.mr-dashboard/ai-actions.toml` is read there |
+| `--repo-dir` | yes | local git clone of the tracked project: git actions run there, the AI button's sessions open there, `.mr-dashboard/ai-actions.toml` is read there |
 | `--port` | no | listening port (default `8765`) |
 | `--target-branch` | no | target branch filtered when the page opens (default: all) |
 | `--gitlab-token-host` | no | host name of the token in the glab configuration (default: the one of `--gitlab-host`) |
@@ -136,6 +138,7 @@ Options given after the profile are passed to `server.py` and win over the profi
 | `--pit-marker` | unless `--no-pit` | beginning of the mutation testing note posted on the MR — see [Mutation report format](#mutation-report-format) |
 | `--no-pit` | no | project without mutation testing: its column, data and notifications disappear |
 | `--git-fetch-interval` | no | seconds between two automatic `git fetch` of the local git clone, `0` for none (default `300`) |
+| `--launch-in` | no | where the AI button opens its sessions: `auto`, `none`, `orca`, `herdr`, `terminal:<preset>` or `terminal:<template>` (default `auto`: Orca when it is found); see [Where sessions open](#where-sessions-open) |
 | `--quiet` | no | do not log each request |
 
 ## Using the dashboard
@@ -272,8 +275,8 @@ The image needs `curl` and `jq`. Then start the dashboard with `--pit-job mutati
 ## AI actions
 
 The **AI** button of an open MR offers the actions of the tracked project's catalogue. The dialog
-shows the chosen action's prompt, to copy into Claude Code or to launch in an Orca tab (see
-[Orca integration](#orca-integration)). The prompt can be edited in the dialog before being copied or
+shows the chosen action's prompt, to copy into Claude Code or to launch in a new tab (see
+[Where sessions open](#where-sessions-open)). The prompt can be edited in the dialog before being copied or
 launched: the edited text is what goes out. It is kept per MR and per action until the page is
 reloaded; **Original prompt** restores it.
 
@@ -323,20 +326,59 @@ Without a catalogue, only the fix action is offered, with `{fix_context}` as its
 catalogue offers none, and the dialog says why. With or without a catalogue, the last action,
 **Free**, opens an empty prompt to write in the dialog; its id `free` is reserved.
 
-### Orca integration
+### Where sessions open
 
-When the server finds Orca, the dialog offers **Open in Orca**: it opens a new Orca tab on `--repo-dir`
-and starts a Claude Code session there with the prompt, model and effort chosen. Two set-ups:
+`--launch-in` (`LAUNCH_IN` in a profile) names where the dialog's **Open in …** button opens a new tab on
+`--repo-dir` and starts a Claude Code session there with the prompt, model and effort chosen. The tab runs
+your login shell, which must understand a POSIX command line, as bash and zsh do.
+
+| `--launch-in` | Opens the tab in |
+|---|---|
+| `auto` (default) | Orca when it is found, else nowhere: prompts are copied |
+| `none` | nowhere, even with Orca installed: prompts are copied |
+| `orca` | [Orca](#orca) |
+| `herdr` | [herdr](#herdr) |
+| `terminal:<preset>` | a [terminal](#terminals) |
+| `terminal:<template>` | a [terminal](#terminals), with a command of your own |
+
+The prompt goes through a short-lived file under `~/.cache/mr-dashboard/`, deleted by the session
+once started.
+
+#### Orca
+
+Two set-ups, found by themselves:
 
 - **Orca on Windows, the dashboard under WSL**: `orca.exe` reachable through Windows interop.
-- **Both on Linux**: `orca` on the `PATH`. The tab runs your login shell, which must understand a
-  POSIX command line, as bash and zsh do.
+- **Both on Linux**: `orca` on the `PATH`.
 
 Orca only opens tabs in its projects: `--repo-dir` must be one of them. Otherwise the dialog says so,
 with the command that adds it (`orca repo add --path <repo-dir>`).
 
-The prompt goes through a short-lived file under `~/.cache/mr-dashboard/`, deleted by the session
-once started. Without Orca, the button is not offered and prompts are copied instead.
+#### herdr
+
+[herdr](https://herdr.dev), the terminal multiplexer for coding agents, must be running (`herdr` in a
+terminal). Sessions open as tabs of a workspace named after `--repo-dir`'s folder, created by the first
+launch, and herdr shows each agent's state in its sidebar.
+
+#### Terminals
+
+A preset opens a new tab, or a new window for terminals without tabs. Once Claude Code exits, the tab
+stays open as an ordinary shell.
+
+| Preset | Opens | Tried |
+|---|---|---|
+| `terminal:gnome-terminal` | a tab of GNOME Terminal | yes |
+| `terminal:terminator` | a tab of Terminator | yes |
+| `terminal:xterm` | a window of xterm | yes |
+| `terminal:tmux` | a window of the running tmux session | no |
+| `terminal:konsole` | a tab of Konsole | no |
+| `terminal:wezterm` | a tab of WezTerm | no |
+| `terminal:kitty` | a tab of kitty, with remote control enabled (`allow_remote_control`) | no |
+| `terminal:windows-terminal` | a tab of Windows Terminal, from WSL | no |
+
+Any other terminal takes a template: a command line where `{dir}` is `--repo-dir`, `{title}` the tab's
+title and `{command}` the command to run, as a single argument, for instance
+`--launch-in 'terminal:mlterm --title {title} -e sh -c {command}'`.
 
 Each step of a launch plays a radio sound followed by a spoken line ("Yes sir!", "Operation underway!"),
 also heard from 🔊. The lines go through the browser's speech synthesis, which needs voices from the

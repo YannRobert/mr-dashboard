@@ -35,7 +35,7 @@ if [[ ! -f "$profile_file" ]]; then
 fi
 profile="$(basename "$profile_file" .conf)"
 
-PORT= GITLAB_HOST= GITLAB_PROJECT= SONAR_ENABLED= SONAR_HOST= SONAR_PROJECT= SONAR_JOB= PIT_ENABLED= PIT_JOB= PIT_MARKER= PIPELINE_BRANCH= TARGET_BRANCH= REPO_DIR= GIT_FETCH_INTERVAL=
+PORT= GITLAB_HOST= GITLAB_PROJECT= SONAR_ENABLED= SONAR_HOST= SONAR_PROJECT= SONAR_JOB= PIT_ENABLED= PIT_JOB= PIT_MARKER= PIPELINE_BRANCH= TARGET_BRANCH= REPO_DIR= GIT_FETCH_INTERVAL= LAUNCH_IN=
 # shellcheck source=profile.example.conf
 source "$profile_file"
 
@@ -67,6 +67,7 @@ fi
 [[ -n "$TARGET_BRANCH" ]] && args+=(--target-branch "$TARGET_BRANCH")
 [[ -n "$REPO_DIR" ]] && args+=(--repo-dir "${REPO_DIR/#\~/$HOME}")
 [[ -n "$GIT_FETCH_INTERVAL" ]] && args+=(--git-fetch-interval "$GIT_FETCH_INTERVAL")
+[[ -n "$LAUNCH_IN" ]] && args+=(--launch-in "$LAUNCH_IN")
 args+=("$@")
 
 # Port actually used: the last occurrence wins, as in argparse.

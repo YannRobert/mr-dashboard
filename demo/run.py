@@ -53,6 +53,7 @@ def main():
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="dashboard's port (default: %(default)s)")
     parser.add_argument("--gitlab-port", type=int, default=DEFAULT_GITLAB_PORT, help="fake GitLab's port (default: %(default)s)")
     parser.add_argument("--activity", type=int, default=DEFAULT_ACTIVITY_S, help="average seconds between two changes by the team, 0 for none (default: %(default)s)")
+    parser.add_argument("--launch-in", default="auto", help="where the AI button opens its sessions, as the dashboard's --launch-in (default: %(default)s)")
     parser.add_argument("--gitlab-only", action="store_true", help="only start the fake GitLab")
     parser.add_argument("--no-open", action="store_true", help="do not open the browser")
     parser.add_argument("--quiet", action="store_true", help="do not log every request")
@@ -98,6 +99,7 @@ def main():
             "--pit-marker", dataset.PIT_MARKER,
             "--repo-dir", str(repo.clone),
             "--port", str(args.port),
+            "--launch-in", args.launch_in,
         ]
         command += ["--quiet"] if args.quiet else []
         print(f"Demo GitLab: {gitlab.base_url}, controls (GitLab outage) at {gitlab.base_url}/demo", flush=True)

@@ -1075,11 +1075,11 @@ const I18N = {
     "soundTest.mergedWhen": "Une MR est mergée, la tienne ou celle d'un autre",
     "soundTest.actions": "Tes actions",
     "soundTest.orcaOrdered": "Radio « Yes sir! »",
-    "soundTest.orcaOrderedWhen": "Tu cliques « Ouvrir dans Orca », suivi de la réplique de l'action",
+    "soundTest.orcaOrderedWhen": "Tu lances une session depuis le bouton AI, suivi de la réplique de l'action",
     "soundTest.orcaLaunched": "Radio « Operation underway! »",
-    "soundTest.orcaLaunchedWhen": "La session Claude Code a démarré dans Orca, suivi du titre de l'onglet",
+    "soundTest.orcaLaunchedWhen": "La session Claude Code a démarré, suivi du titre de l'onglet",
     "soundTest.orcaUnreachable": "Radio « No response from command! »",
-    "soundTest.orcaUnreachableWhen": "Orca ne répond pas ou refuse d'ouvrir l'onglet",
+    "soundTest.orcaUnreachableWhen": "L'onglet n'a pas pu s'ouvrir",
     "soundTest.orcaLostContact": "Radio « We've lost contact! »",
     "soundTest.orcaLostContactWhen": "L'onglet est ouvert, mais son shell ne démarre pas",
     "soundTest.orcaAborted": "Radio « Mission aborted! »",
@@ -1390,11 +1390,11 @@ const I18N = {
     "soundTest.mergedWhen": "An MR is merged, yours or someone else's",
     "soundTest.actions": "Your actions",
     "soundTest.orcaOrdered": "Radio “Yes sir!”",
-    "soundTest.orcaOrderedWhen": "You click “Open in Orca”, followed by the action's line",
+    "soundTest.orcaOrderedWhen": "You start a session from the AI button, followed by the action's line",
     "soundTest.orcaLaunched": "Radio “Operation underway!”",
-    "soundTest.orcaLaunchedWhen": "The Claude Code session started in Orca, followed by the tab title",
+    "soundTest.orcaLaunchedWhen": "The Claude Code session started, followed by the tab title",
     "soundTest.orcaUnreachable": "Radio “No response from command!”",
-    "soundTest.orcaUnreachableWhen": "Orca does not answer or refuses to open the tab",
+    "soundTest.orcaUnreachableWhen": "The tab could not be opened",
     "soundTest.orcaLostContact": "Radio “We've lost contact!”",
     "soundTest.orcaLostContactWhen": "The tab is open, but its shell does not start",
     "soundTest.orcaAborted": "Radio “Mission aborted!”",
@@ -6004,7 +6004,7 @@ document.addEventListener("keydown", e => {
 $("git-fetch").addEventListener("click", () => gitFetch());
 $("git-fetch-auto").addEventListener("change", e => setGitFetchAuto(e.target.checked));
 
-MrAi.init({ lang: state.lang, orcaEnabled: () => !!state.config?.orcaEnabled });
+MrAi.init({ lang: state.lang, launchTarget: () => state.config?.launchTarget ?? null });
 applyStaticTexts();
 applyTheme();
 applyTextScale();
@@ -6035,7 +6035,7 @@ if (window.AudioContext) {
     lostContact: "orcaLostContact",
     aborted: "orcaAborted",
   };
-  document.addEventListener("mr-dashboard:orca", e => {
+  document.addEventListener("mr-dashboard:launch", e => {
     if (state.sound) playSound(
       orcaSounds[e.detail.step],
       e.detail.subject

@@ -1,5 +1,6 @@
 // AI button of an MR: a dialog offers the actions of the tracked project's catalog (see ai_actions.py),
-// and the prompt of the chosen action, to copy into Claude Code or to launch in an Orca tab.
+// and the prompt of the chosen action, to copy into Claude Code or to launch in a tab of the launch target
+// (Orca, herdr, a terminal).
 // Shared by index.html (one row per MR) and diff.html (the diff's MR).
 window.MrAi = (() => {
   const TEXTS = {
@@ -12,23 +13,23 @@ window.MrAi = (() => {
       "dialog.title": p => `Claude Code sur la MR !${p.iid}`,
       "dialog.actions": "Action",
       "dialog.catalogError": p => `Catalogue des actions AI illisible : ${p.message}`,
-      "dialog.hint": "Prompt à compléter ou retoucher ici si besoin, puis à coller dans Claude Code, lancé à la racine du dépôt — ou à lancer directement dans Orca.",
-      "dialog.hint.free": "Prompt à rédiger ici, puis à coller dans Claude Code, lancé à la racine du dépôt — ou à lancer directement dans Orca.",
+      "dialog.hint": p => `Prompt à compléter ou retoucher ici si besoin, puis à coller dans Claude Code, lancé à la racine du dépôt${p.target ? ` — ou à lancer directement dans ${p.target}` : ""}.`,
+      "dialog.hint.free": p => `Prompt à rédiger ici, puis à coller dans Claude Code, lancé à la racine du dépôt${p.target ? ` — ou à lancer directement dans ${p.target}` : ""}.`,
       "dialog.reset": "Prompt d'origine",
       "dialog.reset.title": "Remplace le prompt modifié par celui de l'action",
       "dialog.aria": "Prompt pour Claude Code",
       "dialog.close": "Fermer",
       "dialog.copy": "Copier",
       "dialog.copied": "Copié",
-      "dialog.orca": "Ouvrir dans Orca",
-      "dialog.orca.title": "Lance Claude Code avec ce prompt dans un nouvel onglet Orca, sur le worktree principal",
+      "dialog.launch": p => `Ouvrir dans ${p.target}`,
+      "dialog.launch.title": p => `Lance Claude Code avec ce prompt dans un nouvel onglet de ${p.target}, sur le worktree principal`,
       "dialog.model": "Modèle",
-      "dialog.model.title": "Modèle de la session lancée dans Orca. Un prompt copié prend celui de la session où on le colle : /model pour en changer.",
+      "dialog.model.title": p => `Modèle de la session lancée dans ${p.target}. Un prompt copié prend celui de la session où on le colle : /model pour en changer.`,
       "dialog.model.default": "par défaut",
       "dialog.model.latest": "Dernière version",
       "dialog.model.versions": "Version précise",
       "dialog.effort": "Effort",
-      "dialog.effort.title": "Niveau d'effort de la session lancée dans Orca : bas pour une tâche simple, qui coûte moins, élevé pour une tâche difficile. Un prompt copié prend celui de la session où on le colle : /effort pour en changer.",
+      "dialog.effort.title": p => `Niveau d'effort de la session lancée dans ${p.target} : bas pour une tâche simple, qui coûte moins, élevé pour une tâche difficile. Un prompt copié prend celui de la session où on le colle : /effort pour en changer.`,
       "dialog.effort.default": "par défaut",
       "dialog.effort.low": "Bas",
       "dialog.effort.medium": "Moyen",
@@ -36,13 +37,13 @@ window.MrAi = (() => {
       "dialog.effort.xhigh": "Très élevé",
       "dialog.effort.max": "Maximal",
       "dialog.effort.recommended": p => `${p.level} (recommandé)`,
-      "dialog.orca.opening": "Ouverture dans Orca…",
-      "dialog.orca.opened": "Onglet ouvert dans Orca, en attente du démarrage de Claude Code…",
-      "dialog.orca.unconfirmed": "Orca n'a pas confirmé à temps : bascule sur Orca, l'onglet s'y ouvre dès que sa fenêtre est au premier plan. En attente du démarrage de Claude Code…",
-      "dialog.orca.read": "Session Claude Code démarrée dans Orca",
-      "dialog.orca.noShell": p => `Le shell du terminal n'a pas démarré en ${p.seconds} s : regarde dans Orca`,
-      "dialog.orca.unread": p => `Le shell a démarré, mais pas Claude Code en ${p.seconds} s : regarde dans Orca`,
-      "dialog.orca.failed": p => `Échec : ${p.message}`,
+      "dialog.launch.opening": p => `Ouverture dans ${p.target}…`,
+      "dialog.launch.opened": p => `Onglet ouvert dans ${p.target}, en attente du démarrage de Claude Code…`,
+      "dialog.launch.unconfirmed": p => `${p.target} n'a pas confirmé à temps : bascule sur ${p.target}, l'onglet s'y ouvre dès que sa fenêtre est au premier plan. En attente du démarrage de Claude Code…`,
+      "dialog.launch.read": p => `Session Claude Code démarrée dans ${p.target}`,
+      "dialog.launch.noShell": p => `Le shell du terminal n'a pas démarré en ${p.seconds} s : regarde dans ${p.target}`,
+      "dialog.launch.unread": p => `Le shell a démarré, mais pas Claude Code en ${p.seconds} s : regarde dans ${p.target}`,
+      "dialog.launch.failed": p => `Échec : ${p.message}`,
     },
     en: {
       "ai": "AI",
@@ -53,23 +54,23 @@ window.MrAi = (() => {
       "dialog.title": p => `Claude Code on MR !${p.iid}`,
       "dialog.actions": "Action",
       "dialog.catalogError": p => `Unreadable AI actions catalogue: ${p.message}`,
-      "dialog.hint": "Prompt to complete or adjust here if needed, then paste into Claude Code, started at the repository root — or to start directly in Orca.",
-      "dialog.hint.free": "Prompt to write here, then paste into Claude Code, started at the repository root — or to start directly in Orca.",
+      "dialog.hint": p => `Prompt to complete or adjust here if needed, then paste into Claude Code, started at the repository root${p.target ? ` — or to start directly in ${p.target}` : ""}.`,
+      "dialog.hint.free": p => `Prompt to write here, then paste into Claude Code, started at the repository root${p.target ? ` — or to start directly in ${p.target}` : ""}.`,
       "dialog.reset": "Original prompt",
       "dialog.reset.title": "Replace the edited prompt with the action's own",
       "dialog.aria": "Prompt for Claude Code",
       "dialog.close": "Close",
       "dialog.copy": "Copy",
       "dialog.copied": "Copied",
-      "dialog.orca": "Open in Orca",
-      "dialog.orca.title": "Start Claude Code with this prompt in a new Orca tab, on the main worktree",
+      "dialog.launch": p => `Open in ${p.target}`,
+      "dialog.launch.title": p => `Start Claude Code with this prompt in a new ${p.target} tab, on the main worktree`,
       "dialog.model": "Model",
-      "dialog.model.title": "Model of the session started in Orca. A copied prompt runs on the model of the session it is pasted into: /model to change it.",
+      "dialog.model.title": p => `Model of the session started in ${p.target}. A copied prompt runs on the model of the session it is pasted into: /model to change it.`,
       "dialog.model.default": "default",
       "dialog.model.latest": "Latest version",
       "dialog.model.versions": "Specific version",
       "dialog.effort": "Effort",
-      "dialog.effort.title": "Effort level of the session started in Orca: low for a simple task, which costs less, high for a hard one. A copied prompt runs at the effort of the session it is pasted into: /effort to change it.",
+      "dialog.effort.title": p => `Effort level of the session started in ${p.target}: low for a simple task, which costs less, high for a hard one. A copied prompt runs at the effort of the session it is pasted into: /effort to change it.`,
       "dialog.effort.default": "default",
       "dialog.effort.low": "Low",
       "dialog.effort.medium": "Medium",
@@ -77,13 +78,13 @@ window.MrAi = (() => {
       "dialog.effort.xhigh": "Extra high",
       "dialog.effort.max": "Max",
       "dialog.effort.recommended": p => `${p.level} (recommended)`,
-      "dialog.orca.opening": "Opening in Orca…",
-      "dialog.orca.opened": "Tab opened in Orca, waiting for Claude Code to start…",
-      "dialog.orca.unconfirmed": "Orca did not confirm in time: switch to Orca, the tab opens as soon as its window is in front. Waiting for Claude Code to start…",
-      "dialog.orca.read": "Claude Code session started in Orca",
-      "dialog.orca.noShell": p => `The terminal shell did not start within ${p.seconds} s: check Orca`,
-      "dialog.orca.unread": p => `The shell started, but not Claude Code within ${p.seconds} s: check Orca`,
-      "dialog.orca.failed": p => `Failed: ${p.message}`,
+      "dialog.launch.opening": p => `Opening in ${p.target}…`,
+      "dialog.launch.opened": p => `Tab opened in ${p.target}, waiting for Claude Code to start…`,
+      "dialog.launch.unconfirmed": p => `${p.target} did not confirm in time: switch to ${p.target}, the tab opens as soon as its window is in front. Waiting for Claude Code to start…`,
+      "dialog.launch.read": p => `Claude Code session started in ${p.target}`,
+      "dialog.launch.noShell": p => `The terminal shell did not start within ${p.seconds} s: check ${p.target}`,
+      "dialog.launch.unread": p => `The shell started, but not Claude Code within ${p.seconds} s: check ${p.target}`,
+      "dialog.launch.failed": p => `Failed: ${p.message}`,
     },
   };
   // Fix prompt of each open MR, computed by the dashboard on every refresh of its data: only the
@@ -94,7 +95,8 @@ window.MrAi = (() => {
   const ORCA_LOGO = `<svg class="orca-logo" viewBox="6.67 70.67 318.6 202.67" aria-hidden="true"><path fill="currentColor" d="m 177.81311,248.33334 c 23.82304,-41.29793 40.54045,-66.84626 49.51207,-75.66667 6.81685,-6.70196 10.07373,-8.7374 20.07265,-12.54475 34.57822,-13.16655 61.04674,-26.78733 72.37222,-37.24295 9.62924,-8.88966 9.34286,-9.01142 -23.43671,-9.964 -35.71756,-1.03796 -43.72989,0.42119 -62.17546,11.323 -16.72118,9.88265 -34.20103,30.11225 -42.74704,49.47157 -2.57353,5.82985 -14.81294,44.3056 -27.96399,87.90747 -2.86036,9.48343 -3.02466,11.71633 -0.86213,11.71633 0.44382,0 7.29659,-11.25 15.22839,-25 z m -65.14644,-8.32267 C 120,239.3326 130.5,237.50979 136,235.95998 c 5.5,-1.5498 12.25,-3.13783 15,-3.52895 2.75,-0.39111 5,-0.95485 5,-1.25275 0,-0.29789 2.15135,-7.58487 4.78078,-16.19328 8.49209,-27.80201 12.21334,-40.41629 21.13747,-71.65166 4.81891,-16.86667 11.23502,-39.185 14.25802,-49.596301 5.12803,-17.66103 5.74763,-23.07037 2.64253,-23.07037 -1.84887,0 -4.07048,6.908293 -16.72243,52.000001 -21.78975,77.65896 -20.80806,74.74393 -26.84794,79.72251 -7.5925,6.25838 -25.03916,14.82524 -36.10856,17.73044 -17.0947,4.48656 -33.410599,3.86724 -53.116765,-2.01622 -18.569242,-5.54403 -23.142662,-5.80284 -33.639754,-1.9037 -5.875424,2.18242 -9.864152,5.04363 -16.716684,11.99127 -4.95,5.0187 -9.0000001,10.02884 -9.0000001,11.13364 0,1.75174 5.9276921,2.00299 46.3333351,1.96383 25.483334,-0.0247 52.333338,-0.59969 59.666668,-1.27777 z M 252.69513,104.63708 c 12.18267,-3.48651 15.77304,-7.895503 9.63821,-11.835773 -10.19296,-6.546726 -36.19849,-1.77301 -41.19436,7.561863 -1.2556,2.3461 -0.98698,3.2037 1.68353,5.375 2.69471,2.19098 4.59991,2.47691 12.53928,1.88189 5.14899,-0.3859 12.94899,-1.72824 17.33334,-2.98298 z"/></svg>`;
 
   let lang = "fr";
-  let orcaEnabled = () => false;
+  // Name of the launch target the server offers (Orca, herdr, a terminal), or null: prompts are then only copied.
+  let launchTarget = () => null;
   let catalog = null;
   let dialog = null;
   // MR of the open dialog, and what its actions need: { mr, toFix, fixContext }.
@@ -110,7 +112,7 @@ window.MrAi = (() => {
     params = {}
   ) {
     const text = TEXTS[lang][key];
-    return typeof text === "function" ? text(params) : text;
+    return typeof text === "function" ? text({ target: launchTarget(), ...params }) : text;
   }
 
   function escapeHtml(value) {
@@ -133,10 +135,10 @@ window.MrAi = (() => {
     return body;
   }
 
-  // options.orcaEnabled: a function, since the server configuration may arrive later.
+  // options.launchTarget: a function, since the server configuration may arrive later.
   function init(options) {
     lang = options.lang;
-    orcaEnabled = options.orcaEnabled;
+    launchTarget = options.launchTarget;
     dialog = document.createElement("dialog");
     dialog.className = "ai-prompt";
     dialog.setAttribute("aria-labelledby", "ai-title");
@@ -152,7 +154,7 @@ window.MrAi = (() => {
         <button type="button" id="ai-reset" hidden></button>
         <label class="ai-model" id="ai-model-label" hidden><span id="ai-model-name"></span> <select id="ai-model"></select></label>
         <label class="ai-model" id="ai-effort-label" hidden><span id="ai-effort-name"></span> <select id="ai-effort"></select></label>
-        <button type="button" id="ai-orca" class="with-icon" hidden>${ORCA_LOGO}<span id="ai-orca-label"></span></button>
+        <button type="button" id="ai-launch" class="with-icon" hidden>${ORCA_LOGO}<span id="ai-launch-label"></span></button>
         <button type="button" id="ai-copy" class="primary"></button>
       </div>`;
     document.body.append(dialog);
@@ -184,7 +186,7 @@ window.MrAi = (() => {
     part("ai-effort").addEventListener("change", keepEffort);
     part("ai-reset").addEventListener("click", resetDraft);
     part("ai-copy").addEventListener("click", copy);
-    part("ai-orca").addEventListener("click", openInOrca);
+    part("ai-launch").addEventListener("click", launchSession);
   }
 
   const part = id => dialog.querySelector(`#${id}`);
@@ -202,7 +204,9 @@ window.MrAi = (() => {
     part("ai-hint").textContent = t(dialog.dataset.action === "free" ? "dialog.hint.free" : "dialog.hint");
     part("ai-text").setAttribute("aria-label", t("dialog.aria"));
     part("ai-close").textContent = t("dialog.close");
-    part("ai-orca").title = t("dialog.orca.title");
+    part("ai-launch").title = t("dialog.launch.title");
+    // Orca's own logo on its button; other targets have their name only.
+    part("ai-launch").querySelector(".orca-logo").style.display = launchTarget() === "Orca" ? "" : "none";
     part("ai-model-label").title = t("dialog.model.title");
     part("ai-model-name").textContent = t("dialog.model");
     const choice = part("ai-model").value;
@@ -216,7 +220,7 @@ window.MrAi = (() => {
     part("ai-effort-label").title = t("dialog.effort.title");
     part("ai-effort-name").textContent = t("dialog.effort");
     syncEfforts(part("ai-effort").value);
-    part("ai-orca-label").textContent = t("dialog.orca");
+    part("ai-launch-label").textContent = t("dialog.launch");
     part("ai-reset").textContent = t("dialog.reset");
     part("ai-reset").title = t("dialog.reset.title");
     part("ai-copy").textContent = t("dialog.copy");
@@ -312,9 +316,9 @@ window.MrAi = (() => {
       `<button type="button" data-ai-action="${escapeHtml(action.id)}">${escapeHtml(action.label ?? t(`ai.${action.id}`))}</button>`
     ).join("");
     part("ai-actions").hidden = !actions.length;
-    part("ai-orca").hidden = !orcaEnabled();
-    part("ai-model-label").hidden = !orcaEnabled();
-    part("ai-effort-label").hidden = !orcaEnabled();
+    part("ai-launch").hidden = !launchTarget();
+    part("ai-model-label").hidden = !launchTarget();
+    part("ai-effort-label").hidden = !launchTarget();
     applyTexts();
     if (!dialog.open) dialog.showModal();
     select(actions[0]);
@@ -358,7 +362,7 @@ window.MrAi = (() => {
   // Nothing to copy or launch while the prompt is empty: the free action's one, when opened.
   function syncSendButtons() {
     const empty = !dialog.dataset.action || !promptToSend();
-    for (const id of ["ai-orca", "ai-copy"]) part(id).disabled = empty;
+    for (const id of ["ai-launch", "ai-copy"]) part(id).disabled = empty;
   }
 
   // Model chosen for the action, kept like its prompt; the catalog's one need not be.
@@ -382,7 +386,7 @@ window.MrAi = (() => {
     select(actionsFor(current.toFix).find(action => action.id === dialog.dataset.action));
   }
 
-  // What is sent, copied or launched in Orca: without the empty line left for appending, nor the
+  // What is sent, copied or launched: without the empty line left for appending, nor the
   // trailing whitespace, which would only cost tokens.
   const promptToSend = () => part("ai-text").value.trimEnd();
 
@@ -401,8 +405,8 @@ window.MrAi = (() => {
     part("ai-copied").textContent = t("dialog.copied");
   }
 
-  // The Claude Code session deletes the prompt file once started (see orca_launcher.py): the only
-  // proof it is running, since the tab Orca creates may wait for its shell more than ten seconds.
+  // The Claude Code session deletes the prompt file once started (see launches.py): the only proof it
+  // is running, since the tab may wait for its shell more than ten seconds (Orca on Windows, through WSL).
   const PROMPT_READ_TIMEOUT_S = 90;
   const PROMPT_READ_POLL_MS = 1000;
 
@@ -412,26 +416,27 @@ window.MrAi = (() => {
     let progress = { shell: false, claude: false };
     while (Date.now() < deadline && !progress.claude) {
       await new Promise(resolve => setTimeout(resolve, PROMPT_READ_POLL_MS));
-      progress = await request(`orca/status?launch=${encodeURIComponent(launch)}`);
+      progress = await request(`launch/status?launch=${encodeURIComponent(launch)}`);
     }
     return progress;
   }
 
-  // Orca launch step (ordered, launched, unreachable, lostContact, aborted), with what the voice says
+  // Launch step (ordered, launched, unreachable, lostContact, aborted), with what the voice says
   // after its line: the action's name on order, the tab title afterwards. The page that has sounds
   // (index.html) plays it; the others ignore the event.
   function announce(
     step,
     subject = null
   ) {
-    document.dispatchEvent(new CustomEvent("mr-dashboard:orca", { detail: { step, subject } }));
+    document.dispatchEvent(new CustomEvent("mr-dashboard:launch", { detail: { step, subject } }));
   }
 
-  // The server opens an Orca tab on the main worktree, which starts Claude Code with the displayed prompt.
-  async function openInOrca() {
+  // The server opens a tab of the launch target on the main worktree, which starts Claude Code with the
+  // displayed prompt.
+  async function launchSession() {
     const status = part("ai-copied");
-    part("ai-orca").disabled = true;
-    status.textContent = t("dialog.orca.opening");
+    part("ai-launch").disabled = true;
+    status.textContent = t("dialog.launch.opening");
     const action = (catalog?.actions ?? []).find(candidate => candidate.id === dialog.dataset.action);
     announce(
       "ordered",
@@ -439,7 +444,7 @@ window.MrAi = (() => {
     );
     try {
       const body = await request(
-        "orca/launch",
+        "launch",
         {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-MR-Dashboard": "1" },
@@ -452,20 +457,20 @@ window.MrAi = (() => {
           }),
         }
       );
-      status.textContent = t(body.confirmed ? "dialog.orca.opened" : "dialog.orca.unconfirmed", body);
+      status.textContent = t(body.confirmed ? "dialog.launch.opened" : "dialog.launch.unconfirmed", body);
       const progress = await sessionProgress(body.launch);
       const outcome = progress.claude ? "launched" : progress.shell ? "aborted" : "lostContact";
-      const message = { launched: "dialog.orca.read", aborted: "dialog.orca.unread", lostContact: "dialog.orca.noShell" }[outcome];
+      const message = { launched: "dialog.launch.read", aborted: "dialog.launch.unread", lostContact: "dialog.launch.noShell" }[outcome];
       status.textContent = t(message, { seconds: PROMPT_READ_TIMEOUT_S });
       announce(
         outcome,
         body.title
       );
     } catch (error) {
-      status.textContent = t("dialog.orca.failed", { message: error.message });
+      status.textContent = t("dialog.launch.failed", { message: error.message });
       announce("unreachable");
     } finally {
-      part("ai-orca").disabled = false;
+      part("ai-launch").disabled = false;
     }
   }
 

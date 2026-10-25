@@ -14,10 +14,10 @@ also keeps both tokens out of the browser. Only GET is relayed, and the server o
 before forwarding it.
 
 Local actions, over POST:
-    /orca/launch  opens in Orca a Claude Code session with the prompt of a MR's AI button action:
-                {"iid", "action", "prompt", "model", "effort"} (see orca_launcher.py), when Orca is
-                found, on Windows from WSL or on Linux; GET /ai/actions returns the catalog (see ai_actions.py),
-                GET /orca/status?launch= tells whether the shell, then Claude Code, started in a launch's tab
+    /launch       opens a Claude Code session with the prompt of a MR's AI button action, in a tab of the
+                launch target (see launch_targets.py): {"iid", "action", "prompt", "model", "effort"};
+                GET /ai/actions returns the catalog (see ai_actions.py),
+                GET /launch/status?launch= tells whether the shell, then Claude Code, started in a launch's tab
     /git/fetch  git fetch of the local git clone, which also runs by itself every --git-fetch-interval
                 seconds; GET /git/status returns the last result (see git_actions.py)
     /git/auto   enables or suspends automatic fetch: {"enabled": true|false}
@@ -73,7 +73,9 @@ from ai_actions import AiActions, AiActionsError
 from avatar_colors import DEFAULT_PATH as AVATAR_COLORS_PATH, AvatarColors
 from front_version import FrontVersion, tag as front_version_tag
 from git_actions import GitActions, GitError
-from orca_launcher import OrcaError, OrcaLauncher
+import launches
+from launch_targets import LaunchTargetError, TARGETS as LAUNCH_TARGETS, choose as choose_launch_target
+from launches import LaunchError
 from relay_cache import TTL_S, RelayCache
 from request_stats import RequestStats, http_error
 
@@ -275,7 +277,7 @@ class UpstreamPool:
 
 def make_handler(
         settings,
-        orca,
+        launch_target,
         git,
         ai_actions,
         stats,
@@ -315,8 +317,8 @@ def make_handler(
                 self.send_json(200, stats.snapshot())
             elif self.path == "/avatars":
                 self.send_json(200, avatar_colors.snapshot())
-            elif self.path.startswith("/orca/status?"):
-                self.orca_status(parse_qs(urlsplit(self.path).query))
+            elif self.path.startswith("/launch/status?"):
+                self.launch_status(parse_qs(urlsplit(self.path).query))
             elif self.path.startswith("/git/diff?"):
                 self.git_diff(parse_qs(urlsplit(self.path).query))
             elif self.path.startswith("/git/commits?"):
@@ -351,7 +353,7 @@ def make_handler(
             if not self.host_allowed():
                 return
             actions = {
-                "/orca/launch": self.orca_launch,
+                "/launch": self.launch,
                 "/git/fetch": self.git_fetch,
                 "/git/auto": self.git_auto,
                 "/gitlab/discussion": self.gitlab_discussion,
@@ -381,7 +383,7 @@ def make_handler(
                 return
             action(payload)
 
-        def orca_launch(self, payload):
+        def launch(self, payload):
             try:
                 iid = int(payload["iid"])
                 action = str(payload["action"])
@@ -391,7 +393,7 @@ def make_handler(
             except (ValueError, KeyError, TypeError):
                 self.send_json(400, {"message": "invalid request"})
                 return
-            # Only an offered model and level get through: the command launched in Orca goes through a shell.
+            # Only an offered model and level get through: the command launched goes through a shell.
             choice = claude_models.find(model) if model is not None else None
             if model is not None and choice is None:
                 self.send_json(400, {"message": f"model not offered: {model}"})
@@ -399,8 +401,8 @@ def make_handler(
             if effort is not None and effort not in (choice["efforts"] if choice else claude_models.EFFORTS):
                 self.send_json(400, {"message": f"effort level not offered for this model: {effort}"})
                 return
-            if not orca:
-                self.send_json(503, {"message": "Orca not found: orca.exe from WSL, or orca on Linux"})
+            if not launch_target:
+                self.send_json(503, {"message": "no launch target: prompts are copied (see --launch-in)"})
                 return
             try:
                 title = ai_actions.tab_title(
@@ -411,22 +413,22 @@ def make_handler(
                 self.send_json(400, {"message": str(error)})
                 return
             try:
-                result = orca.launch(
+                result = launch_target.launch(
                     iid,
                     title,
                     prompt,
                     model,
                     effort
                 )
-            except OrcaError as error:
+            except LaunchError as error:
                 self.send_json(502, {"message": str(error)})
                 return
             self.send_json(200, {**result, "title": title})
 
-        def orca_status(self, query):
+        def launch_status(self, query):
             try:
-                progress = OrcaLauncher.progress(query.get("launch", [""])[0])
-            except OrcaError as error:
+                progress = launches.progress(query.get("launch", [""])[0])
+            except LaunchError as error:
                 self.send_json(400, {"message": str(error)})
                 return
             self.send_json(200, progress)
@@ -857,7 +859,12 @@ def main():
         "--repo-dir",
         type=Path,
         required=True,
-        help="local git clone of the tracked project, where Orca opens the fix session and where git actions run"
+        help="local git clone of the tracked project, where the AI button's sessions open and where git actions run"
+    )
+    parser.add_argument(
+        "--launch-in",
+        default="auto",
+        help=f"where the AI button opens its sessions: {', '.join(LAUNCH_TARGETS)} (default: %(default)s, Orca when it is found)"
     )
     parser.add_argument(
         "--git-fetch-interval",
@@ -881,7 +888,10 @@ def main():
     )
 
     sonar_token = os.environ.get("SONAR_TOKEN")
-    orca = OrcaLauncher.detect(args.repo_dir)
+    try:
+        launch_target = choose_launch_target(args.launch_in, args.repo_dir)
+    except LaunchTargetError as error:
+        parser.error(f"--launch-in: {error}")
     stats = RequestStats(TTL_S)
     git = GitActions(
         args.repo_dir,
@@ -909,7 +919,7 @@ def main():
             "pitMarker": args.pit_marker,
             "pipelineBranch": args.pipeline_branch,
             "targetBranch": args.target_branch,
-            "orcaEnabled": orca is not None,
+            "launchTarget": launch_target.name if launch_target else None,
             "gitFetchIntervalS": args.git_fetch_interval,
         },
     }
@@ -917,7 +927,7 @@ def main():
         ("127.0.0.1", args.port),
         make_handler(
             settings,
-            orca,
+            launch_target,
             git,
             AiActions(args.repo_dir),
             stats,
