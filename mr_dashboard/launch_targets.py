@@ -3,13 +3,15 @@
     auto     Orca when it is found (the default), else nowhere: prompts are copied
     none     nowhere, even with Orca installed
     orca     Orca, which must be found
+    herdr    herdr, the terminal multiplexer for coding agents, which must be found and running
 
 Each target has a name, shown on the button, and launch(iid, title, prompt, model, effort), which opens a tab
 running the agent and returns what launches.Launch.result gives.
 """
+from herdr_launcher import HerdrLauncher
 from orca_launcher import OrcaLauncher
 
-TARGETS = ("auto", "none", "orca")
+TARGETS = ("auto", "none", "orca", "herdr")
 
 
 class LaunchTargetError(Exception):
@@ -26,5 +28,10 @@ def choose(launch_in, repo_dir):
         target = OrcaLauncher.detect(repo_dir)
         if target is None:
             raise LaunchTargetError("Orca not found: orca.exe from WSL, or orca on Linux")
+        return target
+    if launch_in == "herdr":
+        target = HerdrLauncher.detect(repo_dir)
+        if target is None:
+            raise LaunchTargetError("herdr not found on the PATH")
         return target
     raise LaunchTargetError(f"unknown launch target: {launch_in} (one of {', '.join(TARGETS)})")
