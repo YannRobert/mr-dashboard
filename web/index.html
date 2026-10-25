@@ -6004,7 +6004,7 @@ document.addEventListener("keydown", e => {
 $("git-fetch").addEventListener("click", () => gitFetch());
 $("git-fetch-auto").addEventListener("change", e => setGitFetchAuto(e.target.checked));
 
-MrAi.init({ lang: state.lang, launchTarget: () => state.config?.launchTarget ?? null });
+MrAi.init({ lang: state.lang, launchTargets: () => state.config?.launchTargets ?? [] });
 applyStaticTexts();
 applyTheme();
 applyTextScale();

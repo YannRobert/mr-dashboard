@@ -2140,9 +2140,9 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
   // prompt the dashboard computes and stores (see MrAi.readFixContext). Not on a merged MR.
   function initAi() {
     if (mr.merge || !mr.iid) return;
-    let launchTarget = null;
-    config().then(c => { launchTarget = c.launchTarget ?? null; }).catch(() => { /* no config, prompts are copied */ });
-    MrAi.init({ lang, launchTarget: () => launchTarget });
+    let launchTargets = [];
+    config().then(c => { launchTargets = c.launchTargets ?? []; }).catch(() => { /* no config, prompts are copied */ });
+    MrAi.init({ lang, launchTargets: () => launchTargets });
     const aiMr = { iid: mr.iid, title: mr.title, source_branch: mr.branch, target_branch: mr.target, web_url: mr.url };
     const button = document.getElementById("ai-button");
     button.textContent = MrAi.t("ai");

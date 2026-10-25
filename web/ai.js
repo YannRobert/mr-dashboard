@@ -23,6 +23,8 @@ window.MrAi = (() => {
       "dialog.copied": "Copié",
       "dialog.launch": p => `Ouvrir dans ${p.target}`,
       "dialog.launch.title": p => `Lance Claude Code avec ce prompt dans un nouvel onglet de ${p.target}, sur le worktree principal`,
+      "dialog.target": "Où",
+      "dialog.target.title": "Où lancer la session : choisi ici au dernier moment, retenu par le navigateur",
       "dialog.model": "Modèle",
       "dialog.model.title": p => `Modèle de la session lancée dans ${p.target}. Un prompt copié prend celui de la session où on le colle : /model pour en changer.`,
       "dialog.model.default": "par défaut",
@@ -64,6 +66,8 @@ window.MrAi = (() => {
       "dialog.copied": "Copied",
       "dialog.launch": p => `Open in ${p.target}`,
       "dialog.launch.title": p => `Start Claude Code with this prompt in a new ${p.target} tab, on the main worktree`,
+      "dialog.target": "Where",
+      "dialog.target.title": "Where to start the session: picked here at the last moment, remembered by the browser",
       "dialog.model": "Model",
       "dialog.model.title": p => `Model of the session started in ${p.target}. A copied prompt runs on the model of the session it is pasted into: /model to change it.`,
       "dialog.model.default": "default",
@@ -90,13 +94,16 @@ window.MrAi = (() => {
   // Fix prompt of each open MR, computed by the dashboard on every refresh of its data: only the
   // dashboard loads the CI indicators and threads it is built from. The diff reads it back.
   const FIX_CONTEXTS_KEY = "mr-dashboard.aiFixContexts";
+  // Id of the launch target last picked in the dialog's menu.
+  const LAUNCH_TARGET_KEY = "mr-dashboard.launchTarget";
   // Beyond that, no dashboard tab keeps it up to date anymore: the fix is no longer offered.
   const FIX_CONTEXT_MAX_AGE_MS = 30 * 60 * 1000;
   const ORCA_LOGO = `<svg class="orca-logo" viewBox="6.67 70.67 318.6 202.67" aria-hidden="true"><path fill="currentColor" d="m 177.81311,248.33334 c 23.82304,-41.29793 40.54045,-66.84626 49.51207,-75.66667 6.81685,-6.70196 10.07373,-8.7374 20.07265,-12.54475 34.57822,-13.16655 61.04674,-26.78733 72.37222,-37.24295 9.62924,-8.88966 9.34286,-9.01142 -23.43671,-9.964 -35.71756,-1.03796 -43.72989,0.42119 -62.17546,11.323 -16.72118,9.88265 -34.20103,30.11225 -42.74704,49.47157 -2.57353,5.82985 -14.81294,44.3056 -27.96399,87.90747 -2.86036,9.48343 -3.02466,11.71633 -0.86213,11.71633 0.44382,0 7.29659,-11.25 15.22839,-25 z m -65.14644,-8.32267 C 120,239.3326 130.5,237.50979 136,235.95998 c 5.5,-1.5498 12.25,-3.13783 15,-3.52895 2.75,-0.39111 5,-0.95485 5,-1.25275 0,-0.29789 2.15135,-7.58487 4.78078,-16.19328 8.49209,-27.80201 12.21334,-40.41629 21.13747,-71.65166 4.81891,-16.86667 11.23502,-39.185 14.25802,-49.596301 5.12803,-17.66103 5.74763,-23.07037 2.64253,-23.07037 -1.84887,0 -4.07048,6.908293 -16.72243,52.000001 -21.78975,77.65896 -20.80806,74.74393 -26.84794,79.72251 -7.5925,6.25838 -25.03916,14.82524 -36.10856,17.73044 -17.0947,4.48656 -33.410599,3.86724 -53.116765,-2.01622 -18.569242,-5.54403 -23.142662,-5.80284 -33.639754,-1.9037 -5.875424,2.18242 -9.864152,5.04363 -16.716684,11.99127 -4.95,5.0187 -9.0000001,10.02884 -9.0000001,11.13364 0,1.75174 5.9276921,2.00299 46.3333351,1.96383 25.483334,-0.0247 52.333338,-0.59969 59.666668,-1.27777 z M 252.69513,104.63708 c 12.18267,-3.48651 15.77304,-7.895503 9.63821,-11.835773 -10.19296,-6.546726 -36.19849,-1.77301 -41.19436,7.561863 -1.2556,2.3461 -0.98698,3.2037 1.68353,5.375 2.69471,2.19098 4.59991,2.47691 12.53928,1.88189 5.14899,-0.3859 12.94899,-1.72824 17.33334,-2.98298 z"/></svg>`;
 
   let lang = "fr";
-  // Name of the launch target the server offers (Orca, herdr, a terminal), or null: prompts are then only copied.
-  let launchTarget = () => null;
+  // Launch targets the server offers, [{id, name}] (Orca, herdr, terminals), in the order of its menu: none, and
+  // prompts are only copied.
+  let launchTargets = () => [];
   let catalog = null;
   let dialog = null;
   // MR of the open dialog, and what its actions need: { mr, toFix, fixContext }.
@@ -112,7 +119,7 @@ window.MrAi = (() => {
     params = {}
   ) {
     const text = TEXTS[lang][key];
-    return typeof text === "function" ? text({ target: launchTarget(), ...params }) : text;
+    return typeof text === "function" ? text({ target: launchTarget()?.name, ...params }) : text;
   }
 
   function escapeHtml(value) {
@@ -135,10 +142,10 @@ window.MrAi = (() => {
     return body;
   }
 
-  // options.launchTarget: a function, since the server configuration may arrive later.
+  // options.launchTargets: a function, since the server configuration may arrive later.
   function init(options) {
     lang = options.lang;
-    launchTarget = options.launchTarget;
+    launchTargets = options.launchTargets;
     dialog = document.createElement("dialog");
     dialog.className = "ai-prompt";
     dialog.setAttribute("aria-labelledby", "ai-title");
@@ -152,6 +159,7 @@ window.MrAi = (() => {
         <button type="button" id="ai-close" class="dismiss"></button>
         <span class="muted" id="ai-copied" aria-live="polite"></span>
         <button type="button" id="ai-reset" hidden></button>
+        <label class="ai-model" id="ai-target-label" hidden><span id="ai-target-name"></span> <select id="ai-target"></select></label>
         <label class="ai-model" id="ai-model-label" hidden><span id="ai-model-name"></span> <select id="ai-model"></select></label>
         <label class="ai-model" id="ai-effort-label" hidden><span id="ai-effort-name"></span> <select id="ai-effort"></select></label>
         <button type="button" id="ai-launch" class="with-icon" hidden>${ORCA_LOGO}<span id="ai-launch-label"></span></button>
@@ -187,6 +195,23 @@ window.MrAi = (() => {
     part("ai-reset").addEventListener("click", resetDraft);
     part("ai-copy").addEventListener("click", copy);
     part("ai-launch").addEventListener("click", launchSession);
+    part("ai-target").addEventListener("change", () => {
+      try {
+        localStorage.setItem(LAUNCH_TARGET_KEY, part("ai-target").value);
+      } catch (ignored) { /* storage unavailable: the choice lasts until the page reloads */ }
+      applyTexts();
+    });
+  }
+
+  // The launch target picked in the menu, else the one picked last time, else the first offered; null without any.
+  function launchTarget() {
+    const targets = launchTargets();
+    let saved = null;
+    try {
+      saved = localStorage.getItem(LAUNCH_TARGET_KEY);
+    } catch (ignored) { /* storage unavailable */ }
+    const picked = dialog ? part("ai-target").value : "";
+    return targets.find(target => target.id === picked) ?? targets.find(target => target.id === saved) ?? targets[0] ?? null;
   }
 
   const part = id => dialog.querySelector(`#${id}`);
@@ -206,7 +231,9 @@ window.MrAi = (() => {
     part("ai-close").textContent = t("dialog.close");
     part("ai-launch").title = t("dialog.launch.title");
     // Orca's own logo on its button; other targets have their name only.
-    part("ai-launch").querySelector(".orca-logo").style.display = launchTarget() === "Orca" ? "" : "none";
+    part("ai-launch").querySelector(".orca-logo").style.display = launchTarget()?.id === "orca" ? "" : "none";
+    part("ai-target-label").title = t("dialog.target.title");
+    part("ai-target-name").textContent = t("dialog.target");
     part("ai-model-label").title = t("dialog.model.title");
     part("ai-model-name").textContent = t("dialog.model");
     const choice = part("ai-model").value;
@@ -316,9 +343,15 @@ window.MrAi = (() => {
       `<button type="button" data-ai-action="${escapeHtml(action.id)}">${escapeHtml(action.label ?? t(`ai.${action.id}`))}</button>`
     ).join("");
     part("ai-actions").hidden = !actions.length;
-    part("ai-launch").hidden = !launchTarget();
-    part("ai-model-label").hidden = !launchTarget();
-    part("ai-effort-label").hidden = !launchTarget();
+    const targets = launchTargets();
+    const chosen = launchTarget();
+    part("ai-target").innerHTML = targets.map(target =>
+      `<option value="${escapeHtml(target.id)}"${target.id === chosen?.id ? " selected" : ""}>${escapeHtml(target.name)}</option>`
+    ).join("");
+    part("ai-target-label").hidden = targets.length < 2;
+    part("ai-launch").hidden = !chosen;
+    part("ai-model-label").hidden = !chosen;
+    part("ai-effort-label").hidden = !chosen;
     applyTexts();
     if (!dialog.open) dialog.showModal();
     select(actions[0]);
@@ -436,6 +469,8 @@ window.MrAi = (() => {
   async function launchSession() {
     const status = part("ai-copied");
     part("ai-launch").disabled = true;
+    // The messages keep naming the target launched in, even if the menu changes meanwhile.
+    const target = { target: launchTarget().name };
     status.textContent = t("dialog.launch.opening");
     const action = (catalog?.actions ?? []).find(candidate => candidate.id === dialog.dataset.action);
     announce(
@@ -454,14 +489,15 @@ window.MrAi = (() => {
             prompt: promptToSend(),
             model: part("ai-model").value || null,
             effort: part("ai-effort").value || null,
+            target: launchTarget().id,
           }),
         }
       );
-      status.textContent = t(body.confirmed ? "dialog.launch.opened" : "dialog.launch.unconfirmed", body);
+      status.textContent = t(body.confirmed ? "dialog.launch.opened" : "dialog.launch.unconfirmed", { ...body, ...target });
       const progress = await sessionProgress(body.launch);
       const outcome = progress.claude ? "launched" : progress.shell ? "aborted" : "lostContact";
       const message = { launched: "dialog.launch.read", aborted: "dialog.launch.unread", lostContact: "dialog.launch.noShell" }[outcome];
-      status.textContent = t(message, { seconds: PROMPT_READ_TIMEOUT_S });
+      status.textContent = t(message, { seconds: PROMPT_READ_TIMEOUT_S, ...target });
       announce(
         outcome,
         body.title

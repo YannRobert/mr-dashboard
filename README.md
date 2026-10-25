@@ -138,7 +138,7 @@ Options given after the profile are passed to `server.py` and win over the profi
 | `--pit-marker` | unless `--no-pit` | beginning of the mutation testing note posted on the MR — see [Mutation report format](#mutation-report-format) |
 | `--no-pit` | no | project without mutation testing: its column, data and notifications disappear |
 | `--git-fetch-interval` | no | seconds between two automatic `git fetch` of the local git clone, `0` for none (default `300`) |
-| `--launch-in` | no | where the AI button opens its sessions: `auto`, `none`, `orca`, `herdr`, `terminal:<preset>` or `terminal:<template>` (default `auto`: Orca when it is found); see [Where sessions open](#where-sessions-open) |
+| `--launch-in` | no | where the AI button can open its sessions, once per target, offered in the dialog's menu in this order: `auto`, `none`, `orca`, `herdr`, `terminal:<preset>` or `terminal:<template>` (default `auto`: every target found); see [Where sessions open](#where-sessions-open) |
 | `--quiet` | no | do not log each request |
 
 ## Using the dashboard
@@ -328,13 +328,16 @@ catalogue offers none, and the dialog says why. With or without a catalogue, the
 
 ### Where sessions open
 
-`--launch-in` (`LAUNCH_IN` in a profile) names where the dialog's **Open in …** button opens a new tab on
-`--repo-dir` and starts a Claude Code session there with the prompt, model and effort chosen. The tab runs
-your login shell, which must understand a POSIX command line, as bash and zsh do.
+`--launch-in` (`LAUNCH_IN` in a profile) names where the dialog's **Open in …** button can open a new tab on
+`--repo-dir` and start a Claude Code session there with the prompt, model and effort chosen. Given several
+times (`--launch-in orca --launch-in terminal:terminator`, or `LAUNCH_IN=(orca terminal:terminator)` in a
+profile), it offers them in the dialog's **Where** menu, in that order: the session opens where you pick at
+the last moment, should one of them fail you, and the browser remembers the choice. The tab runs your login
+shell, which must understand a POSIX command line, as bash and zsh do.
 
 | `--launch-in` | Opens the tab in |
 |---|---|
-| `auto` (default) | Orca when it is found, else nowhere: prompts are copied |
+| `auto` (default) | every target found, in this order: Orca, herdr, the [terminals](#terminals) of the presets installed |
 | `none` | nowhere, even with Orca installed: prompts are copied |
 | `orca` | [Orca](#orca) |
 | `herdr` | [herdr](#herdr) |

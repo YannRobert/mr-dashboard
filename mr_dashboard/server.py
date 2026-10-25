@@ -14,8 +14,9 @@ also keeps both tokens out of the browser. Only GET is relayed, and the server o
 before forwarding it.
 
 Local actions, over POST:
-    /launch       opens a Claude Code session with the prompt of a MR's AI button action, in a tab of the
-                launch target (see launch_targets.py): {"iid", "action", "prompt", "model", "effort"};
+    /launch       opens a Claude Code session with the prompt of a MR's AI button action, in a tab of one of
+                the launch targets (see launch_targets.py): {"iid", "action", "prompt", "model", "effort",
+                "target"}, target being a launch target's id (default: the first one);
                 GET /ai/actions returns the catalog (see ai_actions.py),
                 GET /launch/status?launch= tells whether the shell, then Claude Code, started in a launch's tab
     /git/fetch  git fetch of the local git clone, which also runs by itself every --git-fetch-interval
@@ -74,7 +75,7 @@ from avatar_colors import DEFAULT_PATH as AVATAR_COLORS_PATH, AvatarColors
 from front_version import FrontVersion, tag as front_version_tag
 from git_actions import GitActions, GitError
 import launches
-from launch_targets import LaunchTargetError, TARGETS as LAUNCH_TARGETS, choose as choose_launch_target
+from launch_targets import LaunchTargetError, TARGETS as LAUNCH_TARGETS, choose_all as choose_launch_targets
 from launches import LaunchError
 from relay_cache import TTL_S, RelayCache
 from request_stats import RequestStats, http_error
@@ -277,7 +278,7 @@ class UpstreamPool:
 
 def make_handler(
         settings,
-        launch_target,
+        launch_targets,
         git,
         ai_actions,
         stats,
@@ -390,6 +391,7 @@ def make_handler(
                 prompt = str(payload["prompt"])
                 model = payload.get("model")
                 effort = payload.get("effort")
+                target_id = payload.get("target")
             except (ValueError, KeyError, TypeError):
                 self.send_json(400, {"message": "invalid request"})
                 return
@@ -401,8 +403,12 @@ def make_handler(
             if effort is not None and effort not in (choice["efforts"] if choice else claude_models.EFFORTS):
                 self.send_json(400, {"message": f"effort level not offered for this model: {effort}"})
                 return
-            if not launch_target:
+            if not launch_targets:
                 self.send_json(503, {"message": "no launch target: prompts are copied (see --launch-in)"})
+                return
+            launch_target = next((target for target in launch_targets if target.id == target_id), None) if target_id else launch_targets[0]
+            if launch_target is None:
+                self.send_json(400, {"message": f"launch target not offered: {target_id}"})
                 return
             try:
                 title = ai_actions.tab_title(
@@ -863,8 +869,8 @@ def main():
     )
     parser.add_argument(
         "--launch-in",
-        default="auto",
-        help=f"where the AI button opens its sessions: {', '.join(LAUNCH_TARGETS)} (default: %(default)s, Orca when it is found)"
+        action="append",
+        help=f"where the AI button can open its sessions, once per target, offered in this order: {', '.join(LAUNCH_TARGETS)} (default: auto, every target found)"
     )
     parser.add_argument(
         "--git-fetch-interval",
@@ -889,7 +895,7 @@ def main():
 
     sonar_token = os.environ.get("SONAR_TOKEN")
     try:
-        launch_target = choose_launch_target(args.launch_in, args.repo_dir)
+        launch_targets = choose_launch_targets(args.launch_in, args.repo_dir)
     except LaunchTargetError as error:
         parser.error(f"--launch-in: {error}")
     stats = RequestStats(TTL_S)
@@ -919,7 +925,7 @@ def main():
             "pitMarker": args.pit_marker,
             "pipelineBranch": args.pipeline_branch,
             "targetBranch": args.target_branch,
-            "launchTarget": launch_target.name if launch_target else None,
+            "launchTargets": [{"id": target.id, "name": target.name} for target in launch_targets],
             "gitFetchIntervalS": args.git_fetch_interval,
         },
     }
@@ -927,7 +933,7 @@ def main():
         ("127.0.0.1", args.port),
         make_handler(
             settings,
-            launch_target,
+            launch_targets,
             git,
             AiActions(args.repo_dir),
             stats,
