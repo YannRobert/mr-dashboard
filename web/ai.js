@@ -9,24 +9,30 @@ window.MrAi = (() => {
       "ai.title": "Afficher un prompt pour un agent de code, sur cette MR",
       "ai.title.toFix": "Afficher un prompt pour un agent de code, sur cette MR qui a quelque chose à corriger",
       "ai.fix": "Corriger",
-      "ai.free": "Libre",
-      "dialog.title": p => `${p.agent} sur la MR !${p.iid}`,
-      "dialog.actions": "Action",
+      "ai.free": "Vierge",
+      "dialog.title": p => `Prompt pour la MR !${p.iid}`,
+      "dialog.predefined": "Modèles de prompt",
+      "dialog.free": "Prompt vierge, à écrire",
+      "dialog.source.file": p => `Modèles tirés de ${p.path}, dans le dépôt : modifie-le pour les changer ou ajouter les tiens.`,
+      "dialog.source.builtIn": p => `Modèle fourni par MisteR Dashboard : ajoute les tiens dans ${p.path}, dans le dépôt.`,
+      "dialog.source.how": "Comment ?",
+      "dialog.source.about": "D'où viennent ces modèles",
       "dialog.catalogError": p => `Catalogue des actions AI illisible : ${p.message}`,
-      "dialog.hint": p => `Prompt à compléter ou retoucher ici si besoin, puis à coller dans ${p.agent}, lancé à la racine du dépôt${p.target ? ` — ou à lancer directement dans ${p.target}` : ""}.`,
-      "dialog.hint.free": p => `Prompt à rédiger ici, puis à coller dans ${p.agent}, lancé à la racine du dépôt${p.target ? ` — ou à lancer directement dans ${p.target}` : ""}.`,
-      "dialog.reset": "Prompt d'origine",
-      "dialog.reset.title": "Remplace le prompt modifié par celui de l'action",
+      "dialog.hint": "Relis le prompt et ajuste-le si besoin.",
+      "dialog.hint.free": "Écris le prompt.",
+      "dialog.reset": "Revenir au prompt d'origine",
+      "dialog.reset.title": "Revenir au prompt d'origine : remplace le prompt modifié par celui du modèle",
       "dialog.aria": p => `Prompt pour ${p.agent}`,
       "dialog.close": "Fermer",
-      "dialog.copy": "Copier",
-      "dialog.copyCommand": "Copier la commande",
+      "dialog.close.title": "Fermer (Échap)",
+      "dialog.copy": "Copier le prompt",
+      "dialog.copyCommand": "Copier en commande shell",
       "dialog.copyCommand.title": p => `Copie la commande qui lance ${p.agent} avec ce prompt, ce modèle et cet effort, à coller dans un terminal ouvert sur le dépôt`,
       "dialog.copiedCommand": "Commande copiée",
       "dialog.copied": "Copié",
-      "dialog.launch": p => `Ouvrir dans ${p.target}`,
+      "dialog.launch": p => `Lancer maintenant dans ${p.target}`,
       "dialog.launch.title": p => `Lance ${p.agent} avec ce prompt dans un nouvel onglet de ${p.target}, dans le worktree de la MR s'il existe, sinon à la racine du dépôt`,
-      "dialog.launch.in": "Ouvrir dans",
+      "dialog.launch.in": "Lancer maintenant dans",
       "dialog.launch.again": "Lancer une autre session ?",
       "dialog.target.unavailable": p => `${p.name} (${{ "not running": "pas lancé", "not answering": "ne répond pas", "no session": "aucune session" }[p.reason] ?? p.reason})`,
       "dialog.launch.recent": p => `${p.agent} a déjà démarré dans ${p.target} pour ce prompt il y a ${p.seconds} s : clique à nouveau pour lancer une autre session.`,
@@ -63,24 +69,30 @@ window.MrAi = (() => {
       "ai.title": "Show a prompt for a coding agent, on this MR",
       "ai.title.toFix": "Show a prompt for a coding agent, on this MR, which has something to fix",
       "ai.fix": "Fix",
-      "ai.free": "Free",
-      "dialog.title": p => `${p.agent} on MR !${p.iid}`,
-      "dialog.actions": "Action",
+      "ai.free": "Blank",
+      "dialog.title": p => `Prompt for MR !${p.iid}`,
+      "dialog.predefined": "Templates",
+      "dialog.free": "Blank prompt, to write",
+      "dialog.source.file": p => `Templates from ${p.path}, in the repository: edit it to change them or add yours.`,
+      "dialog.source.builtIn": p => `Template built into MisteR Dashboard: add yours in ${p.path}, in the repository.`,
+      "dialog.source.how": "How?",
+      "dialog.source.about": "Where these templates come from",
       "dialog.catalogError": p => `Unreadable AI actions catalogue: ${p.message}`,
-      "dialog.hint": p => `Prompt to complete or adjust here if needed, then paste into ${p.agent}, started at the repository root${p.target ? ` — or to start directly in ${p.target}` : ""}.`,
-      "dialog.hint.free": p => `Prompt to write here, then paste into ${p.agent}, started at the repository root${p.target ? ` — or to start directly in ${p.target}` : ""}.`,
-      "dialog.reset": "Original prompt",
-      "dialog.reset.title": "Replace the edited prompt with the action's own",
+      "dialog.hint": "Review the prompt and adjust it if needed.",
+      "dialog.hint.free": "Write the prompt.",
+      "dialog.reset": "Back to the original prompt",
+      "dialog.reset.title": "Back to the original prompt: replaces the edited prompt with the template's own",
       "dialog.aria": p => `Prompt for ${p.agent}`,
       "dialog.close": "Close",
-      "dialog.copy": "Copy",
-      "dialog.copyCommand": "Copy command",
+      "dialog.close.title": "Close (Escape)",
+      "dialog.copy": "Copy prompt",
+      "dialog.copyCommand": "Copy as shell command",
       "dialog.copyCommand.title": p => `Copy the command that starts ${p.agent} with this prompt, model and effort, to paste into a terminal open on the repository`,
       "dialog.copiedCommand": "Command copied",
       "dialog.copied": "Copied",
-      "dialog.launch": p => `Open in ${p.target}`,
+      "dialog.launch": p => `Run now in ${p.target}`,
       "dialog.launch.title": p => `Start ${p.agent} with this prompt in a new ${p.target} tab, in the MR's worktree if there is one, else at the root of the repository`,
-      "dialog.launch.in": "Open in",
+      "dialog.launch.in": "Run now in",
       "dialog.launch.again": "Start another session?",
       "dialog.target.unavailable": p => `${p.name} (${p.reason})`,
       "dialog.launch.recent": p => `${p.agent} already started in ${p.target} for this prompt ${p.seconds} s ago: click again to start another session.`,
@@ -195,24 +207,33 @@ window.MrAi = (() => {
     dialog.setAttribute("aria-labelledby", "ai-title");
     dialog.innerHTML = `
       <h2 id="ai-title"></h2>
-      <div class="ai-actions" id="ai-actions" role="group"></div>
+      <button type="button" class="ai-close" id="ai-close"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+      <div class="ai-choice">
+        <div class="ai-choice-group" id="ai-predefined-group"><span class="ai-caption"><span id="ai-predefined-name"></span><span class="ai-info"><button type="button" class="ai-info-button" id="ai-source-button" aria-describedby="ai-source"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 7v4.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="4.9" r="0.9" fill="currentColor"/></svg></button><span class="ai-info-pop" id="ai-source" role="tooltip"></span></span></span><div class="ai-actions" id="ai-actions" role="group"></div></div>
+        <div class="ai-choice-group" id="ai-free-group"><div class="ai-actions" id="ai-free" role="group"></div></div>
+      </div>
       <p class="ai-error" id="ai-error" hidden></p>
       <p id="ai-hint"></p>
-      <textarea id="ai-text" spellcheck="false"></textarea>
+      <div class="ai-text">
+        <textarea id="ai-text" spellcheck="false"></textarea>
+        <button type="button" class="ai-copy" id="ai-copy"></button>
+        <button type="button" class="ai-copy ai-reset" id="ai-reset" hidden><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3.2 6.2A5.2 5.2 0 1 1 3 9.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M2.6 2.8v3.6h3.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div>
       <div class="actions">
-        <button type="button" id="ai-close" class="dismiss"></button>
-        <span class="muted" id="ai-copied" aria-live="polite"></span>
-        <button type="button" id="ai-reset" hidden></button>
-        <label class="ai-model" id="ai-agent-label" hidden><span id="ai-agent-name"></span> <span class="ai-monogram" id="ai-agent-monogram" aria-hidden="true"></span><select id="ai-agent"></select></label>
-        <label class="ai-model" id="ai-model-label" hidden><span id="ai-model-name"></span> <select id="ai-model"></select></label>
-        <label class="ai-model" id="ai-effort-label" hidden><span id="ai-effort-name"></span> <select id="ai-effort"></select></label>
+        <span class="ai-agent-group" role="group">
+        <label class="ai-model" id="ai-agent-label" hidden><span class="ai-caption"><span id="ai-agent-name"></span><span class="ai-monogram" id="ai-agent-monogram" aria-hidden="true"></span></span><select id="ai-agent"></select></label>
+        <label class="ai-model" id="ai-model-label" hidden><span class="ai-caption" id="ai-model-name"></span><select id="ai-model"></select></label>
+        <label class="ai-model" id="ai-effort-label" hidden><span class="ai-caption" id="ai-effort-name"></span><select id="ai-effort"></select></label>
+        </span>
+        <span class="ai-run">
         <span class="ai-launch" id="ai-launch-group" hidden><button type="button" id="ai-launch" class="with-icon"><span class="ai-icon" id="ai-launch-icon"></span><span id="ai-launch-label"></span></button><select id="ai-target"></select></span>
         <button type="button" id="ai-copy-command"></button>
-        <button type="button" id="ai-copy" class="primary"></button>
-      </div>`;
+        </span>
+      </div>
+      <p class="ai-status" id="ai-copied" aria-live="polite"></p>`;
     document.body.append(dialog);
     applyTexts();
-    part("ai-actions").addEventListener("click", event => {
+    dialog.querySelector(".ai-choice").addEventListener("click", event => {
       const button = event.target.closest("[data-ai-action]");
       if (button) select(actionsFor(current.toFix).find(action => action.id === button.dataset.aiAction));
     });
@@ -297,10 +318,18 @@ window.MrAi = (() => {
   }
 
   function applyTexts() {
-    part("ai-actions").setAttribute("aria-label", t("dialog.actions"));
+    part("ai-actions").setAttribute("aria-label", t("dialog.predefined"));
+    part("ai-predefined-name").textContent = t("dialog.predefined");
+    part("ai-free").setAttribute("aria-label", t("dialog.free"));
+    // Where the predefined prompts come from, and where one's own go: the project's catalogue, in a bubble of the
+    // information icon beside their name, which stays open while the pointer or the focus is in it, for its link.
+    part("ai-source-button").setAttribute("aria-label", t("dialog.source.about"));
+    const how = `<a href="${README_CATALOG}" target="_blank" rel="noopener">${escapeHtml(t("dialog.source.how"))}</a>`;
+    part("ai-source").innerHTML = `${escapeHtml(t(catalog?.source ? "dialog.source.file" : "dialog.source.builtIn", { path: catalog?.source ?? CATALOG_PATH }))} ${how}`;
     part("ai-hint").textContent = t(dialog.dataset.action === "free" ? "dialog.hint.free" : "dialog.hint");
     part("ai-text").setAttribute("aria-label", t("dialog.aria"));
-    part("ai-close").textContent = t("dialog.close");
+    part("ai-close").setAttribute("aria-label", t("dialog.close"));
+    part("ai-close").title = t("dialog.close.title");
     part("ai-launch").title = t("dialog.launch.title");
     // The chosen target's icon on the button, the chosen agent's monogram before its menu.
     part("ai-launch-icon").innerHTML = launchTarget() ? targetIcon(launchTarget().id) : "";
@@ -334,9 +363,11 @@ window.MrAi = (() => {
     syncEfforts(part("ai-effort").value);
     // With a menu, the button reads "Open in" and the menu beside it names the target.
     part("ai-launch-label").textContent = t(targetMenuShown() ? "dialog.launch.in" : "dialog.launch");
-    part("ai-reset").textContent = t("dialog.reset");
+    part("ai-reset").setAttribute("aria-label", t("dialog.reset"));
     part("ai-reset").title = t("dialog.reset.title");
-    part("ai-copy").textContent = t("dialog.copy");
+    part("ai-copy").setAttribute("aria-label", t("dialog.copy"));
+    part("ai-copy").title = t("dialog.copy");
+    part("ai-copy").innerHTML = COPY_ICON;
     part("ai-copy-command").textContent = t("dialog.copyCommand");
     part("ai-copy-command").title = t("dialog.copyCommand.title");
     part("ai-copy-command").hidden = !agent();
@@ -413,6 +444,10 @@ window.MrAi = (() => {
   }
 
   // Re-read on each dialog opening, to try a prompt without reloading the page.
+  // The project's catalogue of predefined prompts, and how to write it.
+  const CATALOG_PATH = ".mr-dashboard/ai-actions.toml";
+  const README_CATALOG = "https://github.com/YannRobert/mr-dashboard#the-ai-actionstoml-catalogue";
+
   async function loadCatalog() {
     try {
       catalog = await request("ai/actions");
@@ -460,10 +495,12 @@ window.MrAi = (() => {
     part("ai-title").textContent = t("dialog.title", { iid: mr.iid });
     part("ai-error").hidden = !catalog.error;
     part("ai-error").textContent = catalog.error ? t("dialog.catalogError", { message: catalog.error }) : "";
-    part("ai-actions").innerHTML = actions.map(action =>
-      `<button type="button" data-ai-action="${escapeHtml(action.id)}">${escapeHtml(action.label ?? t(`ai.${action.id}`))}</button>`
-    ).join("");
-    part("ai-actions").hidden = !actions.length;
+    // The project's templates, then apart the blank prompt, written in the dialog.
+    const button = action => `<button type="button" data-ai-action="${escapeHtml(action.id)}">${escapeHtml(action.label ?? t(`ai.${action.id}`))}</button>`;
+    part("ai-actions").innerHTML = actions.filter(action => action.id !== "free").map(button).join("");
+    part("ai-free").innerHTML = actions.filter(action => action.id === "free").map(button).join("");
+    part("ai-predefined-group").hidden = !part("ai-actions").childElementCount;
+    part("ai-free-group").hidden = !part("ai-free").childElementCount;
     const targets = launchTargets();
     const chosen = launchTarget();
     // A target that cannot open a tab now stays listed, greyed out with the reason.
@@ -475,6 +512,8 @@ window.MrAi = (() => {
     part("ai-target").hidden = !targetMenuShown();
     // Shown even when no target can open a tab now: the greyed-out button and its menu say why.
     part("ai-launch-group").hidden = !targets.length;
+    // The main action, when there is a target.
+    part("ai-launch").classList.toggle("primary", targets.length > 0);
     // The agent, its model and level only matter for a launch. They stay in place for every agent, greyed out on
     // the default when it offers none, so that changing agents moves nothing.
     part("ai-agent-label").hidden = !targets.length || (catalog?.agents ?? []).length < 2;
@@ -489,7 +528,7 @@ window.MrAi = (() => {
     dialog.dataset.action = action?.id ?? "";
     // The free prompt, written by whoever sends it, needs no instructions beyond writing it.
     part("ai-hint").textContent = t(action?.id === "free" ? "dialog.hint.free" : "dialog.hint");
-    for (const button of part("ai-actions").querySelectorAll("[data-ai-action]")) {
+    for (const button of dialog.querySelectorAll(".ai-choice [data-ai-action]")) {
       button.setAttribute("aria-pressed", String(button.dataset.aiAction === action?.id));
     }
     const text = part("ai-text");
@@ -579,9 +618,23 @@ window.MrAi = (() => {
   // trailing whitespace, which would only cost tokens.
   const promptToSend = () => part("ai-text").value.trimEnd();
 
+  // The prompt's copy icon, and the check mark it turns into a moment once the prompt is copied.
+  const COPY_ICON = `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M10.5 3.5V3a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 3v6.5A1.5 1.5 0 0 0 4 11h1" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>`;
+  const COPIED_ICON = `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 8.5l3.2 3.2L13 4.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const COPIED_SHOWN_MS = 1500;
+  let copiedTimer;
+
   async function copy() {
     await copyText(promptToSend());
+    const button = part("ai-copy");
+    button.innerHTML = COPIED_ICON;
+    button.title = t("dialog.copied");
     part("ai-copied").textContent = t("dialog.copied");
+    clearTimeout(copiedTimer);
+    copiedTimer = setTimeout(() => {
+      button.innerHTML = COPY_ICON;
+      button.title = t("dialog.copy");
+    }, COPIED_SHOWN_MS);
   }
 
   // The agent's command line with the chosen model, level and the prompt, quoted for bash and zsh, as the server

@@ -274,11 +274,13 @@ The image needs `curl` and `jq`. Then start the dashboard with `--pit-job mutati
 
 ## AI actions
 
-The **AI** button of an open MR offers the actions of the tracked project's catalogue. The dialog
+The **AI** button of an open MR offers the actions of the tracked project's catalogue, as prompt
+templates, apart from the blank prompt written in the dialog; the dialog says where they come from (see
+[The `ai-actions.toml` catalogue](#the-ai-actionstoml-catalogue)). The dialog
 shows the chosen action's prompt, to copy into your coding agent or to launch in a new tab (see
 [Where sessions open](#where-sessions-open)). The prompt can be edited in the dialog before being copied or
 launched: the edited text is what goes out. It is kept per MR and per action until the page is
-reloaded; **Original prompt** restores it.
+reloaded; the undo icon under the copy icon brings the original prompt back.
 
 - **Agent** selects the coding agent launched, among those installed: Claude Code (`claude`), Codex
   (`codex`) and Pi (`pi`). The browser remembers the choice, and each agent's last model and effort level,
@@ -302,12 +304,16 @@ reloaded; **Original prompt** restores it.
 - **Effort** selects the effort level: `claude --effort` (from *Low* to *Max*), Codex's
   `-c model_reasoning_effort` (from *Low* to *Ultra*) or `pi --thinking` (from *Off* to *Max*). Only the levels the chosen model supports are listed, the recommended one
   flagged; a model without effort levels greys the list out.
-- **Copy command** copies the agent's command line with the model, the effort level and the prompt, quoted
-  for bash and zsh, to paste into a terminal open on the repository.
-- **Open in** is greyed out while a launch runs, until its agent starts. Within two minutes of a session
-  started for the same prompt, agent and target, it first asks whether to start another one.
-- **Close**, Escape or a click outside the dialog close it. The button has a red outline when the MR
-  has something to fix: branch behind or in conflict, imperfect quality indicator, unresolved thread.
+- **Run now in** starts the agent on the prompt at once, without asking. It is greyed out while a launch
+  runs, until its agent starts. Within two minutes of a session started for the same prompt, agent and
+  target, it first asks whether to start another one.
+- **Copy as shell command**, under it, is its alternative: it copies the agent's command line with the model,
+  the effort level and the prompt, quoted for bash and zsh, to paste into a terminal of your own open on the
+  repository.
+- The copy icon in the prompt's top right corner copies the prompt as it stands.
+- The cross in the top right corner, Escape or a click outside the dialog close it. The AI button has a red
+  outline when the MR has something to fix: branch behind or in conflict, imperfect quality indicator,
+  unresolved thread.
 
 The same button sits at the top of an open MR's diff, with the same actions: ask for an explanation
 while reading the diff. The fix action is offered there only if a dashboard tab refreshed its data
@@ -342,15 +348,15 @@ unknown variable is left as is in the displayed prompt.
 
 Without a catalogue, only the fix action is offered, with `{fix_context}` as its prompt. An invalid
 catalogue offers none, and the dialog says why. With or without a catalogue, the last action,
-**Free**, opens an empty prompt to write in the dialog; its id `free` is reserved.
+**Blank**, opens an empty prompt to write in the dialog; its id `free` is reserved.
 
 ### Where sessions open
 
-`--launch-in` (`LAUNCH_IN` in a profile) names where the dialog's **Open in …** button can open a new tab on
+`--launch-in` (`LAUNCH_IN` in a profile) names where the dialog's **Run now in …** button can open a new tab on
 `--repo-dir`, or in the MR's worktree when one has its branch checked out (`git worktree list`), and start the
 chosen agent there with the prompt, model and effort chosen. Given several
 times (`--launch-in orca --launch-in terminal:terminator`, or `LAUNCH_IN=(orca terminal:terminator)` in a
-profile), it offers them in the menu beside **Open in**, in that order: the session opens where you pick at
+profile), it offers them in the menu beside **Run now in**, in that order: the session opens where you pick at
 the last moment, should one of them fail you, and the browser remembers the choice. Each time the dialog
 opens, the server checks which can open a tab now: Orca or herdr not running, or tmux without a session,
 show greyed out with the reason. The tab runs your login

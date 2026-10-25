@@ -3868,7 +3868,7 @@ const SOUNDS = {
   broken: siren,
   // Rising major arpeggio, C-E-G-C, the last note held: an MR is merged.
   // Military radio, each followed by a line (SOUND_VOICES). Order received: crackle, a beep,
-  // closing — "Open in Orca" was just clicked.
+  // closing — "Run now in" was just clicked.
   orcaOrdered: (ctx, output) => radio(
     ctx,
     output,
@@ -6027,7 +6027,7 @@ if (window.AudioContext) {
   ));
   ["pointerdown", "keydown"].forEach(type => window.addEventListener(type, unlockAudio, true));
   window.addEventListener("pagehide", forgetSoundTab);
-  // Played in this tab, where "Open in Orca" was just clicked: the browser allows it.
+  // Played in this tab, where "Run now in" was just clicked: the browser allows it.
   const orcaSounds = {
     ordered: "orcaOrdered",
     launched: "orcaLaunched",
