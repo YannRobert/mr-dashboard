@@ -281,7 +281,8 @@ launched: the edited text is what goes out. It is kept per MR and per action unt
 reloaded; **Original prompt** restores it.
 
 - **Agent** selects the coding agent launched, among those installed: Claude Code (`claude`), Codex
-  (`codex`) and Pi (`pi`). The browser remembers the choice.
+  (`codex`) and Pi (`pi`). The browser remembers the choice, and each agent's last model and effort level,
+  used unless the catalogue's action sets its own.
 - **Model** selects the model of the launched session, or the agent's configured default:
   - Claude Code (`claude --model`): the action's one from the catalogue, preselected. Aliases come first
     (they always map to the latest version), then older specific versions. The list is read from the
@@ -338,8 +339,10 @@ catalogue offers none, and the dialog says why. With or without a catalogue, the
 `--launch-in` (`LAUNCH_IN` in a profile) names where the dialog's **Open in …** button can open a new tab on
 `--repo-dir` and start the chosen agent there with the prompt, model and effort chosen. Given several
 times (`--launch-in orca --launch-in terminal:terminator`, or `LAUNCH_IN=(orca terminal:terminator)` in a
-profile), it offers them in the dialog's **Where** menu, in that order: the session opens where you pick at
-the last moment, should one of them fail you, and the browser remembers the choice. The tab runs your login
+profile), it offers them in the menu beside **Open in**, in that order: the session opens where you pick at
+the last moment, should one of them fail you, and the browser remembers the choice. Each time the dialog
+opens, the server checks which can open a tab now: Orca or herdr not running, or tmux without a session,
+show greyed out with the reason. The tab runs your login
 shell, which must understand a POSIX command line, as bash and zsh do.
 
 | `--launch-in` | Opens the tab in |

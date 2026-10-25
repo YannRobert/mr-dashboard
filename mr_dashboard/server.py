@@ -19,7 +19,8 @@ Local actions, over POST:
                 "target"}, agent being an installed agent's id (default: claude, see agents.py) and target a
                 launch target's id (default: the first one);
                 GET /ai/actions returns the catalog (see ai_actions.py),
-                GET /launch/status?launch= tells whether the shell, then the agent, started in a launch's tab
+                GET /launch/status?launch= tells whether the shell, then the agent, started in a launch's tab,
+                GET /launch/targets whether each launch target can open a tab now
     /git/fetch  git fetch of the local git clone, which also runs by itself every --git-fetch-interval
                 seconds; GET /git/status returns the last result (see git_actions.py)
     /git/auto   enables or suspends automatic fetch: {"enabled": true|false}
@@ -76,7 +77,7 @@ from front_version import FrontVersion, tag as front_version_tag
 from git_actions import GitActions, GitError
 import agents
 import launches
-from launch_targets import LaunchTargetError, TARGETS as LAUNCH_TARGETS, choose_all as choose_launch_targets
+from launch_targets import LaunchTargetError, TARGETS as LAUNCH_TARGETS, availability as launch_availability, choose_all as choose_launch_targets
 from launches import LaunchError
 from relay_cache import TTL_S, RelayCache
 from request_stats import RequestStats, http_error
@@ -319,6 +320,8 @@ def make_handler(
                 self.send_json(200, stats.snapshot())
             elif self.path == "/avatars":
                 self.send_json(200, avatar_colors.snapshot())
+            elif self.path == "/launch/targets":
+                self.send_json(200, launch_availability(launch_targets))
             elif self.path.startswith("/launch/status?"):
                 self.launch_status(parse_qs(urlsplit(self.path).query))
             elif self.path.startswith("/git/diff?"):

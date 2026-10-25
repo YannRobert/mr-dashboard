@@ -57,6 +57,17 @@ class TerminalLauncher:
             raise ValueError(f"unknown terminal: {spec} (a preset among {', '.join(PRESETS)}, or a template with {{command}})")
         return cls(shlex.split(spec)[0], spec, repo_dir)
 
+    def unavailable(self):
+        """Why the terminal cannot open a tab now, or None: tmux needs a running session; a terminal that opens its
+        own window always can."""
+        if self._template[:2] != ["tmux", "new-window"]:
+            return None
+        try:
+            result = subprocess.run(["tmux", "has-session"], capture_output=True, timeout=FAILURE_WAIT_S, check=False)
+        except (OSError, subprocess.TimeoutExpired):
+            return "not answering"
+        return None if result.returncode == 0 else "no session"
+
     def launch(
             self,
             iid,

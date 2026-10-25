@@ -8,10 +8,12 @@ them in a menu, the first one chosen until the user picks another.
     terminal:<preset>    a terminal, as one of terminal_launcher.PRESETS opens it (terminal:gnome-terminal)
     terminal:<template>  a terminal, as a command template of your own opens it (see terminal_launcher.py)
 
-Each target has an id (its --launch-in value), a name, shown on the button, and launch(iid, title, prompt, model,
+Each target has an id (its --launch-in value), a name, shown on the button, unavailable(), why it cannot open a tab
+now (None when it can), and launch(iid, title, prompt, model,
 effort), which opens a tab running the agent and returns what launches.Launch.result gives.
 """
 import os
+from concurrent.futures import ThreadPoolExecutor
 
 from herdr_launcher import HerdrLauncher
 from orca_launcher import OrcaLauncher
@@ -76,3 +78,12 @@ def _found(repo_dir):
         except LaunchTargetError:
             continue
     return found
+
+
+def availability(targets):
+    """[{"id", "name", "unavailable"}]: why each target cannot open a tab now, or None, all asked at once."""
+    if not targets:
+        return []
+    with ThreadPoolExecutor(max_workers=len(targets)) as pool:
+        reasons = list(pool.map(lambda target: target.unavailable(), targets))
+    return [{"id": target.id, "name": target.name, "unavailable": reason} for target, reason in zip(targets, reasons)]

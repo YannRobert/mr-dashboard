@@ -33,6 +33,15 @@ class HerdrLauncher:
         herdr = shutil.which("herdr")
         return cls(herdr, repo_dir) if herdr else None
 
+    def unavailable(self):
+        """Why herdr cannot open a tab now, or None: its server must be running."""
+        try:
+            result = subprocess.run([self._herdr_exe, "status", "server"], capture_output=True, text=True,
+                                    encoding="utf-8", timeout=COMMAND_TIMEOUT_S, check=False)
+        except (OSError, subprocess.TimeoutExpired):
+            return "not answering"
+        return None if "status: running" in result.stdout else "not running"
+
     def launch(
             self,
             iid,

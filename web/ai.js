@@ -25,6 +25,7 @@ window.MrAi = (() => {
       "dialog.launch.title": p => `Lance ${p.agent} avec ce prompt dans un nouvel onglet de ${p.target}, sur le worktree principal`,
       "dialog.launch.in": "Ouvrir dans",
       "dialog.launch.again": "Lancer une autre session ?",
+      "dialog.target.unavailable": p => `${p.name} (${{ "not running": "pas lancé", "not answering": "ne répond pas", "no session": "aucune session" }[p.reason] ?? p.reason})`,
       "dialog.launch.recent": p => `${p.agent} a déjà démarré dans ${p.target} pour ce prompt il y a ${p.seconds} s : clique à nouveau pour lancer une autre session.`,
       "dialog.target.title": "Où lancer la session : choisi ici au dernier moment, retenu par le navigateur",
       "dialog.agent": "Agent",
@@ -74,6 +75,7 @@ window.MrAi = (() => {
       "dialog.launch.title": p => `Start ${p.agent} with this prompt in a new ${p.target} tab, on the main worktree`,
       "dialog.launch.in": "Open in",
       "dialog.launch.again": "Start another session?",
+      "dialog.target.unavailable": p => `${p.name} (${p.reason})`,
       "dialog.launch.recent": p => `${p.agent} already started in ${p.target} for this prompt ${p.seconds} s ago: click again to start another session.`,
       "dialog.target.title": "Where to start the session: picked here at the last moment, remembered by the browser",
       "dialog.agent": "Agent",
@@ -110,6 +112,10 @@ window.MrAi = (() => {
   const LAUNCH_TARGET_KEY = "mr-dashboard.launchTarget";
   // Id of the coding agent last picked in the dialog's menu.
   const AGENT_KEY = "mr-dashboard.agent";
+  // Model and effort level last picked for each agent: {agentId: {model, effort}}.
+  const AGENT_CHOICES_KEY = "mr-dashboard.agentChoices";
+  // Why each launch target cannot open a tab now, by id, as the server told when the dialog opened.
+  let unavailable = {};
   // Beyond that, no dashboard tab keeps it up to date anymore: the fix is no longer offered.
   const FIX_CONTEXT_MAX_AGE_MS = 30 * 60 * 1000;
   const ORCA_LOGO = `<svg class="target-icon" viewBox="6.67 70.67 318.6 202.67" aria-hidden="true"><path fill="currentColor" d="m 177.81311,248.33334 c 23.82304,-41.29793 40.54045,-66.84626 49.51207,-75.66667 6.81685,-6.70196 10.07373,-8.7374 20.07265,-12.54475 34.57822,-13.16655 61.04674,-26.78733 72.37222,-37.24295 9.62924,-8.88966 9.34286,-9.01142 -23.43671,-9.964 -35.71756,-1.03796 -43.72989,0.42119 -62.17546,11.323 -16.72118,9.88265 -34.20103,30.11225 -42.74704,49.47157 -2.57353,5.82985 -14.81294,44.3056 -27.96399,87.90747 -2.86036,9.48343 -3.02466,11.71633 -0.86213,11.71633 0.44382,0 7.29659,-11.25 15.22839,-25 z m -65.14644,-8.32267 C 120,239.3326 130.5,237.50979 136,235.95998 c 5.5,-1.5498 12.25,-3.13783 15,-3.52895 2.75,-0.39111 5,-0.95485 5,-1.25275 0,-0.29789 2.15135,-7.58487 4.78078,-16.19328 8.49209,-27.80201 12.21334,-40.41629 21.13747,-71.65166 4.81891,-16.86667 11.23502,-39.185 14.25802,-49.596301 5.12803,-17.66103 5.74763,-23.07037 2.64253,-23.07037 -1.84887,0 -4.07048,6.908293 -16.72243,52.000001 -21.78975,77.65896 -20.80806,74.74393 -26.84794,79.72251 -7.5925,6.25838 -25.03916,14.82524 -36.10856,17.73044 -17.0947,4.48656 -33.410599,3.86724 -53.116765,-2.01622 -18.569242,-5.54403 -23.142662,-5.80284 -33.639754,-1.9037 -5.875424,2.18242 -9.864152,5.04363 -16.716684,11.99127 -4.95,5.0187 -9.0000001,10.02884 -9.0000001,11.13364 0,1.75174 5.9276921,2.00299 46.3333351,1.96383 25.483334,-0.0247 52.333338,-0.59969 59.666668,-1.27777 z M 252.69513,104.63708 c 12.18267,-3.48651 15.77304,-7.895503 9.63821,-11.835773 -10.19296,-6.546726 -36.19849,-1.77301 -41.19436,7.561863 -1.2556,2.3461 -0.98698,3.2037 1.68353,5.375 2.69471,2.19098 4.59991,2.47691 12.53928,1.88189 5.14899,-0.3859 12.94899,-1.72824 17.33334,-2.98298 z"/></svg>`;
@@ -252,7 +258,8 @@ window.MrAi = (() => {
     return agents.find(candidate => candidate.id === picked) ?? agents.find(candidate => candidate.id === saved) ?? agents[0] ?? null;
   }
 
-  // The launch target picked in the menu, else the one picked last time, else the first offered; null without any.
+  // The launch target picked in the menu, else the one picked last time, else the first offered, among those that can
+  // open a tab now; null without any.
   function launchTarget() {
     const targets = launchTargets();
     let saved = null;
@@ -260,7 +267,8 @@ window.MrAi = (() => {
       saved = localStorage.getItem(LAUNCH_TARGET_KEY);
     } catch (ignored) { /* storage unavailable */ }
     const picked = dialog ? part("ai-target").value : "";
-    return targets.find(target => target.id === picked) ?? targets.find(target => target.id === saved) ?? targets[0] ?? null;
+    const usable = targets.filter(target => !unavailable[target.id]);
+    return usable.find(target => target.id === picked) ?? usable.find(target => target.id === saved) ?? usable[0] ?? null;
   }
 
   const part = id => dialog.querySelector(`#${id}`);
@@ -354,6 +362,15 @@ window.MrAi = (() => {
     if (dialog) applyTexts();
   }
 
+  // Whether each launch target can open a tab now, asked on each dialog opening; on failure, all are offered.
+  async function loadAvailability() {
+    unavailable = {};
+    if (launchTargets().length < 1) return;
+    try {
+      for (const target of await request("launch/targets")) if (target.unavailable) unavailable[target.id] = target.unavailable;
+    } catch (ignored) { /* unknown: every target stays offered */ }
+  }
+
   // Re-read on each dialog opening, to try a prompt without reloading the page.
   async function loadCatalog() {
     try {
@@ -395,7 +412,7 @@ window.MrAi = (() => {
     mr,
     context
   ) {
-    await loadCatalog();
+    await Promise.all([loadCatalog(), loadAvailability()]);
     current = { mr, ...(typeof context === "function" ? context() : context) };
     const actions = actionsFor(current.toFix);
     dialog.dataset.iid = mr.iid;
@@ -408,16 +425,20 @@ window.MrAi = (() => {
     part("ai-actions").hidden = !actions.length;
     const targets = launchTargets();
     const chosen = launchTarget();
-    part("ai-target").innerHTML = targets.map(target =>
-      `<option value="${escapeHtml(target.id)}"${target.id === chosen?.id ? " selected" : ""}>${escapeHtml(target.name)}</option>`
-    ).join("");
+    // A target that cannot open a tab now stays listed, greyed out with the reason.
+    part("ai-target").innerHTML = targets.map(target => {
+      const reason = unavailable[target.id];
+      const label = reason ? t("dialog.target.unavailable", { name: target.name, reason }) : target.name;
+      return `<option value="${escapeHtml(target.id)}"${target.id === chosen?.id ? " selected" : ""}${reason ? " disabled" : ""}>${escapeHtml(label)}</option>`;
+    }).join("");
     part("ai-target").hidden = targets.length < 2;
-    part("ai-launch-group").hidden = !chosen;
+    // Shown even when no target can open a tab now: the greyed-out button and its menu say why.
+    part("ai-launch-group").hidden = !targets.length;
     // The agent, its model and level only matter for a launch. They stay in place for every agent, greyed out on
     // the default when it offers none, so that changing agents moves nothing.
-    part("ai-agent-label").hidden = !chosen || (catalog?.agents ?? []).length < 2;
-    part("ai-model-label").hidden = !chosen;
-    part("ai-effort-label").hidden = !chosen;
+    part("ai-agent-label").hidden = !targets.length || (catalog?.agents ?? []).length < 2;
+    part("ai-model-label").hidden = !targets.length;
+    part("ai-effort-label").hidden = !targets.length;
     applyTexts();
     if (!dialog.open) dialog.showModal();
     select(actions[0]);
@@ -450,9 +471,9 @@ window.MrAi = (() => {
   const draftKey = () => `${dialog.dataset.iid} ${dialog.dataset.action}`;
   const choiceKey = () => `${draftKey()} ${agent()?.id}`;
 
-  // The catalog's model and level are Claude Code's: other agents start from their own defaults.
-  const actionModel = action => (agent()?.id === "claude" ? action?.model ?? "" : "");
-  const actionEffort = action => (agent()?.id === "claude" ? action?.effort ?? "" : "");
+  // The catalog's model and level are Claude Code's, and win for it; otherwise those last picked for the agent.
+  const actionModel = action => (agent()?.id === "claude" && action?.model) || agentChoice(agent()?.id).model || "";
+  const actionEffort = action => (agent()?.id === "claude" && action?.effort) || agentChoice(agent()?.id).effort || "";
 
   function keepDraft() {
     const action = actionsFor(current.toFix).find(candidate => candidate.id === dialog.dataset.action);
@@ -469,13 +490,31 @@ window.MrAi = (() => {
     const empty = !dialog.dataset.action || !promptToSend();
     part("ai-copy").disabled = empty;
     // Greyed out while a launch runs, until its agent starts: a second click would open a second tab.
-    part("ai-launch").disabled = empty || launching;
+    part("ai-launch").disabled = empty || launching || !launchTarget();
   }
 
-  // Model chosen for the action, kept like its prompt; the catalog's one need not be.
+  // The model and level last picked for an agent, remembered by the browser: {model, effort}.
+  function agentChoice(agentId) {
+    try {
+      return JSON.parse(localStorage.getItem(AGENT_CHOICES_KEY))?.[agentId] ?? {};
+    } catch (ignored) {
+      return {};
+    }
+  }
+
+  function rememberAgentChoice(field, value) {
+    try {
+      const choices = JSON.parse(localStorage.getItem(AGENT_CHOICES_KEY)) ?? {};
+      choices[agent()?.id] = { ...choices[agent()?.id], [field]: value };
+      localStorage.setItem(AGENT_CHOICES_KEY, JSON.stringify(choices));
+    } catch (ignored) { /* storage unavailable: the choice lasts until the page reloads */ }
+  }
+
+  // Model chosen for the action, kept like its prompt; the catalog's one need not be. Also remembered for the agent.
   function keepModel() {
     const action = actionsFor(current.toFix).find(candidate => candidate.id === dialog.dataset.action);
     const model = part("ai-model").value;
+    rememberAgentChoice("model", model);
     if (!action || model === actionModel(action)) models.delete(choiceKey());
     else models.set(choiceKey(), model);
   }
@@ -484,6 +523,7 @@ window.MrAi = (() => {
   function keepEffort() {
     const action = actionsFor(current.toFix).find(candidate => candidate.id === dialog.dataset.action);
     const effort = part("ai-effort").value;
+    rememberAgentChoice("effort", effort);
     if (!action || effort === actionEffort(action)) efforts.delete(choiceKey());
     else efforts.set(choiceKey(), effort);
   }

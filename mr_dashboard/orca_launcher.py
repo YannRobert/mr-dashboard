@@ -24,6 +24,7 @@ import launches
 from launches import LaunchError
 
 COMMAND_TIMEOUT_S = 60
+STATUS_TIMEOUT_S = 4
 # Orca waits only a few seconds for the terminal, while the WSL shell sometimes takes more than ten to
 # start: it then reports a failure although the terminal was indeed created.
 UNCONFIRMED_ERROR = "Timed out waiting for terminal handle"
@@ -77,6 +78,15 @@ class OrcaLauncher:
             return cls(orca, repo_dir, distro) if orca else None
         orca = shutil.which("orca") if sys.platform.startswith("linux") else None
         return cls(orca, repo_dir) if orca else None
+
+    def unavailable(self):
+        """Why Orca cannot open a tab now, or None: its app must be running."""
+        try:
+            result = subprocess.run([self._orca_exe, "status"], capture_output=True, text=True, encoding="utf-8",
+                                    timeout=STATUS_TIMEOUT_S, check=False)
+        except (OSError, subprocess.TimeoutExpired):
+            return "not answering"
+        return None if "appRunning: true" in result.stdout else "not running"
 
     def launch(
             self,
