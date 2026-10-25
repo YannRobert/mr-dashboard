@@ -492,6 +492,12 @@ See [SECURITY.md](.github/SECURITY.md) to report a vulnerability.
 - Changes to `server.py` or the Python modules it imports require restarting the server.
 - The server serves the files of the directory it was started from: to test a working copy, start the
   server from it.
+- Tests: `python3 -m unittest discover tests`, standard library only. They hold still the command lines
+  the AI button's launches run (terminal presets, herdr, Orca, each agent's start command) against
+  `tests/golden/launch_commands.json`, and run them as each terminal reads them, so that the agent gets its
+  prompt intact. A deliberate change regenerates the file with `MR_DASHBOARD_UPDATE_GOLDEN=1`.
+  `python3 tests/live_launch_check.py` checks the same on the terminals, herdr and Orca installed: it opens
+  real tabs, which close themselves.
 
 See [CONTRIBUTING.md](.github/CONTRIBUTING.md).
 

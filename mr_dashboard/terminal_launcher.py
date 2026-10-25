@@ -24,7 +24,9 @@ PRESETS = {
     "tmux": ("tmux", "tmux new-window -c {dir} -n {title} {command}"),
     "gnome-terminal": ("GNOME Terminal", "gnome-terminal --tab --working-directory={dir} -- {argv}"),
     "konsole": ("Konsole", "konsole --new-tab --workdir {dir} -e {argv}"),
-    "terminator": ("Terminator", "terminator --new-tab --working-directory={dir} -x {argv}"),
+    # A single command line: a Terminator already open gets the command through DBus, its -x arguments joined with spaces,
+    # their quoting lost.
+    "terminator": ("Terminator", "terminator --new-tab --working-directory={dir} -e {command}"),
     "wezterm": ("WezTerm", "wezterm cli spawn --cwd {dir} -- {argv}"),
     "kitty": ("kitty", "kitty @ launch --type=tab --cwd={dir} --tab-title={title} {argv}"),
     "windows-terminal": ("Windows Terminal", "wt.exe -w 0 new-tab --title {title} wsl.exe -d {distro} --cd {dir} -- {argv}"),
