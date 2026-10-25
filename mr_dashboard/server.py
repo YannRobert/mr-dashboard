@@ -15,8 +15,8 @@ before forwarding it.
 
 Local actions, over POST:
     /orca/launch  opens in Orca a Claude Code session with the prompt of a MR's AI button action:
-                {"iid", "action", "prompt", "model", "effort"} (see orca_launcher.py), when the server runs
-                in WSL and Orca is installed; GET /ai/actions returns the catalog (see ai_actions.py),
+                {"iid", "action", "prompt", "model", "effort"} (see orca_launcher.py), when Orca is
+                found, on Windows from WSL or on Linux; GET /ai/actions returns the catalog (see ai_actions.py),
                 GET /orca/status?launch= tells whether the shell, then Claude Code, started in a launch's tab
     /git/fetch  git fetch of the local git clone, which also runs by itself every --git-fetch-interval
                 seconds; GET /git/status returns the last result (see git_actions.py)
@@ -400,7 +400,7 @@ def make_handler(
                 self.send_json(400, {"message": f"effort level not offered for this model: {effort}"})
                 return
             if not orca:
-                self.send_json(503, {"message": "Orca not found, or server running outside WSL"})
+                self.send_json(503, {"message": "Orca not found: orca.exe from WSL, or orca on Linux"})
                 return
             try:
                 title = ai_actions.tab_title(
