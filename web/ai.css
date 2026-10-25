@@ -61,3 +61,10 @@ dialog.ai-prompt .ai-model select {
   border: 1px solid var(--border-strong); border-radius: 0.5rem; padding: 0.25em 0.5em; cursor: pointer;
 }
 dialog.ai-prompt .ai-model select:disabled { opacity: 0.5; cursor: default; }
+/* Same widths whatever the agent and its models: a long name is cut short on the closed menu, whole in the
+   open list. */
+dialog.ai-prompt .ai-model select, dialog.ai-prompt .ai-launch select { text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
+dialog.ai-prompt #ai-agent { width: 9.5em; }
+dialog.ai-prompt #ai-model { width: 11em; }
+dialog.ai-prompt #ai-effort { width: 8.5em; }
+dialog.ai-prompt #ai-target { width: 10.5em; }

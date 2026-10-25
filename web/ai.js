@@ -231,8 +231,6 @@ window.MrAi = (() => {
       part("ai-model").value = "";
       applyTexts();
       part("ai-title").textContent = t("dialog.title", { iid: dialog.dataset.iid });
-      part("ai-model-label").hidden = part("ai-launch-group").hidden || !agent()?.models.length;
-      part("ai-effort-label").hidden = part("ai-launch-group").hidden || (!agent()?.models.length && !agent()?.efforts.length);
       select(actionsFor(current.toFix).find(action => action.id === dialog.dataset.action));
     });
     part("ai-target").addEventListener("change", () => {
@@ -299,11 +297,14 @@ window.MrAi = (() => {
     const choices = chosenAgent?.models ?? [];
     const option = model => `<option value="${escapeHtml(model.id)}">${escapeHtml(modelLabel(model))}</option>`;
     const group = (label, list) => (list.length ? `<optgroup label="${escapeHtml(label)}">${list.map(option).join("")}</optgroup>` : "");
-    // Aliases and versions apart for Claude Code; a plain list for an agent without aliases.
+    // Aliases and versions apart for Claude Code; one group per provider for an agent that names them (Pi).
+    const providers = [...new Set(choices.map(model => model.provider).filter(Boolean))];
     part("ai-model").innerHTML = `<option value="">${escapeHtml(t("dialog.model.default"))}</option>`
       + (choices.some(model => model.alias)
         ? group(t("dialog.model.latest"), choices.filter(model => model.alias)) + group(t("dialog.model.versions"), choices.filter(model => !model.alias))
-        : choices.map(option).join(""));
+        : providers.length
+          ? providers.map(provider => group(provider, choices.filter(model => model.provider === provider))).join("")
+          : choices.map(option).join(""));
     choose(part("ai-model"), choice);
     part("ai-effort-label").title = t("dialog.effort.title");
     part("ai-effort-name").textContent = t("dialog.effort");
@@ -412,11 +413,11 @@ window.MrAi = (() => {
     ).join("");
     part("ai-target").hidden = targets.length < 2;
     part("ai-launch-group").hidden = !chosen;
-    // The agent, its model and level only matter for a launch; an agent that lists no models runs on its own.
-    const chosenAgent = agent();
+    // The agent, its model and level only matter for a launch. They stay in place for every agent, greyed out on
+    // the default when it offers none, so that changing agents moves nothing.
     part("ai-agent-label").hidden = !chosen || (catalog?.agents ?? []).length < 2;
-    part("ai-model-label").hidden = !chosen || !chosenAgent?.models.length;
-    part("ai-effort-label").hidden = !chosen || (!chosenAgent?.models.length && !chosenAgent?.efforts.length);
+    part("ai-model-label").hidden = !chosen;
+    part("ai-effort-label").hidden = !chosen;
     applyTexts();
     if (!dialog.open) dialog.showModal();
     select(actions[0]);
@@ -434,7 +435,7 @@ window.MrAi = (() => {
     text.readOnly = !action;
     part("ai-reset").hidden = !drafts.has(draftKey());
     choose(part("ai-model"), models.get(choiceKey()) ?? actionModel(action));
-    part("ai-model").disabled = !action;
+    part("ai-model").disabled = !action || !agent()?.models.length;
     syncEfforts(efforts.get(choiceKey()) ?? actionEffort(action));
     part("ai-copied").textContent = "";
     syncSendButtons();

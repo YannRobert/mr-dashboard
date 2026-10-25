@@ -2,7 +2,7 @@
 
 Each agent has its command line, the models it offers and the effort levels each model accepts, as the dialog's
 menus show them ({"id", "label", "alias", "version", "efforts", "recommended"}, as claude_models.choices gives
-them). An agent whose models cannot be listed offers none: its session then runs on the model of its own
+them, plus "provider" for an agent that groups its models by provider). An agent whose models cannot be listed offers none: its session then runs on the model of its own
 configuration.
 """
 import re
@@ -102,7 +102,7 @@ class Pi(Agent):
             provider, model, thinking = columns[0], columns[1], columns[4]
             model_id = f"{provider}/{model}"
             if PI_MODEL.match(model_id):
-                models.append({"id": model_id, "label": f"{model} ({provider})", "alias": False, "version": None,
+                models.append({"id": model_id, "label": model, "provider": provider, "alias": False, "version": None,
                                "efforts": list(PI_THINKING) if thinking == "yes" else [], "recommended": None})
         return models
 
