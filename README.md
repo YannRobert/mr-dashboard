@@ -304,6 +304,23 @@ tab on `--repo-dir` and starts a Claude Code session there with the prompt, mode
 The prompt goes through a short-lived file under `~/.cache/mr-dashboard/`, deleted by the session
 once started. Without Orca, the button is not offered and prompts are copied instead.
 
+Each step of a launch plays a radio sound followed by a spoken line ("Yes sir!", "Operation underway!"),
+also heard from 🔊. The lines go through the browser's speech synthesis, which needs voices from the
+system:
+
+- **Windows** and **macOS** provide them out of the box. With the dashboard under WSL, the browser runs
+  on Windows and uses its voices.
+- **Linux**: browsers speak through speech-dispatcher, which many distributions do not install. Without
+  it, the sounds play but the lines stay silent. Install it with a voice engine, then restart the
+  browser completely; `spd-say "Yes sir"` checks the voice outside the browser.
+  - Arch, Manjaro: `sudo pacman -S speech-dispatcher espeak-ng`
+  - Debian, Ubuntu: `sudo apt install speech-dispatcher espeak-ng`
+
+  Firefox then speaks as is. Chrome, Chromium and Brave only use speech-dispatcher when started with
+  `--enable-speech-dispatcher`: on Arch and Manjaro, add that line to `~/.config/brave-flags.conf`
+  (`chrome-flags.conf`, `chromium-flags.conf`), which their launchers read. espeak-ng sounds robotic;
+  a neural voice engine plugged into speech-dispatcher sounds closer to Windows'.
+
 ## Local git clone: fetch and diff
 
 The server works on the local git clone (`--repo-dir`, main or secondary worktree) and never checks
