@@ -28,10 +28,7 @@ nobody keeps an IDE open on each of them. The diff of every merge request comes 
 clone, without checking anything out, so neither the author nor the reviewer opens an IDE to read
 it. The **AI** button turns the fix of what is red, and the actions the project defines, such as a
 review or an explanation, into a prompt already filled in for that merge request: one click copies
-it, or opens a new Orca tab and starts Claude Code with it\*.
-
-\* For now, Orca is supported only with the dashboard running under WSL and Orca on Windows: see
-[Orca integration](#orca-integration).
+it, or opens a new Orca tab and starts Claude Code with it (see [Orca integration](#orca-integration)).
 
 `mr_dashboard/server.py` serves the page (`web/index.html`) and relays the GitLab and SonarQube APIs, so that tokens
 never reach the browser. It only listens on `127.0.0.1`.
@@ -328,9 +325,16 @@ catalogue offers none, and the dialog says why. With or without a catalogue, the
 
 ### Orca integration
 
-When the server runs under WSL and Orca is installed on Windows
-(`orca.exe` reachable through Windows interop), the dialog offers **Open in Orca**: it opens a new Orca
-tab on `--repo-dir` and starts a Claude Code session there with the prompt, model and effort chosen.
+When the server finds Orca, the dialog offers **Open in Orca**: it opens a new Orca tab on `--repo-dir`
+and starts a Claude Code session there with the prompt, model and effort chosen. Two set-ups:
+
+- **Orca on Windows, the dashboard under WSL**: `orca.exe` reachable through Windows interop.
+- **Both on Linux**: `orca` on the `PATH`. The tab runs your login shell, which must understand a
+  POSIX command line, as bash and zsh do.
+
+Orca only opens tabs in its projects: `--repo-dir` must be one of them. Otherwise the dialog says so,
+with the command that adds it (`orca repo add --path <repo-dir>`).
+
 The prompt goes through a short-lived file under `~/.cache/mr-dashboard/`, deleted by the session
 once started. Without Orca, the button is not offered and prompts are copied instead.
 

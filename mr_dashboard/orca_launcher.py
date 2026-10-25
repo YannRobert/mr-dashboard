@@ -1,8 +1,13 @@
 """Opens in Orca a Claude Code session in charge of an AI button action on a MR.
 
-Orca runs on Windows, this server in WSL: Orca is driven through its CLI (orca.exe, reachable from WSL
-through Windows interop). The terminal Orca opens on a \\\\wsl.localhost\\… worktree is a WSL bash
-placed in that worktree, which types the startup command there as is.
+Orca is driven through its CLI, in one of two set-ups:
+
+- under WSL, with Orca on Windows: orca.exe, reachable from WSL through Windows interop. The terminal Orca
+  opens on a \\\\wsl.localhost\\… worktree is a WSL bash placed in that worktree;
+- on Linux, with Orca on the same machine: orca, on the PATH. The terminal is the user's login shell,
+  placed in the worktree.
+
+Either way, the terminal types the startup command as is: a POSIX shell command, which bash and zsh run.
 
 The terminal always opens on the tracked repository (--repo-dir): it is Claude that, following the prompt,
 works in the MR's worktree. All tabs thus stay in the same place in Orca.
@@ -15,6 +20,7 @@ import secrets
 import shlex
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -24,7 +30,7 @@ COMMAND_TIMEOUT_S = 60
 # command line. The terminal reads it, and the Claude Code session deletes it once started, through a
 # SessionStart hook brought by its own settings (sibling file, passed with --settings); a file never
 # deleted (shell or claude failing at startup) is purged on the next launch, once past this age. A marker
-# file, which the terminal shell deletes first, tells a shell that never started (WSL unreachable) from
+# file, which the terminal shell deletes first, tells a shell that never started (WSL unreachable, say) from
 # a claude that did not start.
 PROMPT_DIR = Path.home() / ".cache" / "mr-dashboard"
 PROMPT_MAX_AGE_S = 24 * 3600
@@ -33,6 +39,8 @@ LAUNCH_ID = re.compile(r"MR\d+-[0-9a-f]{8}")
 # Orca waits only a few seconds for the terminal, while the WSL shell sometimes takes more than ten to
 # start: it then reports a failure although the terminal was indeed created.
 UNCONFIRMED_ERROR = "Timed out waiting for terminal handle"
+# Orca only opens terminals in the folders it holds as projects: the tracked repository must be one of them.
+NOT_A_PROJECT = "selector_not_found"
 # Orca only processes a tab creation once its window is in the foreground: bring it there first.
 # Windows refuses this switch to a process that did not receive the last input, except right after a
 # key press: hence the simulated Alt key (no visible effect). At worst, the user switches by hand.
@@ -73,24 +81,23 @@ class OrcaLauncher:
             self,
             orca,
             repo_dir,
-            distro
+            distro=None
     ):
         self._orca_exe = orca
         self._repo_dir = repo_dir
+        # The WSL distribution, under WSL with Orca on Windows; None with Orca on Linux.
         self._distro = distro
 
     @classmethod
     def detect(cls, repo_dir):
-        """The launcher, or None outside WSL or without Orca installed: the button is then not offered."""
-        orca = shutil.which("orca.exe")
+        """The launcher, or None without Orca: the button is then not offered. Under WSL, Orca on Windows;
+        elsewhere on Linux, Orca on the same machine."""
         distro = os.environ.get("WSL_DISTRO_NAME")
-        if not orca or not distro:
-            return None
-        return cls(
-            orca,
-            repo_dir,
-            distro
-        )
+        if distro:
+            orca = shutil.which("orca.exe")
+            return cls(orca, repo_dir, distro) if orca else None
+        orca = shutil.which("orca") if sys.platform.startswith("linux") else None
+        return cls(orca, repo_dir) if orca else None
 
     def launch(
             self,
@@ -119,13 +126,16 @@ class OrcaLauncher:
         try:
             self._orca([
                 "terminal", "create",
-                "--worktree", "path:" + self._windows_path(self._repo_dir),
+                "--worktree", "path:" + self._worktree_path(),
                 "--title", title,
                 "--command", f"rm -f '{shell_file}'; [ -f '{prompt_file}' ] && claude --settings '{settings_file}' {model_option}{effort_option}\"$(cat '{prompt_file}')\"",
                 "--focus",
                 "--json",
             ])
         except OrcaError as error:
+            if NOT_A_PROJECT in str(error):
+                raise OrcaError(f"Orca does not know {self._worktree_path()}: add it to Orca as a project, "
+                                f"or run orca repo add --path {shlex.quote(self._worktree_path())}") from error
             if not error.unconfirmed:
                 raise
             return {"worktree": str(self._repo_dir), "confirmed": False, "launch": prompt_file.stem}
@@ -164,11 +174,17 @@ class OrcaLauncher:
         path.chmod(0o600)
         return path
 
-    def _windows_path(self, path):
-        return f"\\\\wsl.localhost\\{self._distro}" + str(path).replace("/", "\\")
+    def _worktree_path(self):
+        """The tracked repository as Orca sees it: a Windows path to the WSL file system, or the Linux path."""
+        if not self._distro:
+            return str(self._repo_dir)
+        return f"\\\\wsl.localhost\\{self._distro}" + str(self._repo_dir).replace("/", "\\")
 
     def _raise_orca(self):
-        """Best effort: on failure, the creation happens as soon as the user switches to Orca."""
+        """Best effort, on Windows only: on failure, the creation happens as soon as the user switches to Orca.
+        On Linux, --focus is enough."""
+        if not self._distro:
+            return
         powershell = shutil.which("powershell.exe")
         if not powershell:
             return
