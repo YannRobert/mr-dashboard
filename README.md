@@ -20,15 +20,15 @@ review activity: commits, comments, who pushed or commented last.
   branch's pipeline fails.
 
 It also offers a diff viewer built on the local git clone, where threads are opened, answered and
-resolved, a comments page, and an **AI** button that prepares Claude Code prompts for a merge
-request.
+resolved, a comments page, and an **AI** button that prepares prompts for a merge request, for
+Claude Code, Codex or Pi.
 
 Made for agentic development, where coding agents write the code across several worktrees and
 nobody keeps an IDE open on each of them. The diff of every merge request comes from the local git
 clone, without checking anything out, so neither the author nor the reviewer opens an IDE to read
 it. The **AI** button turns the fix of what is red, and the actions the project defines, such as a
 review or an explanation, into a prompt already filled in for that merge request: one click copies
-it, or opens a new tab in Orca, herdr or your terminal and starts Claude Code with it (see
+it, or opens a new tab in Orca, herdr or your terminal and starts Claude Code, Codex or Pi with it (see
 [Where sessions open](#where-sessions-open)).
 
 `mr_dashboard/server.py` serves the page (`web/index.html`) and relays the GitLab and SonarQube APIs, so that tokens
@@ -67,7 +67,7 @@ dated relative to that moment, in a temporary directory removed on exit.
   (`~/.config/glab-cli/config.yml`): run `glab auth login --hostname gitlab.example.com` once.
 - **`SONAR_TOKEN`** in the environment of the shell that starts the server, if the project uses
   SonarQube. Without it, the Sonar badges stay grey.
-- Optional: Claude Code, with [Orca, herdr or a terminal](#where-sessions-open), for the AI button's launch
+- Optional: Claude Code, Codex or Pi, with [Orca, herdr or a terminal](#where-sessions-open), for the AI button's launch
   action.
 
 ## Running
@@ -275,19 +275,24 @@ The image needs `curl` and `jq`. Then start the dashboard with `--pit-job mutati
 ## AI actions
 
 The **AI** button of an open MR offers the actions of the tracked project's catalogue. The dialog
-shows the chosen action's prompt, to copy into Claude Code or to launch in a new tab (see
+shows the chosen action's prompt, to copy into your coding agent or to launch in a new tab (see
 [Where sessions open](#where-sessions-open)). The prompt can be edited in the dialog before being copied or
 launched: the edited text is what goes out. It is kept per MR and per action until the page is
 reloaded; **Original prompt** restores it.
 
-- **Model** selects the model of the launched session (`claude --model`): the action's one from the
-  catalogue, preselected, or Claude Code's configured default. Aliases come first (they always map to
-  the latest version), then older specific versions. The list is read from the cache Claude Code
-  maintains itself (`~/.claude/cache/model-catalog/`, reread every time the dialog opens), so new
-  models show up without changing anything here; without that cache, only the aliases are offered.
-- **Effort** selects the effort level (`claude --effort`, from *Low* to *Max*). Only the levels the
-  chosen model supports are listed, the recommended one flagged; a model without effort levels greys
-  the list out.
+- **Agent** selects the coding agent launched, among those installed: Claude Code (`claude`), Codex
+  (`codex`) and Pi (`pi`). The browser remembers the choice.
+- **Model** selects the model of the launched session, or the agent's configured default:
+  - Claude Code (`claude --model`): the action's one from the catalogue, preselected. Aliases come first
+    (they always map to the latest version), then older specific versions. The list is read from the
+    cache Claude Code maintains itself (`~/.claude/cache/model-catalog/`, reread every time the dialog
+    opens), so new models show up without changing anything here; without that cache, only the aliases
+    are offered.
+  - Pi (`pi --model`): the models of `pi --list-models`.
+  - Codex lists no models offline: its sessions run on the model of its configuration.
+- **Effort** selects the effort level: `claude --effort` (from *Low* to *Max*) or `pi --thinking`
+  (from *Off* to *Max*). Only the levels the chosen model supports are listed, the recommended one
+  flagged; a model without effort levels greys the list out.
 - **Close**, Escape or a click outside the dialog close it. The button has a red outline when the MR
   has something to fix: branch behind or in conflict, imperfect quality indicator, unresolved thread.
 
@@ -329,7 +334,7 @@ catalogue offers none, and the dialog says why. With or without a catalogue, the
 ### Where sessions open
 
 `--launch-in` (`LAUNCH_IN` in a profile) names where the dialog's **Open in …** button can open a new tab on
-`--repo-dir` and start a Claude Code session there with the prompt, model and effort chosen. Given several
+`--repo-dir` and start the chosen agent there with the prompt, model and effort chosen. Given several
 times (`--launch-in orca --launch-in terminal:terminator`, or `LAUNCH_IN=(orca terminal:terminator)` in a
 profile), it offers them in the dialog's **Where** menu, in that order: the session opens where you pick at
 the last moment, should one of them fail you, and the browser remembers the choice. The tab runs your login
@@ -365,7 +370,7 @@ launch, and herdr shows each agent's state in its sidebar.
 
 #### Terminals
 
-A preset opens a new tab, or a new window for terminals without tabs. Once Claude Code exits, the tab
+A preset opens a new tab, or a new window for terminals without tabs. Once the agent exits, the tab
 stays open as an ordinary shell.
 
 | Preset | Opens | Tried |

@@ -39,14 +39,16 @@ class HerdrLauncher:
             title,
             prompt,
             model=None,
-            effort=None
+            effort=None,
+            agent=None
     ):
         """Opens the tab and returns {worktree, confirmed, launch}."""
         launch = launches.prepare(
             iid,
             prompt,
             model,
-            effort
+            effort,
+            agent
         )
         workspace = self._workspace()
         if workspace:

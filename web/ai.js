@@ -6,25 +6,27 @@ window.MrAi = (() => {
   const TEXTS = {
     fr: {
       "ai": "AI",
-      "ai.title": "Afficher un prompt Claude Code pour cette MR",
-      "ai.title.toFix": "Afficher un prompt Claude Code pour cette MR, qui a quelque chose à corriger",
+      "ai.title": "Afficher un prompt pour un agent de code, sur cette MR",
+      "ai.title.toFix": "Afficher un prompt pour un agent de code, sur cette MR qui a quelque chose à corriger",
       "ai.fix": "Corriger",
       "ai.free": "Libre",
-      "dialog.title": p => `Claude Code sur la MR !${p.iid}`,
+      "dialog.title": p => `${p.agent} sur la MR !${p.iid}`,
       "dialog.actions": "Action",
       "dialog.catalogError": p => `Catalogue des actions AI illisible : ${p.message}`,
-      "dialog.hint": p => `Prompt à compléter ou retoucher ici si besoin, puis à coller dans Claude Code, lancé à la racine du dépôt${p.target ? ` — ou à lancer directement dans ${p.target}` : ""}.`,
-      "dialog.hint.free": p => `Prompt à rédiger ici, puis à coller dans Claude Code, lancé à la racine du dépôt${p.target ? ` — ou à lancer directement dans ${p.target}` : ""}.`,
+      "dialog.hint": p => `Prompt à compléter ou retoucher ici si besoin, puis à coller dans ${p.agent}, lancé à la racine du dépôt${p.target ? ` — ou à lancer directement dans ${p.target}` : ""}.`,
+      "dialog.hint.free": p => `Prompt à rédiger ici, puis à coller dans ${p.agent}, lancé à la racine du dépôt${p.target ? ` — ou à lancer directement dans ${p.target}` : ""}.`,
       "dialog.reset": "Prompt d'origine",
       "dialog.reset.title": "Remplace le prompt modifié par celui de l'action",
-      "dialog.aria": "Prompt pour Claude Code",
+      "dialog.aria": p => `Prompt pour ${p.agent}`,
       "dialog.close": "Fermer",
       "dialog.copy": "Copier",
       "dialog.copied": "Copié",
       "dialog.launch": p => `Ouvrir dans ${p.target}`,
-      "dialog.launch.title": p => `Lance Claude Code avec ce prompt dans un nouvel onglet de ${p.target}, sur le worktree principal`,
+      "dialog.launch.title": p => `Lance ${p.agent} avec ce prompt dans un nouvel onglet de ${p.target}, sur le worktree principal`,
       "dialog.launch.in": "Ouvrir dans",
       "dialog.target.title": "Où lancer la session : choisi ici au dernier moment, retenu par le navigateur",
+      "dialog.agent": "Agent",
+      "dialog.agent.title": "Agent de code qui reçoit le prompt, retenu par le navigateur",
       "dialog.model": "Modèle",
       "dialog.model.title": p => `Modèle de la session lancée dans ${p.target}. Un prompt copié prend celui de la session où on le colle : /model pour en changer.`,
       "dialog.model.default": "par défaut",
@@ -33,6 +35,8 @@ window.MrAi = (() => {
       "dialog.effort": "Effort",
       "dialog.effort.title": p => `Niveau d'effort de la session lancée dans ${p.target} : bas pour une tâche simple, qui coûte moins, élevé pour une tâche difficile. Un prompt copié prend celui de la session où on le colle : /effort pour en changer.`,
       "dialog.effort.default": "par défaut",
+      "dialog.effort.off": "Aucune",
+      "dialog.effort.minimal": "Minimal",
       "dialog.effort.low": "Bas",
       "dialog.effort.medium": "Moyen",
       "dialog.effort.high": "Élevé",
@@ -40,34 +44,36 @@ window.MrAi = (() => {
       "dialog.effort.max": "Maximal",
       "dialog.effort.recommended": p => `${p.level} (recommandé)`,
       "dialog.launch.opening": p => `Ouverture dans ${p.target}…`,
-      "dialog.launch.opened": p => `Onglet ouvert dans ${p.target}, en attente du démarrage de Claude Code…`,
-      "dialog.launch.unconfirmed": p => `${p.target} n'a pas confirmé à temps : bascule sur ${p.target}, l'onglet s'y ouvre dès que sa fenêtre est au premier plan. En attente du démarrage de Claude Code…`,
-      "dialog.launch.read": p => `Session Claude Code démarrée dans ${p.target}`,
+      "dialog.launch.opened": p => `Onglet ouvert dans ${p.target}, en attente du démarrage de ${p.agent}…`,
+      "dialog.launch.unconfirmed": p => `${p.target} n'a pas confirmé à temps : bascule sur ${p.target}, l'onglet s'y ouvre dès que sa fenêtre est au premier plan. En attente du démarrage de ${p.agent}…`,
+      "dialog.launch.read": p => `Session ${p.agent} démarrée dans ${p.target}`,
       "dialog.launch.noShell": p => `Le shell du terminal n'a pas démarré en ${p.seconds} s : regarde dans ${p.target}`,
-      "dialog.launch.unread": p => `Le shell a démarré, mais pas Claude Code en ${p.seconds} s : regarde dans ${p.target}`,
+      "dialog.launch.unread": p => `Le shell a démarré, mais pas ${p.agent} en ${p.seconds} s : regarde dans ${p.target}`,
       "dialog.launch.failed": p => `Échec : ${p.message}`,
     },
     en: {
       "ai": "AI",
-      "ai.title": "Show a Claude Code prompt for this MR",
-      "ai.title.toFix": "Show a Claude Code prompt for this MR, which has something to fix",
+      "ai.title": "Show a prompt for a coding agent, on this MR",
+      "ai.title.toFix": "Show a prompt for a coding agent, on this MR, which has something to fix",
       "ai.fix": "Fix",
       "ai.free": "Free",
-      "dialog.title": p => `Claude Code on MR !${p.iid}`,
+      "dialog.title": p => `${p.agent} on MR !${p.iid}`,
       "dialog.actions": "Action",
       "dialog.catalogError": p => `Unreadable AI actions catalogue: ${p.message}`,
-      "dialog.hint": p => `Prompt to complete or adjust here if needed, then paste into Claude Code, started at the repository root${p.target ? ` — or to start directly in ${p.target}` : ""}.`,
-      "dialog.hint.free": p => `Prompt to write here, then paste into Claude Code, started at the repository root${p.target ? ` — or to start directly in ${p.target}` : ""}.`,
+      "dialog.hint": p => `Prompt to complete or adjust here if needed, then paste into ${p.agent}, started at the repository root${p.target ? ` — or to start directly in ${p.target}` : ""}.`,
+      "dialog.hint.free": p => `Prompt to write here, then paste into ${p.agent}, started at the repository root${p.target ? ` — or to start directly in ${p.target}` : ""}.`,
       "dialog.reset": "Original prompt",
       "dialog.reset.title": "Replace the edited prompt with the action's own",
-      "dialog.aria": "Prompt for Claude Code",
+      "dialog.aria": p => `Prompt for ${p.agent}`,
       "dialog.close": "Close",
       "dialog.copy": "Copy",
       "dialog.copied": "Copied",
       "dialog.launch": p => `Open in ${p.target}`,
-      "dialog.launch.title": p => `Start Claude Code with this prompt in a new ${p.target} tab, on the main worktree`,
+      "dialog.launch.title": p => `Start ${p.agent} with this prompt in a new ${p.target} tab, on the main worktree`,
       "dialog.launch.in": "Open in",
       "dialog.target.title": "Where to start the session: picked here at the last moment, remembered by the browser",
+      "dialog.agent": "Agent",
+      "dialog.agent.title": "Coding agent the prompt goes to, remembered by the browser",
       "dialog.model": "Model",
       "dialog.model.title": p => `Model of the session started in ${p.target}. A copied prompt runs on the model of the session it is pasted into: /model to change it.`,
       "dialog.model.default": "default",
@@ -76,6 +82,8 @@ window.MrAi = (() => {
       "dialog.effort": "Effort",
       "dialog.effort.title": p => `Effort level of the session started in ${p.target}: low for a simple task, which costs less, high for a hard one. A copied prompt runs at the effort of the session it is pasted into: /effort to change it.`,
       "dialog.effort.default": "default",
+      "dialog.effort.off": "Off",
+      "dialog.effort.minimal": "Minimal",
       "dialog.effort.low": "Low",
       "dialog.effort.medium": "Medium",
       "dialog.effort.high": "High",
@@ -83,11 +91,11 @@ window.MrAi = (() => {
       "dialog.effort.max": "Max",
       "dialog.effort.recommended": p => `${p.level} (recommended)`,
       "dialog.launch.opening": p => `Opening in ${p.target}…`,
-      "dialog.launch.opened": p => `Tab opened in ${p.target}, waiting for Claude Code to start…`,
-      "dialog.launch.unconfirmed": p => `${p.target} did not confirm in time: switch to ${p.target}, the tab opens as soon as its window is in front. Waiting for Claude Code to start…`,
-      "dialog.launch.read": p => `Claude Code session started in ${p.target}`,
+      "dialog.launch.opened": p => `Tab opened in ${p.target}, waiting for ${p.agent} to start…`,
+      "dialog.launch.unconfirmed": p => `${p.target} did not confirm in time: switch to ${p.target}, the tab opens as soon as its window is in front. Waiting for ${p.agent} to start…`,
+      "dialog.launch.read": p => `${p.agent} session started in ${p.target}`,
       "dialog.launch.noShell": p => `The terminal shell did not start within ${p.seconds} s: check ${p.target}`,
-      "dialog.launch.unread": p => `The shell started, but not Claude Code within ${p.seconds} s: check ${p.target}`,
+      "dialog.launch.unread": p => `The shell started, but not ${p.agent} within ${p.seconds} s: check ${p.target}`,
       "dialog.launch.failed": p => `Failed: ${p.message}`,
     },
   };
@@ -96,6 +104,8 @@ window.MrAi = (() => {
   const FIX_CONTEXTS_KEY = "mr-dashboard.aiFixContexts";
   // Id of the launch target last picked in the dialog's menu.
   const LAUNCH_TARGET_KEY = "mr-dashboard.launchTarget";
+  // Id of the coding agent last picked in the dialog's menu.
+  const AGENT_KEY = "mr-dashboard.agent";
   // Beyond that, no dashboard tab keeps it up to date anymore: the fix is no longer offered.
   const FIX_CONTEXT_MAX_AGE_MS = 30 * 60 * 1000;
   const ORCA_LOGO = `<svg class="orca-logo" viewBox="6.67 70.67 318.6 202.67" aria-hidden="true"><path fill="currentColor" d="m 177.81311,248.33334 c 23.82304,-41.29793 40.54045,-66.84626 49.51207,-75.66667 6.81685,-6.70196 10.07373,-8.7374 20.07265,-12.54475 34.57822,-13.16655 61.04674,-26.78733 72.37222,-37.24295 9.62924,-8.88966 9.34286,-9.01142 -23.43671,-9.964 -35.71756,-1.03796 -43.72989,0.42119 -62.17546,11.323 -16.72118,9.88265 -34.20103,30.11225 -42.74704,49.47157 -2.57353,5.82985 -14.81294,44.3056 -27.96399,87.90747 -2.86036,9.48343 -3.02466,11.71633 -0.86213,11.71633 0.44382,0 7.29659,-11.25 15.22839,-25 z m -65.14644,-8.32267 C 120,239.3326 130.5,237.50979 136,235.95998 c 5.5,-1.5498 12.25,-3.13783 15,-3.52895 2.75,-0.39111 5,-0.95485 5,-1.25275 0,-0.29789 2.15135,-7.58487 4.78078,-16.19328 8.49209,-27.80201 12.21334,-40.41629 21.13747,-71.65166 4.81891,-16.86667 11.23502,-39.185 14.25802,-49.596301 5.12803,-17.66103 5.74763,-23.07037 2.64253,-23.07037 -1.84887,0 -4.07048,6.908293 -16.72243,52.000001 -21.78975,77.65896 -20.80806,74.74393 -26.84794,79.72251 -7.5925,6.25838 -25.03916,14.82524 -36.10856,17.73044 -17.0947,4.48656 -33.410599,3.86724 -53.116765,-2.01622 -18.569242,-5.54403 -23.142662,-5.80284 -33.639754,-1.9037 -5.875424,2.18242 -9.864152,5.04363 -16.716684,11.99127 -4.95,5.0187 -9.0000001,10.02884 -9.0000001,11.13364 0,1.75174 5.9276921,2.00299 46.3333351,1.96383 25.483334,-0.0247 52.333338,-0.59969 59.666668,-1.27777 z M 252.69513,104.63708 c 12.18267,-3.48651 15.77304,-7.895503 9.63821,-11.835773 -10.19296,-6.546726 -36.19849,-1.77301 -41.19436,7.561863 -1.2556,2.3461 -0.98698,3.2037 1.68353,5.375 2.69471,2.19098 4.59991,2.47691 12.53928,1.88189 5.14899,-0.3859 12.94899,-1.72824 17.33334,-2.98298 z"/></svg>`;
@@ -119,7 +129,7 @@ window.MrAi = (() => {
     params = {}
   ) {
     const text = TEXTS[lang][key];
-    return typeof text === "function" ? text({ target: launchTarget()?.name, ...params }) : text;
+    return typeof text === "function" ? text({ target: launchTarget()?.name, agent: agent()?.name ?? "Claude Code", ...params }) : text;
   }
 
   function escapeHtml(value) {
@@ -159,6 +169,7 @@ window.MrAi = (() => {
         <button type="button" id="ai-close" class="dismiss"></button>
         <span class="muted" id="ai-copied" aria-live="polite"></span>
         <button type="button" id="ai-reset" hidden></button>
+        <label class="ai-model" id="ai-agent-label" hidden><span id="ai-agent-name"></span> <select id="ai-agent"></select></label>
         <label class="ai-model" id="ai-model-label" hidden><span id="ai-model-name"></span> <select id="ai-model"></select></label>
         <label class="ai-model" id="ai-effort-label" hidden><span id="ai-effort-name"></span> <select id="ai-effort"></select></label>
         <span class="ai-launch" id="ai-launch-group" hidden><button type="button" id="ai-launch" class="with-icon">${ORCA_LOGO}<span id="ai-launch-label"></span></button><select id="ai-target"></select></span>
@@ -194,12 +205,35 @@ window.MrAi = (() => {
     part("ai-reset").addEventListener("click", resetDraft);
     part("ai-copy").addEventListener("click", copy);
     part("ai-launch").addEventListener("click", launchSession);
+    part("ai-agent").addEventListener("change", () => {
+      try {
+        localStorage.setItem(AGENT_KEY, part("ai-agent").value);
+      } catch (ignored) { /* storage unavailable: the choice lasts until the page reloads */ }
+      // Another agent, other models: back to its default model, and the action's one for Claude Code.
+      part("ai-model").value = "";
+      applyTexts();
+      part("ai-title").textContent = t("dialog.title", { iid: dialog.dataset.iid });
+      part("ai-model-label").hidden = part("ai-launch-group").hidden || !agent()?.models.length;
+      part("ai-effort-label").hidden = part("ai-launch-group").hidden || (!agent()?.models.length && !agent()?.efforts.length);
+      select(actionsFor(current.toFix).find(action => action.id === dialog.dataset.action));
+    });
     part("ai-target").addEventListener("change", () => {
       try {
         localStorage.setItem(LAUNCH_TARGET_KEY, part("ai-target").value);
       } catch (ignored) { /* storage unavailable: the choice lasts until the page reloads */ }
       applyTexts();
     });
+  }
+
+  // The coding agent picked in the menu, else the one picked last time, else the first installed; null without any.
+  function agent() {
+    const agents = catalog?.agents ?? [];
+    let saved = null;
+    try {
+      saved = localStorage.getItem(AGENT_KEY);
+    } catch (ignored) { /* storage unavailable */ }
+    const picked = dialog ? part("ai-agent").value : "";
+    return agents.find(candidate => candidate.id === picked) ?? agents.find(candidate => candidate.id === saved) ?? agents[0] ?? null;
   }
 
   // The launch target picked in the menu, else the one picked last time, else the first offered; null without any.
@@ -233,15 +267,24 @@ window.MrAi = (() => {
     part("ai-launch").querySelector(".orca-logo").style.display = launchTarget()?.id === "orca" ? "" : "none";
     part("ai-target").title = t("dialog.target.title");
     part("ai-target").setAttribute("aria-label", t("dialog.target.title"));
+    part("ai-agent-label").title = t("dialog.agent.title");
+    part("ai-agent-name").textContent = t("dialog.agent");
+    const agents = catalog?.agents ?? [];
+    const chosenAgent = agent();
+    part("ai-agent").innerHTML = agents.map(candidate =>
+      `<option value="${escapeHtml(candidate.id)}"${candidate.id === chosenAgent?.id ? " selected" : ""}>${escapeHtml(candidate.name)}</option>`
+    ).join("");
     part("ai-model-label").title = t("dialog.model.title");
     part("ai-model-name").textContent = t("dialog.model");
     const choice = part("ai-model").value;
-    const choices = catalog?.models ?? [];
+    const choices = chosenAgent?.models ?? [];
     const option = model => `<option value="${escapeHtml(model.id)}">${escapeHtml(modelLabel(model))}</option>`;
     const group = (label, list) => (list.length ? `<optgroup label="${escapeHtml(label)}">${list.map(option).join("")}</optgroup>` : "");
+    // Aliases and versions apart for Claude Code; a plain list for an agent without aliases.
     part("ai-model").innerHTML = `<option value="">${escapeHtml(t("dialog.model.default"))}</option>`
-      + group(t("dialog.model.latest"), choices.filter(model => model.alias))
-      + group(t("dialog.model.versions"), choices.filter(model => !model.alias));
+      + (choices.some(model => model.alias)
+        ? group(t("dialog.model.latest"), choices.filter(model => model.alias)) + group(t("dialog.model.versions"), choices.filter(model => !model.alias))
+        : choices.map(option).join(""));
     choose(part("ai-model"), choice);
     part("ai-effort-label").title = t("dialog.effort.title");
     part("ai-effort-name").textContent = t("dialog.effort");
@@ -270,13 +313,13 @@ window.MrAi = (() => {
     if (select.value !== value) select.value = "";
   }
 
-  const chosenModel = () => (catalog?.models ?? []).find(model => model.id === part("ai-model").value);
+  const chosenModel = () => (agent()?.models ?? []).find(model => model.id === part("ai-model").value);
 
-  // Effort levels of the chosen model, its recommended level flagged; all of them for the default model,
-  // which only Claude Code's configuration knows. A model without effort greys out the list.
+  // Effort levels of the chosen model, its recommended level flagged; all the agent's for the default model,
+  // which only the agent's configuration knows. A model without effort greys out the list.
   function syncEfforts(wanted) {
     const model = chosenModel();
-    const levels = model ? model.efforts : catalog?.efforts ?? [];
+    const levels = model ? model.efforts : agent()?.efforts ?? [];
     part("ai-effort").innerHTML = ["", ...levels].map(level => {
       const label = t(`dialog.effort.${level || "default"}`) ?? level;
       const text = level && level === model?.recommended ? t("dialog.effort.recommended", { level: label }) : label;
@@ -350,8 +393,11 @@ window.MrAi = (() => {
     ).join("");
     part("ai-target").hidden = targets.length < 2;
     part("ai-launch-group").hidden = !chosen;
-    part("ai-model-label").hidden = !chosen;
-    part("ai-effort-label").hidden = !chosen;
+    // The agent, its model and level only matter for a launch; an agent that lists no models runs on its own.
+    const chosenAgent = agent();
+    part("ai-agent-label").hidden = !chosen || (catalog?.agents ?? []).length < 2;
+    part("ai-model-label").hidden = !chosen || !chosenAgent?.models.length;
+    part("ai-effort-label").hidden = !chosen || (!chosenAgent?.models.length && !chosenAgent?.efforts.length);
     applyTexts();
     if (!dialog.open) dialog.showModal();
     select(actions[0]);
@@ -368,9 +414,9 @@ window.MrAi = (() => {
     text.value = action ? drafts.get(draftKey()) ?? prompt(action) : "";
     text.readOnly = !action;
     part("ai-reset").hidden = !drafts.has(draftKey());
-    choose(part("ai-model"), models.get(draftKey()) ?? action?.model ?? "");
+    choose(part("ai-model"), models.get(choiceKey()) ?? actionModel(action));
     part("ai-model").disabled = !action;
-    syncEfforts(efforts.get(draftKey()) ?? action?.effort ?? "");
+    syncEfforts(efforts.get(choiceKey()) ?? actionEffort(action));
     part("ai-copied").textContent = "";
     syncSendButtons();
     // Cursor on the trailing empty line, nothing selected, the start of the prompt on screen: what is
@@ -380,7 +426,13 @@ window.MrAi = (() => {
     text.scrollTop = 0;
   }
 
+  // Model and level kept per MR, action and agent: each agent has its own.
   const draftKey = () => `${dialog.dataset.iid} ${dialog.dataset.action}`;
+  const choiceKey = () => `${draftKey()} ${agent()?.id}`;
+
+  // The catalog's model and level are Claude Code's: other agents start from their own defaults.
+  const actionModel = action => (agent()?.id === "claude" ? action?.model ?? "" : "");
+  const actionEffort = action => (agent()?.id === "claude" ? action?.effort ?? "" : "");
 
   function keepDraft() {
     const action = actionsFor(current.toFix).find(candidate => candidate.id === dialog.dataset.action);
@@ -402,16 +454,16 @@ window.MrAi = (() => {
   function keepModel() {
     const action = actionsFor(current.toFix).find(candidate => candidate.id === dialog.dataset.action);
     const model = part("ai-model").value;
-    if (!action || model === (action.model ?? "")) models.delete(draftKey());
-    else models.set(draftKey(), model);
+    if (!action || model === actionModel(action)) models.delete(choiceKey());
+    else models.set(choiceKey(), model);
   }
 
   // Effort level chosen for the action, kept like its model.
   function keepEffort() {
     const action = actionsFor(current.toFix).find(candidate => candidate.id === dialog.dataset.action);
     const effort = part("ai-effort").value;
-    if (!action || effort === (action.effort ?? "")) efforts.delete(draftKey());
-    else efforts.set(draftKey(), effort);
+    if (!action || effort === actionEffort(action)) efforts.delete(choiceKey());
+    else efforts.set(choiceKey(), effort);
   }
 
   function resetDraft() {
@@ -438,16 +490,16 @@ window.MrAi = (() => {
     part("ai-copied").textContent = t("dialog.copied");
   }
 
-  // The Claude Code session deletes the prompt file once started (see launches.py): the only proof it
-  // is running, since the tab may wait for its shell more than ten seconds (Orca on Windows, through WSL).
+  // The prompt file disappears once the agent starts (see launches.py): the only proof it runs, since the
+  // tab may wait for its shell more than ten seconds (Orca on Windows, through WSL).
   const PROMPT_READ_TIMEOUT_S = 90;
   const PROMPT_READ_POLL_MS = 1000;
 
-  // {shell, claude} once Claude Code starts, or the last known state once the delay has elapsed.
+  // {shell, agent} once the agent starts, or the last known state once the delay has elapsed.
   async function sessionProgress(launch) {
     const deadline = Date.now() + PROMPT_READ_TIMEOUT_S * 1000;
-    let progress = { shell: false, claude: false };
-    while (Date.now() < deadline && !progress.claude) {
+    let progress = { shell: false, agent: false };
+    while (Date.now() < deadline && !progress.agent) {
       await new Promise(resolve => setTimeout(resolve, PROMPT_READ_POLL_MS));
       progress = await request(`launch/status?launch=${encodeURIComponent(launch)}`);
     }
@@ -470,7 +522,7 @@ window.MrAi = (() => {
     const status = part("ai-copied");
     part("ai-launch").disabled = true;
     // The messages keep naming the target launched in, even if the menu changes meanwhile.
-    const target = { target: launchTarget().name };
+    const target = { target: launchTarget().name, agent: agent()?.name ?? "Claude Code" };
     status.textContent = t("dialog.launch.opening");
     const action = (catalog?.actions ?? []).find(candidate => candidate.id === dialog.dataset.action);
     announce(
@@ -490,12 +542,13 @@ window.MrAi = (() => {
             model: part("ai-model").value || null,
             effort: part("ai-effort").value || null,
             target: launchTarget().id,
+            agent: agent()?.id ?? "claude",
           }),
         }
       );
       status.textContent = t(body.confirmed ? "dialog.launch.opened" : "dialog.launch.unconfirmed", { ...body, ...target });
       const progress = await sessionProgress(body.launch);
-      const outcome = progress.claude ? "launched" : progress.shell ? "aborted" : "lostContact";
+      const outcome = progress.agent ? "launched" : progress.shell ? "aborted" : "lostContact";
       const message = { launched: "dialog.launch.read", aborted: "dialog.launch.unread", lostContact: "dialog.launch.noShell" }[outcome];
       status.textContent = t(message, { seconds: PROMPT_READ_TIMEOUT_S, ...target });
       announce(

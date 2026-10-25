@@ -63,14 +63,16 @@ class TerminalLauncher:
             title,
             prompt,
             model=None,
-            effort=None
+            effort=None,
+            agent=None
     ):
         """Opens the tab and returns {worktree, confirmed, launch}."""
         launch = launches.prepare(
             iid,
             prompt,
             model,
-            effort
+            effort,
+            agent
         )
         argv = self._command(title, launch.shell_command())
         try:

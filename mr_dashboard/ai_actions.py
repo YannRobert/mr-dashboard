@@ -20,6 +20,7 @@ it ends with the free action, with an empty prompt to write in the dialog.
 import tomllib
 from pathlib import Path
 
+import agents
 import claude_models
 from claude_models import ALIASES, EFFORTS, SAFE_ID
 
@@ -44,16 +45,15 @@ class AiActions:
         self._path = repo_root / CATALOG_PATH
 
     def catalog(self):
-        """{"source", "actions", "models", "efforts"}: source is None for the default catalog, when there is no
-        file; models are those Claude Code offers (see claude_models.py)."""
+        """{"source", "actions", "agents"}: source is None for the default catalog, when there is no file; agents
+        are those installed, with their models and effort levels (see agents.py)."""
         try:
             content = self._path.read_bytes()
         except FileNotFoundError:
             return {
                 "source": None,
                 "actions": [*DEFAULT_ACTIONS, FREE_ACTION],
-                "models": claude_models.choices(),
-                "efforts": EFFORTS,
+                "agents": [agent.describe() for agent in agents.installed()],
             }
         except OSError as error:
             raise AiActionsError(f"{CATALOG_PATH} unreadable: {error}") from error
@@ -64,8 +64,7 @@ class AiActions:
         return {
             "source": str(CATALOG_PATH),
             "actions": [*self._actions(document), FREE_ACTION],
-            "models": claude_models.choices(),
-            "efforts": EFFORTS,
+            "agents": [agent.describe() for agent in agents.installed()],
         }
 
     def tab_title(

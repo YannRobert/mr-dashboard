@@ -14,11 +14,12 @@ also keeps both tokens out of the browser. Only GET is relayed, and the server o
 before forwarding it.
 
 Local actions, over POST:
-    /launch       opens a Claude Code session with the prompt of a MR's AI button action, in a tab of one of
-                the launch targets (see launch_targets.py): {"iid", "action", "prompt", "model", "effort",
-                "target"}, target being a launch target's id (default: the first one);
+    /launch       starts a coding agent with the prompt of a MR's AI button action, in a tab of one of the
+                launch targets (see launch_targets.py): {"iid", "action", "prompt", "agent", "model", "effort",
+                "target"}, agent being an installed agent's id (default: claude, see agents.py) and target a
+                launch target's id (default: the first one);
                 GET /ai/actions returns the catalog (see ai_actions.py),
-                GET /launch/status?launch= tells whether the shell, then Claude Code, started in a launch's tab
+                GET /launch/status?launch= tells whether the shell, then the agent, started in a launch's tab
     /git/fetch  git fetch of the local git clone, which also runs by itself every --git-fetch-interval
                 seconds; GET /git/status returns the last result (see git_actions.py)
     /git/auto   enables or suspends automatic fetch: {"enabled": true|false}
@@ -69,11 +70,11 @@ from copy import copy
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlsplit
 
-import claude_models
 from ai_actions import AiActions, AiActionsError
 from avatar_colors import DEFAULT_PATH as AVATAR_COLORS_PATH, AvatarColors
 from front_version import FrontVersion, tag as front_version_tag
 from git_actions import GitActions, GitError
+import agents
 import launches
 from launch_targets import LaunchTargetError, TARGETS as LAUNCH_TARGETS, choose_all as choose_launch_targets
 from launches import LaunchError
@@ -392,15 +393,18 @@ def make_handler(
                 model = payload.get("model")
                 effort = payload.get("effort")
                 target_id = payload.get("target")
+                agent = agents.find(str(payload.get("agent") or "claude"))
             except (ValueError, KeyError, TypeError):
                 self.send_json(400, {"message": "invalid request"})
                 return
-            # Only an offered model and level get through: the command launched goes through a shell.
-            choice = claude_models.find(model) if model is not None else None
-            if model is not None and choice is None:
-                self.send_json(400, {"message": f"model not offered: {model}"})
+            if agent is None:
+                self.send_json(400, {"message": f"agent not installed: {payload.get('agent')}"})
                 return
-            if effort is not None and effort not in (choice["efforts"] if choice else claude_models.EFFORTS):
+            # Only an offered model and level get through: the command launched goes through a shell.
+            if model is not None and agent.find(model) is None:
+                self.send_json(400, {"message": f"model not offered by {agent.name}: {model}"})
+                return
+            if effort is not None and effort not in agent.efforts(model):
                 self.send_json(400, {"message": f"effort level not offered for this model: {effort}"})
                 return
             if not launch_targets:
@@ -424,7 +428,8 @@ def make_handler(
                     title,
                     prompt,
                     model,
-                    effort
+                    effort,
+                    agent
                 )
             except LaunchError as error:
                 self.send_json(502, {"message": str(error)})
