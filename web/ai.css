@@ -37,7 +37,16 @@ dialog.ai-prompt .actions .dismiss { margin-right: auto; }
 dialog.ai-prompt .muted { color: var(--muted); }
 dialog.ai-prompt button.with-icon { display: inline-flex; align-items: center; gap: 0.45em; }
 dialog.ai-prompt button.with-icon .orca-logo { height: 0.95em; width: auto; flex: none; }
-/* Model and effort level of the Orca session, just before the button that launches it. */
+/* The launch button and the menu of where it launches, joined into one control: "Open in [Orca ▾]". */
+dialog.ai-prompt .ai-launch { display: inline-flex; align-items: stretch; }
+dialog.ai-prompt .ai-launch[hidden] { display: none; }
+dialog.ai-prompt .ai-launch select {
+  font: inherit; font-size: 0.9rem; font-weight: 600; color: var(--text); background: var(--surface);
+  border: 1px solid var(--border-strong); border-left: 0; border-radius: 0 0.5rem 0.5rem 0; padding: 0.25em 0.5em; cursor: pointer;
+}
+dialog.ai-prompt .ai-launch select[hidden] { display: none; }
+dialog.ai-prompt .ai-launch button:has(+ select:not([hidden])) { border-radius: 0.5rem 0 0 0.5rem; }
+/* Model and effort level of the session, just before the control that launches it. */
 dialog.ai-prompt .ai-model { display: inline-flex; align-items: center; gap: 0.4em; font-size: 0.9rem; color: var(--muted); }
 dialog.ai-prompt .ai-model[hidden] { display: none; }
 dialog.ai-prompt .ai-model select {

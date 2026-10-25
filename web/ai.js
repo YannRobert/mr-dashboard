@@ -23,7 +23,7 @@ window.MrAi = (() => {
       "dialog.copied": "Copié",
       "dialog.launch": p => `Ouvrir dans ${p.target}`,
       "dialog.launch.title": p => `Lance Claude Code avec ce prompt dans un nouvel onglet de ${p.target}, sur le worktree principal`,
-      "dialog.target": "Où",
+      "dialog.launch.in": "Ouvrir dans",
       "dialog.target.title": "Où lancer la session : choisi ici au dernier moment, retenu par le navigateur",
       "dialog.model": "Modèle",
       "dialog.model.title": p => `Modèle de la session lancée dans ${p.target}. Un prompt copié prend celui de la session où on le colle : /model pour en changer.`,
@@ -66,7 +66,7 @@ window.MrAi = (() => {
       "dialog.copied": "Copied",
       "dialog.launch": p => `Open in ${p.target}`,
       "dialog.launch.title": p => `Start Claude Code with this prompt in a new ${p.target} tab, on the main worktree`,
-      "dialog.target": "Where",
+      "dialog.launch.in": "Open in",
       "dialog.target.title": "Where to start the session: picked here at the last moment, remembered by the browser",
       "dialog.model": "Model",
       "dialog.model.title": p => `Model of the session started in ${p.target}. A copied prompt runs on the model of the session it is pasted into: /model to change it.`,
@@ -159,10 +159,9 @@ window.MrAi = (() => {
         <button type="button" id="ai-close" class="dismiss"></button>
         <span class="muted" id="ai-copied" aria-live="polite"></span>
         <button type="button" id="ai-reset" hidden></button>
-        <label class="ai-model" id="ai-target-label" hidden><span id="ai-target-name"></span> <select id="ai-target"></select></label>
         <label class="ai-model" id="ai-model-label" hidden><span id="ai-model-name"></span> <select id="ai-model"></select></label>
         <label class="ai-model" id="ai-effort-label" hidden><span id="ai-effort-name"></span> <select id="ai-effort"></select></label>
-        <button type="button" id="ai-launch" class="with-icon" hidden>${ORCA_LOGO}<span id="ai-launch-label"></span></button>
+        <span class="ai-launch" id="ai-launch-group" hidden><button type="button" id="ai-launch" class="with-icon">${ORCA_LOGO}<span id="ai-launch-label"></span></button><select id="ai-target"></select></span>
         <button type="button" id="ai-copy" class="primary"></button>
       </div>`;
     document.body.append(dialog);
@@ -232,8 +231,8 @@ window.MrAi = (() => {
     part("ai-launch").title = t("dialog.launch.title");
     // Orca's own logo on its button; other targets have their name only.
     part("ai-launch").querySelector(".orca-logo").style.display = launchTarget()?.id === "orca" ? "" : "none";
-    part("ai-target-label").title = t("dialog.target.title");
-    part("ai-target-name").textContent = t("dialog.target");
+    part("ai-target").title = t("dialog.target.title");
+    part("ai-target").setAttribute("aria-label", t("dialog.target.title"));
     part("ai-model-label").title = t("dialog.model.title");
     part("ai-model-name").textContent = t("dialog.model");
     const choice = part("ai-model").value;
@@ -247,7 +246,8 @@ window.MrAi = (() => {
     part("ai-effort-label").title = t("dialog.effort.title");
     part("ai-effort-name").textContent = t("dialog.effort");
     syncEfforts(part("ai-effort").value);
-    part("ai-launch-label").textContent = t("dialog.launch");
+    // With a menu, the button reads "Open in" and the menu beside it names the target.
+    part("ai-launch-label").textContent = t(launchTargets().length > 1 ? "dialog.launch.in" : "dialog.launch");
     part("ai-reset").textContent = t("dialog.reset");
     part("ai-reset").title = t("dialog.reset.title");
     part("ai-copy").textContent = t("dialog.copy");
@@ -348,8 +348,8 @@ window.MrAi = (() => {
     part("ai-target").innerHTML = targets.map(target =>
       `<option value="${escapeHtml(target.id)}"${target.id === chosen?.id ? " selected" : ""}>${escapeHtml(target.name)}</option>`
     ).join("");
-    part("ai-target-label").hidden = targets.length < 2;
-    part("ai-launch").hidden = !chosen;
+    part("ai-target").hidden = targets.length < 2;
+    part("ai-launch-group").hidden = !chosen;
     part("ai-model-label").hidden = !chosen;
     part("ai-effort-label").hidden = !chosen;
     applyTexts();
