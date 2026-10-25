@@ -4,6 +4,10 @@ Each agent has its command line, the models it offers and the effort levels each
 menus show them ({"id", "label", "alias", "version", "efforts", "recommended"}, as claude_models.choices gives
 them, plus "provider" for an agent that groups its models by provider). An agent whose models cannot be listed offers none: its session then runs on the model of its own
 configuration.
+
+The menus' default choice leaves the model and the effort level to the agent's configuration, which each agent
+reads in its own files: the dialog names what they set, so that the default is no surprise. What only the agent's
+code decides (Claude Code's model for the account, Codex's model when its configuration names none) stays unnamed.
 """
 import json
 import os
@@ -13,6 +17,8 @@ import shutil
 import subprocess
 import threading
 import time
+import tomllib
+from pathlib import Path
 
 import claude_models
 
@@ -78,6 +84,14 @@ class Agent:
         """Levels the model accepts; without a model, those the agent offers for the model of its configuration."""
         return []
 
+    def defaults(self, folder):
+        """{"model", "effort"}: what the agent's configuration sets for a session in the folder, None where it sets
+        nothing."""
+        return {"model": None, "effort": None}
+
+    # Whether a model's recommended level is the one the agent takes when its configuration sets none.
+    RECOMMENDED_IS_DEFAULT = False
+
     def find(self, model_id):
         return next((model for model in self.models() if model["id"] == model_id), None)
 
@@ -90,11 +104,26 @@ class Agent:
         return [*(part.format(model=model) for part in (self.MODEL_OPTION if model else ())),
                 *(part.format(effort=effort) for part in (self.EFFORT_OPTION if effort else ()))]
 
-    def describe(self):
-        """The agent as the dialog's menus and its command copy need it."""
+    def describe(self, folder):
+        """The agent as the dialog's menus and its command copy need it, with the defaults of a session in the
+        folder."""
         return {"id": self.id, "name": self.name, "program": self.program, "models": self.models(),
                 "efforts": list(self.efforts(None)), "modelOption": list(self.MODEL_OPTION),
-                "effortOption": list(self.EFFORT_OPTION)}
+                "effortOption": list(self.EFFORT_OPTION), "defaults": self.defaults(folder),
+                "recommendedIsDefault": self.RECOMMENDED_IS_DEFAULT}
+
+
+def _json(path):
+    """The JSON object of a settings file, or {} when missing or unreadable."""
+    try:
+        value = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def _text(value):
+    return value if isinstance(value, str) and value else None
 
 
 class ClaudeCode(Agent):
@@ -114,6 +143,19 @@ class ClaudeCode(Agent):
     def efforts(self, model):
         choice = self.find(model) if model else None
         return choice["efforts"] if choice else claude_models.EFFORTS
+
+    def defaults(self, folder):
+        """The user's settings, then the project's, then the project's local ones, each overriding the previous,
+        and the environment above all; each settings file may set the environment too."""
+        model = effort = None
+        for path in (Path.home() / ".claude" / "settings.json", Path(folder) / ".claude" / "settings.json",
+                     Path(folder) / ".claude" / "settings.local.json"):
+            settings = _json(path)
+            env = settings.get("env") if isinstance(settings.get("env"), dict) else {}
+            model = _text(env.get("ANTHROPIC_MODEL")) or _text(settings.get("model")) or model
+            effort = _text(env.get("CLAUDE_CODE_EFFORT_LEVEL")) or _text(settings.get("effortLevel")) or effort
+        return {"model": _text(os.environ.get("ANTHROPIC_MODEL")) or model,
+                "effort": _text(os.environ.get("CLAUDE_CODE_EFFORT_LEVEL")) or effort}
 
     MODEL_OPTION = ("--model", "{model}")
     EFFORT_OPTION = ("--effort", "{effort}")
@@ -157,6 +199,20 @@ class Codex(Agent):
         common = set.intersection(*lists) if lists else set()
         return [level for level in (self.models()[0]["efforts"] if lists else []) if level in common]
 
+    def defaults(self, folder):
+        """Its configuration file, and the profile it names, which overrides it."""
+        try:
+            config = tomllib.loads((Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex") / "config.toml").read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+            return super().defaults(folder)
+        profile = (config.get("profiles") or {}).get(config.get("profile")) if isinstance(config.get("profiles"), dict) else None
+        layers = [config, profile if isinstance(profile, dict) else {}]
+        pick = lambda key: next((_text(layer.get(key)) for layer in reversed(layers) if _text(layer.get(key))), None)
+        return {"model": pick("model"), "effort": pick("model_reasoning_effort")}
+
+    # A model's default_reasoning_level, from Codex's catalogue.
+    RECOMMENDED_IS_DEFAULT = True
+
     MODEL_OPTION = ("-m", "{model}")
     EFFORT_OPTION = ("-c", "model_reasoning_effort={effort}")
 
@@ -198,6 +254,18 @@ class Pi(Agent):
     def efforts(self, model):
         choice = self.find(model) if model else None
         return choice["efforts"] if choice else PI_THINKING
+
+    def defaults(self, folder):
+        """Its global settings, then the project's, which override them."""
+        model = effort = None
+        for path in (Path(os.environ.get("PI_CODING_AGENT_DIR") or Path.home() / ".pi" / "agent") / "settings.json",
+                     Path(folder) / ".pi" / "settings.json"):
+            settings = _json(path)
+            provider, name = _text(settings.get("defaultProvider")), _text(settings.get("defaultModel"))
+            if name:
+                model = name if "/" in name or not provider else f"{provider}/{name}"
+            effort = _text(settings.get("defaultThinkingLevel")) or effort
+        return {"model": model, "effort": effort}
 
     MODEL_OPTION = ("--model", "{model}")
     EFFORT_OPTION = ("--thinking", "{effort}")

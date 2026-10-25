@@ -322,7 +322,7 @@ window.MrAi = (() => {
     const group = (label, list) => (list.length ? `<optgroup label="${escapeHtml(label)}">${list.map(option).join("")}</optgroup>` : "");
     // Aliases and versions apart for Claude Code; one group per provider for an agent that names them (Pi).
     const providers = [...new Set(choices.map(model => model.provider).filter(Boolean))];
-    part("ai-model").innerHTML = `<option value="">${escapeHtml(t("dialog.model.default"))}</option>`
+    part("ai-model").innerHTML = `<option value="">${escapeHtml(withDefault(t("dialog.model.default"), defaultModelName(chosenAgent)))}</option>`
       + (choices.some(model => model.alias)
         ? group(t("dialog.model.latest"), choices.filter(model => model.alias)) + group(t("dialog.model.versions"), choices.filter(model => !model.alias))
         : providers.length
@@ -349,6 +349,26 @@ window.MrAi = (() => {
     return version ? `${model.label} (${version})` : model.label;
   }
 
+  // The default choice, with what the agent's configuration sets when the server could read it: "default (Opus 5.5)".
+  const withDefault = (label, value) => (value ? `${label} (${value})` : label);
+
+  // The model of the agent's configuration, by its menu label without parentheses, or as the configuration names it.
+  function defaultModelName(chosen) {
+    const id = chosen?.defaults?.model;
+    const model = (chosen?.models ?? []).find(candidate => candidate.id === id);
+    if (!model) return id;
+    return model.alias ? modelLabel(model).replace(/ \((.*)\)$/, " $1") : model.label;
+  }
+
+  // The level a session takes with the default choice: the one of the agent's configuration, else the chosen model's
+  // own default for an agent whose catalogue gives it (Codex), else unknown.
+  function defaultEffort(model) {
+    const chosen = agent();
+    if (chosen?.defaults?.effort) return chosen.defaults.effort;
+    if (!chosen?.recommendedIsDefault) return null;
+    return (model ?? (chosen.models ?? []).find(candidate => candidate.id === chosen.defaults?.model))?.recommended ?? null;
+  }
+
   // A value missing from the list, a model retired by Anthropic or a level the model refuses, keeps
   // the default choice.
   function choose(
@@ -366,8 +386,11 @@ window.MrAi = (() => {
   function syncEfforts(wanted) {
     const model = chosenModel();
     const levels = model ? model.efforts : agent()?.efforts ?? [];
+    const fallback = defaultEffort(model);
     part("ai-effort").innerHTML = ["", ...levels].map(level => {
-      const label = t(`dialog.effort.${level || "default"}`) ?? level;
+      const label = level
+        ? t(`dialog.effort.${level}`) ?? level
+        : withDefault(t("dialog.effort.default"), fallback && (t(`dialog.effort.${fallback}`) ?? fallback));
       const text = level && level === model?.recommended ? t("dialog.effort.recommended", { level: label }) : label;
       return `<option value="${escapeHtml(level)}">${escapeHtml(text)}</option>`;
     }).join("");

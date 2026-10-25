@@ -293,6 +293,12 @@ reloaded; **Original prompt** restores it.
   - Pi (`pi --model`): the models of `pi --list-models`, grouped by provider.
 
   Codex's and Pi's lists are read again after 24 hours, or when the server restarts.
+
+  The default choice names what the agent's configuration sets, read in the tracked repository: Claude
+  Code's `model` and `effortLevel` (user, project and local settings, or `ANTHROPIC_MODEL` and
+  `CLAUDE_CODE_EFFORT_LEVEL`), Codex's `model` and `model_reasoning_effort` (`~/.codex/config.toml`, else the
+  model's own default level), Pi's `defaultModel` and `defaultThinkingLevel` (global, then project settings).
+  Where the configuration sets nothing, it only reads *default*: the agent decides.
 - **Effort** selects the effort level: `claude --effort` (from *Low* to *Max*), Codex's
   `-c model_reasoning_effort` (from *Low* to *Ultra*) or `pi --thinking` (from *Off* to *Max*). Only the levels the chosen model supports are listed, the recommended one
   flagged; a model without effort levels greys the list out.

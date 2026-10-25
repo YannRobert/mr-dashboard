@@ -41,6 +41,7 @@ class AiActionsError(Exception):
 class AiActions:
 
     def __init__(self, repo_root):
+        self._repo_root = repo_root
         self._path = repo_root / CATALOG_PATH
 
     def catalog(self):
@@ -52,7 +53,7 @@ class AiActions:
             return {
                 "source": None,
                 "actions": [*DEFAULT_ACTIONS, FREE_ACTION],
-                "agents": [agent.describe() for agent in agents.installed()],
+                "agents": [agent.describe(self._repo_root) for agent in agents.installed()],
             }
         except OSError as error:
             raise AiActionsError(f"{CATALOG_PATH} unreadable: {error}") from error
@@ -63,7 +64,7 @@ class AiActions:
         return {
             "source": str(CATALOG_PATH),
             "actions": [*self._actions(document), FREE_ACTION],
-            "agents": [agent.describe() for agent in agents.installed()],
+            "agents": [agent.describe(self._repo_root) for agent in agents.installed()],
         }
 
     def tab_title(
