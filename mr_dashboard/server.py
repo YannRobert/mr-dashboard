@@ -18,7 +18,7 @@ Local actions, over POST:
                 {"iid", "action", "prompt", "model", "effort"} (see orca_launcher.py), when the server runs
                 in WSL and Orca is installed; GET /ai/actions returns the catalog (see ai_actions.py),
                 GET /orca/status?launch= tells whether the shell, then Claude Code, started in a launch's tab
-    /git/fetch  git fetch of the local clone, which also runs by itself every --git-fetch-interval
+    /git/fetch  git fetch of the local git clone, which also runs by itself every --git-fetch-interval
                 seconds; GET /git/status returns the last result (see git_actions.py)
     /git/auto   enables or suspends automatic fetch: {"enabled": true|false}
     /gitlab/discussion  opens a discussion on one or more diff lines of a MR of the tracked project:
@@ -30,7 +30,7 @@ Local actions, over POST:
                 &first=&last= for what its commits from first to last brought together
     /git/commits GET, same parameters: commits of the MR, oldest first
     /git/branch GET ?branch=&target=: commit count, date of the last one and lag behind the target of
-                an open MR, from the local clone, without network — the page's fallback when GitLab is down
+                an open MR, from the local git clone, without network — the page's fallback when GitLab is down
     /avatars    avatar color of each person, the same in every browser (see avatar_colors.py): GET
                 returns the assignment, POST {"names", "count"} gives one, out of count, to each name
                 that has none yet
@@ -43,7 +43,7 @@ Local actions, over POST:
 Usage:
     python3 mr_dashboard/server.py --gitlab-host https://gitlab.example.com --gitlab-project <group/project> \
         --pipeline-branch <branch> --sonar-host https://sonarqube.example.com --sonar-project <key> --sonar-job <job> --pit-job <job> --pit-marker <marker> \
-        --repo-dir <local clone of the project> --git-fetch-interval 300 --port 8766
+        --repo-dir <local git clone of the project> --git-fetch-interval 300 --port 8766
     python3 mr_dashboard/server.py --gitlab-host https://gitlab.example.com --gitlab-project <group/project> \
         --pipeline-branch main --no-sonar --no-pit   # project without Sonar analysis or mutation testing
 
@@ -857,13 +857,13 @@ def main():
         "--repo-dir",
         type=Path,
         required=True,
-        help="local clone of the tracked project, where Orca opens the fix session and where git actions run"
+        help="local git clone of the tracked project, where Orca opens the fix session and where git actions run"
     )
     parser.add_argument(
         "--git-fetch-interval",
         type=int,
         default=DEFAULT_GIT_FETCH_INTERVAL_S,
-        help=f"seconds between two automatic git fetches of the local clone, 0 for none (default: {DEFAULT_GIT_FETCH_INTERVAL_S})"
+        help=f"seconds between two automatic git fetches of the local git clone, 0 for none (default: {DEFAULT_GIT_FETCH_INTERVAL_S})"
     )
     parser.add_argument("--quiet", action="store_true", help="do not log each request")
     args = parser.parse_args()

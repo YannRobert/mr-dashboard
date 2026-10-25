@@ -270,7 +270,7 @@ class GitActions:
         head, base = f"refs/remotes/origin/{branch}", f"refs/remotes/origin/{target}"
         for ref, name in ((head, branch), (base, target)):
             if self._git(["rev-parse", "--verify", "--quiet", ref]).returncode != 0:
-                raise GitError(f"branch missing from the local clone: {name}")
+                raise GitError(f"branch missing from the local git clone: {name}")
         common = self._git_output(["merge-base", head, base])
         count = int(self._git_output(["rev-list", "--count", f"{base}..{head}"]))
         commit_date, author_date = self._git_output(["log", "-1", "--format=%cI%x1f%aI", head]).split("\x1f")

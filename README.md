@@ -14,12 +14,12 @@ review activity: commits, comments, who pushed or commented last.
 - Browser notifications tell you when your merge request breaks or gets approved, and when the main
   branch's pipeline fails.
 
-It also offers a diff viewer built on the local clone, where threads are opened, answered and
+It also offers a diff viewer built on the local git clone, where threads are opened, answered and
 resolved, a comments page, and an **AI** button that prepares Claude Code prompts for a merge
 request.
 
 Made for agentic development, where coding agents write the code across several worktrees and
-nobody keeps an IDE open on each of them. The diff of every merge request comes from the local
+nobody keeps an IDE open on each of them. The diff of every merge request comes from the local git
 clone, without checking anything out, so neither the author nor the reviewer opens an IDE to read
 it. The **AI** button turns the fix of what is red, and the actions the project defines, such as a
 review or an explanation, into a prompt already filled in for that merge request: one click copies
@@ -34,7 +34,7 @@ never reach the browser. It only listens on `127.0.0.1`.
 ## Prerequisites
 
 - **Python 3.11 or later** (`tomllib`). Standard library only: nothing to install, no build step.
-- **git**, and a local clone of the tracked project.
+- **git**, and a local git clone of the tracked project.
 - **A GitLab token**, read from the [`glab`](https://gitlab.com/gitlab-org/cli) configuration
   (`~/.config/glab-cli/config.yml`): run `glab auth login --hostname gitlab.example.com` once.
 - **`SONAR_TOKEN`** in the environment of the shell that starts the server, if the project uses
@@ -96,7 +96,7 @@ Options given after the profile are passed to `server.py` and win over the profi
 | `--gitlab-host` | yes | GitLab server URL, such as `https://gitlab.example.com` |
 | `--gitlab-project` | yes | project path, not encoded (`group/project`) |
 | `--pipeline-branch` | yes | branch whose latest pipeline is shown below the MR table |
-| `--repo-dir` | yes | local clone of the tracked project: git actions run there, Orca sessions open there, `.mr-dashboard/ai-actions.toml` is read there |
+| `--repo-dir` | yes | local git clone of the tracked project: git actions run there, Orca sessions open there, `.mr-dashboard/ai-actions.toml` is read there |
 | `--port` | no | listening port (default `8765`) |
 | `--target-branch` | no | target branch filtered when the page opens (default: all) |
 | `--gitlab-token-host` | no | host name of the token in the glab configuration (default: the one of `--gitlab-host`) |
@@ -108,7 +108,7 @@ Options given after the profile are passed to `server.py` and win over the profi
 | `--pit-job` | unless `--no-pit` | name of the CI job that posts the mutation testing note |
 | `--pit-marker` | unless `--no-pit` | beginning of the mutation testing note posted on the MR — see [Mutation report format](#mutation-report-format) |
 | `--no-pit` | no | project without mutation testing: its column, data and notifications disappear |
-| `--git-fetch-interval` | no | seconds between two automatic `git fetch` of the local clone, `0` for none (default `300`) |
+| `--git-fetch-interval` | no | seconds between two automatic `git fetch` of the local git clone, `0` for none (default `300`) |
 | `--quiet` | no | do not log each request |
 
 ## Using the dashboard
@@ -304,9 +304,9 @@ tab on `--repo-dir` and starts a Claude Code session there with the prompt, mode
 The prompt goes through a short-lived file under `~/.cache/mr-dashboard/`, deleted by the session
 once started. Without Orca, the button is not offered and prompts are copied instead.
 
-## Local clone: fetch and diff
+## Local git clone: fetch and diff
 
-The server works on the local clone (`--repo-dir`, main or secondary worktree) and never checks
+The server works on the local git clone (`--repo-dir`, main or secondary worktree) and never checks
 anything out there.
 
 - **Fetch**: `git fetch --prune origin` every `--git-fetch-interval` seconds, even with no page open,
@@ -316,7 +316,7 @@ anything out there.
   fetch, or its failure in red. The `origin/<branch>` refs thus stay current during a GitLab outage.
 - **Diff**: each open MR has a button showing its diff in a new tab, from the point where it leaves
   its target (`git diff origin/<target>...origin/<branch>`, like GitLab's *Changes* tab), computed on
-  the local clone, so it stays available during a GitLab outage. A merged MR, even old with its branch
+  the local git clone, so it stays available during a GitLab outage. A merged MR, even old with its branch
   deleted, has one too, found through its commits; a head missing from the clone after a squash comes
   from `refs/merge-requests/<iid>/head`. When the local branch is strictly ahead of `origin/<branch>`,
   its unpushed commits form a last **Not pushed** group.
@@ -346,11 +346,11 @@ anything out there.
   survive a GitLab outage (orange banner).
 - **One tab per page and per MR**: a link to a diff or comments page already open brings back its tab
   and reloads it. Middle-click and Ctrl+click still open a new tab.
-- **Commenting**: on the full diff, with a local clone up to date with the last push, a click on a line
+- **Commenting**: on the full diff, with a local git clone up to date with the last push, a click on a line
   number opens an editor below it, Shift+click extends it to a range; **Publish to GitLab** (Ctrl+Enter)
   creates the discussion. Under each thread, **Reply**, and **Resolve** or **Reopen**.
 - **GitLab unreachable**: a MR whose refresh fails keeps its last good signals, flagged as stale.
-  Commit count, last commit date and lag behind the target then come from the local clone, in grey
+  Commit count, last commit date and lag behind the target then come from the local git clone, in grey
   italics.
 - A manual `git fetch` or `git pull` run during an automatic fetch may answer "cannot lock ref": run it
   again.
