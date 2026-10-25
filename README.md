@@ -1,6 +1,11 @@
 # MisteR Dashboard
 
-Created and maintained by [Yann ROBERT](https://github.com/YannRobert)
+Created and maintained by [Yann ROBERT](https://github.com/YannRobert) · Website: <https://yannrobert.github.io/mr-dashboard/>
+
+[![MisteR Dashboard listing the open merge requests of a project, each with its commits, comments, unresolved threads, pipeline, Sonar issues, coverage, remaining mutants and lag behind the target branch.](https://yannrobert.github.io/mr-dashboard/tour/dashboard.png)](https://yannrobert.github.io/mr-dashboard/)
+
+*The open merge requests of the demo project, an invented online bookshop: [take the tour](https://yannrobert.github.io/mr-dashboard/tour.html),
+or [try it](#try-it-without-a-gitlab) without a GitLab.*
 
 A local dashboard for the development workflow of a GitLab project's merge requests, from the first
 push to the merge, for authors and reviewers alike. Each open merge request shows its CI signals
