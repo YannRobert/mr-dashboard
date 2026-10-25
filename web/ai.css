@@ -36,7 +36,14 @@ dialog.ai-prompt .actions button[hidden] { display: none; }
 dialog.ai-prompt .actions .dismiss { margin-right: auto; }
 dialog.ai-prompt .muted { color: var(--muted); }
 dialog.ai-prompt button.with-icon { display: inline-flex; align-items: center; gap: 0.45em; }
-dialog.ai-prompt button.with-icon .orca-logo { height: 0.95em; width: auto; flex: none; }
+dialog.ai-prompt button.with-icon .ai-icon { display: inline-flex; }
+dialog.ai-prompt button.with-icon .target-icon { height: 1em; width: auto; flex: none; }
+/* The chosen agent's monogram, before its menu. */
+dialog.ai-prompt .ai-monogram {
+  display: inline-grid; place-items: center; min-width: 1.5em; height: 1.5em; padding: 0 0.2em; border-radius: 0.75em;
+  font-size: 0.75rem; font-weight: 700; color: var(--accent-fg); background: var(--accent);
+}
+dialog.ai-prompt .ai-monogram:empty { display: none; }
 /* The launch button and the menu of where it launches, joined into one control: "Open in [Orca ▾]". */
 dialog.ai-prompt .ai-launch { display: inline-flex; align-items: stretch; }
 dialog.ai-prompt .ai-launch[hidden] { display: none; }

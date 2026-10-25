@@ -108,7 +108,15 @@ window.MrAi = (() => {
   const AGENT_KEY = "mr-dashboard.agent";
   // Beyond that, no dashboard tab keeps it up to date anymore: the fix is no longer offered.
   const FIX_CONTEXT_MAX_AGE_MS = 30 * 60 * 1000;
-  const ORCA_LOGO = `<svg class="orca-logo" viewBox="6.67 70.67 318.6 202.67" aria-hidden="true"><path fill="currentColor" d="m 177.81311,248.33334 c 23.82304,-41.29793 40.54045,-66.84626 49.51207,-75.66667 6.81685,-6.70196 10.07373,-8.7374 20.07265,-12.54475 34.57822,-13.16655 61.04674,-26.78733 72.37222,-37.24295 9.62924,-8.88966 9.34286,-9.01142 -23.43671,-9.964 -35.71756,-1.03796 -43.72989,0.42119 -62.17546,11.323 -16.72118,9.88265 -34.20103,30.11225 -42.74704,49.47157 -2.57353,5.82985 -14.81294,44.3056 -27.96399,87.90747 -2.86036,9.48343 -3.02466,11.71633 -0.86213,11.71633 0.44382,0 7.29659,-11.25 15.22839,-25 z m -65.14644,-8.32267 C 120,239.3326 130.5,237.50979 136,235.95998 c 5.5,-1.5498 12.25,-3.13783 15,-3.52895 2.75,-0.39111 5,-0.95485 5,-1.25275 0,-0.29789 2.15135,-7.58487 4.78078,-16.19328 8.49209,-27.80201 12.21334,-40.41629 21.13747,-71.65166 4.81891,-16.86667 11.23502,-39.185 14.25802,-49.596301 5.12803,-17.66103 5.74763,-23.07037 2.64253,-23.07037 -1.84887,0 -4.07048,6.908293 -16.72243,52.000001 -21.78975,77.65896 -20.80806,74.74393 -26.84794,79.72251 -7.5925,6.25838 -25.03916,14.82524 -36.10856,17.73044 -17.0947,4.48656 -33.410599,3.86724 -53.116765,-2.01622 -18.569242,-5.54403 -23.142662,-5.80284 -33.639754,-1.9037 -5.875424,2.18242 -9.864152,5.04363 -16.716684,11.99127 -4.95,5.0187 -9.0000001,10.02884 -9.0000001,11.13364 0,1.75174 5.9276921,2.00299 46.3333351,1.96383 25.483334,-0.0247 52.333338,-0.59969 59.666668,-1.27777 z M 252.69513,104.63708 c 12.18267,-3.48651 15.77304,-7.895503 9.63821,-11.835773 -10.19296,-6.546726 -36.19849,-1.77301 -41.19436,7.561863 -1.2556,2.3461 -0.98698,3.2037 1.68353,5.375 2.69471,2.19098 4.59991,2.47691 12.53928,1.88189 5.14899,-0.3859 12.94899,-1.72824 17.33334,-2.98298 z"/></svg>`;
+  const ORCA_LOGO = `<svg class="target-icon" viewBox="6.67 70.67 318.6 202.67" aria-hidden="true"><path fill="currentColor" d="m 177.81311,248.33334 c 23.82304,-41.29793 40.54045,-66.84626 49.51207,-75.66667 6.81685,-6.70196 10.07373,-8.7374 20.07265,-12.54475 34.57822,-13.16655 61.04674,-26.78733 72.37222,-37.24295 9.62924,-8.88966 9.34286,-9.01142 -23.43671,-9.964 -35.71756,-1.03796 -43.72989,0.42119 -62.17546,11.323 -16.72118,9.88265 -34.20103,30.11225 -42.74704,49.47157 -2.57353,5.82985 -14.81294,44.3056 -27.96399,87.90747 -2.86036,9.48343 -3.02466,11.71633 -0.86213,11.71633 0.44382,0 7.29659,-11.25 15.22839,-25 z m -65.14644,-8.32267 C 120,239.3326 130.5,237.50979 136,235.95998 c 5.5,-1.5498 12.25,-3.13783 15,-3.52895 2.75,-0.39111 5,-0.95485 5,-1.25275 0,-0.29789 2.15135,-7.58487 4.78078,-16.19328 8.49209,-27.80201 12.21334,-40.41629 21.13747,-71.65166 4.81891,-16.86667 11.23502,-39.185 14.25802,-49.596301 5.12803,-17.66103 5.74763,-23.07037 2.64253,-23.07037 -1.84887,0 -4.07048,6.908293 -16.72243,52.000001 -21.78975,77.65896 -20.80806,74.74393 -26.84794,79.72251 -7.5925,6.25838 -25.03916,14.82524 -36.10856,17.73044 -17.0947,4.48656 -33.410599,3.86724 -53.116765,-2.01622 -18.569242,-5.54403 -23.142662,-5.80284 -33.639754,-1.9037 -5.875424,2.18242 -9.864152,5.04363 -16.716684,11.99127 -4.95,5.0187 -9.0000001,10.02884 -9.0000001,11.13364 0,1.75174 5.9276921,2.00299 46.3333351,1.96383 25.483334,-0.0247 52.333338,-0.59969 59.666668,-1.27777 z M 252.69513,104.63708 c 12.18267,-3.48651 15.77304,-7.895503 9.63821,-11.835773 -10.19296,-6.546726 -36.19849,-1.77301 -41.19436,7.561863 -1.2556,2.3461 -0.98698,3.2037 1.68353,5.375 2.69471,2.19098 4.59991,2.47691 12.53928,1.88189 5.14899,-0.3859 12.94899,-1.72824 17.33334,-2.98298 z"/></svg>`;
+  // Icons drawn for this page, by kind of target, so as not to borrow other products' logos: panes for a
+  // terminal multiplexer, a window for a terminal without tabs, a prompt for the others.
+  const PANES_ICON = `<svg class="target-icon" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M8 2.5v11M8 8h6.5"/></svg>`;
+  const WINDOW_ICON = `<svg class="target-icon" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M1.5 5.5h13"/></svg>`;
+  const PROMPT_ICON = `<svg class="target-icon" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M4.5 6.5l2 1.5-2 1.5M8 10.5h3.5"/></svg>`;
+  const targetIcon = id => ({ orca: ORCA_LOGO, herdr: PANES_ICON, "terminal:tmux": PANES_ICON, "terminal:xterm": WINDOW_ICON }[id] ?? PROMPT_ICON);
+  // Agents shown by a monogram, not by their makers' logos.
+  const AGENT_MONOGRAMS = { claude: "C", codex: "Cx", pi: "π" };
 
   let lang = "fr";
   // Launch targets the server offers, [{id, name}] (Orca, herdr, terminals), in the order of its menu: none, and
@@ -169,10 +177,10 @@ window.MrAi = (() => {
         <button type="button" id="ai-close" class="dismiss"></button>
         <span class="muted" id="ai-copied" aria-live="polite"></span>
         <button type="button" id="ai-reset" hidden></button>
-        <label class="ai-model" id="ai-agent-label" hidden><span id="ai-agent-name"></span> <select id="ai-agent"></select></label>
+        <label class="ai-model" id="ai-agent-label" hidden><span id="ai-agent-name"></span> <span class="ai-monogram" id="ai-agent-monogram" aria-hidden="true"></span><select id="ai-agent"></select></label>
         <label class="ai-model" id="ai-model-label" hidden><span id="ai-model-name"></span> <select id="ai-model"></select></label>
         <label class="ai-model" id="ai-effort-label" hidden><span id="ai-effort-name"></span> <select id="ai-effort"></select></label>
-        <span class="ai-launch" id="ai-launch-group" hidden><button type="button" id="ai-launch" class="with-icon">${ORCA_LOGO}<span id="ai-launch-label"></span></button><select id="ai-target"></select></span>
+        <span class="ai-launch" id="ai-launch-group" hidden><button type="button" id="ai-launch" class="with-icon"><span class="ai-icon" id="ai-launch-icon"></span><span id="ai-launch-label"></span></button><select id="ai-target"></select></span>
         <button type="button" id="ai-copy" class="primary"></button>
       </div>`;
     document.body.append(dialog);
@@ -263,8 +271,9 @@ window.MrAi = (() => {
     part("ai-text").setAttribute("aria-label", t("dialog.aria"));
     part("ai-close").textContent = t("dialog.close");
     part("ai-launch").title = t("dialog.launch.title");
-    // Orca's own logo on its button; other targets have their name only.
-    part("ai-launch").querySelector(".orca-logo").style.display = launchTarget()?.id === "orca" ? "" : "none";
+    // The chosen target's icon on the button, the chosen agent's monogram before its menu.
+    part("ai-launch-icon").innerHTML = launchTarget() ? targetIcon(launchTarget().id) : "";
+    part("ai-agent-monogram").textContent = AGENT_MONOGRAMS[agent()?.id] ?? "";
     part("ai-target").title = t("dialog.target.title");
     part("ai-target").setAttribute("aria-label", t("dialog.target.title"));
     part("ai-agent-label").title = t("dialog.agent.title");
