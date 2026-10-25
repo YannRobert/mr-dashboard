@@ -322,7 +322,10 @@ class Project:
         mr.pipelines.append(run)
 
     def _main_pipeline(self, sha, created, source, user, failed=False):
-        jobs = self._jobs(MAIN_JOBS, created, "unit_tests" if failed else None)
+        # Runners are not all equally busy: each pipeline takes between 85 % and 125 % of the usual time.
+        pace = 0.85 + (self._next_pipeline * 37 % 41) / 100
+        plan = [(name, stage, minutes * pace) for name, stage, minutes in MAIN_JOBS]
+        jobs = self._jobs(plan, created, "unit_tests" if failed else None)
         run = PipelineRun(self._take_pipeline_id(), MAIN, sha, source, created, "failed" if failed else "success", jobs, user)
         self.main_pipelines.append(run)
 
