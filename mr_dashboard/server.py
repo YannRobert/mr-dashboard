@@ -33,7 +33,9 @@ Local actions, over POST:
                         refuses when the MR has another one
     /gitlab/unapprove   withdraws the user's approval of a MR: {"iid"}
     /gitlab/merge       merges a MR: {"iid", "sha", "squash", "remove_source_branch"}, sha as for
-                        /gitlab/approve, the two others true or false, or absent for what the MR's settings say
+                        /gitlab/approve, the two others true or false, or absent for what the MR's settings say;
+                        "auto_merge": true merges only once the pipeline succeeds
+    /gitlab/cancel-auto-merge  cancels such a merge to come: {"iid"}
     /git/diff   GET ?branch=&target=: diff of a MR from the point where it leaves its target, displayed
                 by diff.html; ?iid=&head=&merge=&target= for a merged MR, found through its commits;
                 &first=&last= for what its commits from first to last brought together
@@ -374,6 +376,7 @@ def make_handler(
                 "/gitlab/approve": self.gitlab_approve,
                 "/gitlab/unapprove": self.gitlab_unapprove,
                 "/gitlab/merge": self.gitlab_merge,
+                "/gitlab/cancel-auto-merge": self.gitlab_cancel_auto_merge,
                 "/avatars": self.avatars
             }
             action = actions.get(self.path)
@@ -573,6 +576,17 @@ def make_handler(
                 "PUT",
                 f"merge_requests/{iid}/merge",
                 body
+            )
+
+        def gitlab_cancel_auto_merge(self, payload):
+            iid = payload.get("iid") if isinstance(payload, dict) else None
+            if not is_positive(iid):
+                self.send_json(400, {"message": "invalid request"})
+                return
+            self.gitlab_write(
+                "POST",
+                f"merge_requests/{iid}/cancel_merge_when_pipeline_succeeds",
+                b"{}"
             )
 
         def gitlab_write(
@@ -892,11 +906,12 @@ def head_request(payload):
 
 def merge_request(payload):
     """(iid, JSON body for GitLab) of a merge request at the reviewed head, with the squash and the source branch
-    removal chosen, None if it is invalid."""
+    removal chosen, and auto_merge to merge only once the pipeline succeeds, None if it is invalid."""
     request = head_request(payload)
     if not request:
         return None
-    options = {"squash": payload.get("squash"), "should_remove_source_branch": payload.get("remove_source_branch")}
+    options = {"squash": payload.get("squash"), "should_remove_source_branch": payload.get("remove_source_branch"),
+               "auto_merge": payload.get("auto_merge")}
     if not all(value is None or isinstance(value, bool) for value in options.values()):
         return None
     iid, body = request

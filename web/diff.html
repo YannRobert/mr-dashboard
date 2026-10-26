@@ -119,12 +119,13 @@
   .review-actions { display: flex; align-items: center; gap: 0.5rem; margin-right: auto; }
   .review-actions[hidden] { display: none; }
   .review-actions button:disabled { opacity: 0.45; cursor: default; }
-  .review-actions #approve.done { color: var(--green-fg); border-color: var(--green-fg); }
+  .review-actions #approve.done, .review-actions #merge.done { color: var(--green-fg); border-color: var(--green-fg); }
   /* Both labels in the same cell, the one of the other state hidden: the button keeps the width of the longer. */
-  #approve { display: inline-grid; }
-  #approve > span { grid-area: 1 / 1; }
-  #approve:not(.done) > .when-approved, #approve.done > .when-not-approved { visibility: hidden; }
-  .review-actions #merge:not(:disabled) { color: var(--accent-fg); background: var(--accent); border-color: var(--accent); }
+  #approve, #merge { display: inline-grid; }
+  #approve > span, #merge > span { grid-area: 1 / 1; }
+  #approve:not(.done) > .when-approved, #approve.done > .when-not-approved,
+  #merge:not(.done) > .when-approved, #merge.done > .when-not-approved { visibility: hidden; }
+  .review-actions #merge:not(:disabled):not(.done) { color: var(--accent-fg); background: var(--accent); border-color: var(--accent); }
   .review-actions-status { font-size: 0.8rem; color: var(--muted); }
   /* The merge confirmation: the AI dialog's look (ai.css), narrower, saying what the merge will do. */
   dialog.merge-confirm { width: min(30rem, calc(100vw - 32px)); }
@@ -488,6 +489,14 @@ unpushedTitle: "Clic : les commits locaux, que GitLab ne voit pas encore",
       mergeSquashRequired: "Squasher les commits en un seul (imposé par le projet)",
       mergeRemoveBranch: p => `Supprimer la branche <code>${p.branch}</code> après le merge`,
       mergeCancel: "Annuler",
+      autoMerge: "⏱ Merge programmé",
+      autoMergeTitle: "Merger la MR dans GitLab dès que son pipeline réussit",
+      autoMergeConfirm: p => `Merger !${p.iid} quand le pipeline réussit ?`,
+      autoMergeFact: "le pipeline tourne encore : GitLab mergera dès qu'il réussit, et pas s'il échoue",
+      autoMergeButton: "Merger quand le pipeline réussit",
+      autoMergeSet: "Merge programmé",
+      autoMergeSetTitle: p => `GitLab mergera la MR quand le pipeline réussira (programmé par ${p.user}). Clic : annuler ce merge`,
+      cancellingAutoMerge: "Annulation du merge programmé…",
       cannotMerge: "Vous n'avez pas le droit de merger cette MR",
       mergeStatus: {
         not_approved: "La MR attend encore des approbations",
@@ -618,6 +627,14 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
       mergeSquashRequired: "Squash the commits into one (required by the project)",
       mergeRemoveBranch: p => `Delete the <code>${p.branch}</code> branch after the merge`,
       mergeCancel: "Cancel",
+      autoMerge: "⏱ Auto-merge set",
+      autoMergeTitle: "Merge the MR in GitLab as soon as its pipeline succeeds",
+      autoMergeConfirm: p => `Merge !${p.iid} when the pipeline succeeds?`,
+      autoMergeFact: "the pipeline is still running: GitLab will merge as soon as it succeeds, not if it fails",
+      autoMergeButton: "Merge when pipeline succeeds",
+      autoMergeSet: "Auto-merge set",
+      autoMergeSetTitle: p => `GitLab will merge the MR when the pipeline succeeds (set by ${p.user}). Click: cancel this merge`,
+      cancellingAutoMerge: "Cancelling the auto-merge…",
       cannotMerge: "You are not allowed to merge this MR",
       mergeStatus: {
         not_approved: "The MR still needs approvals",
@@ -2261,7 +2278,8 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
   // Approve and Merge, for an open MR: what GitLab allows the token's user now, read again without the relay's cache
   // on each opening and each return to the tab, at the head commit this diff shows, which GitLab checks again.
   // project: the project's squash_option and merge_method, read once.
-  const review = { sha: null, busy: false, detail: null, project: null };
+  // autoMerge: the merge offered waits for the pipeline.
+  const review = { sha: null, busy: false, detail: null, project: null, autoMerge: false };
 
   function reviewedHead() {
     return commits?.filter(c => !c.local).at(-1)?.sha ?? null;
@@ -2309,13 +2327,30 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
       : stale ? texts.staleHead : approvals.user_can_approve ? texts.approveTitle : texts.cannotApprove;
     const merge = document.getElementById("merge");
     const status = detail.detailed_merge_status;
-    merge.textContent = texts.merge;
-    merge.disabled = stale || !detail.user?.can_merge || status !== "mergeable";
-    merge.title = stale ? texts.staleHead
+    if (!merge.firstElementChild) {
+      merge.innerHTML = `<span class="when-not-approved">${escapeHtml(texts.merge)}</span><span class="when-approved">${escapeHtml(texts.autoMerge)}</span>`;
+    }
+    // A merge already set to come is cancelled with a click, as an approval is withdrawn; one is offered while only
+    // the pipeline still runs.
+    const autoMergeSet = !!detail.merge_when_pipeline_succeeds;
+    review.autoMerge = !autoMergeSet && pipelineRunning(detail);
+    merge.classList.toggle("done", autoMergeSet);
+    merge.disabled = autoMergeSet ? !detail.user?.can_merge
+      : stale || !detail.user?.can_merge || !(status === "mergeable" || review.autoMerge);
+    merge.title = autoMergeSet ? texts.autoMergeSetTitle({ user: detail.merge_user?.name ?? "?" })
+      : stale ? texts.staleHead
       : !detail.user?.can_merge ? texts.cannotMerge
+      : review.autoMerge ? texts.autoMergeTitle
       : status !== "mergeable" ? texts.mergeStatus[status] ?? texts.mergeBlocked(status)
       : texts.mergeTitle(mr);
     document.getElementById("review-actions").hidden = false;
+  }
+
+  // Only the pipeline keeps the MR from being merged, and it may still succeed.
+  function pipelineRunning(detail) {
+    const active = ["created", "waiting_for_resource", "preparing", "pending", "running", "scheduled"];
+    return ["ci_still_running", "ci_must_pass"].includes(detail.detailed_merge_status)
+      && active.includes(detail.head_pipeline?.status);
   }
 
   async function reviewAction(path, pending, options = {}) {
@@ -2352,8 +2387,9 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
     const count = commits?.filter(c => !c.local).length ?? 0;
     const names = { branch: escapeHtml(mr.branch), target: escapeHtml(mr.target) };
     const method = review.project?.merge_method;
-    document.getElementById("merge-dialog-title").textContent = texts.mergeConfirm(mr);
+    document.getElementById("merge-dialog-title").textContent = review.autoMerge ? texts.autoMergeConfirm(mr) : texts.mergeConfirm(mr);
     document.getElementById("merge-facts").innerHTML = [
+      ...(review.autoMerge ? [texts.autoMergeFact] : []),
       texts.mergeInto(names),
       texts.mergeCommits(count),
       ...(texts.mergeMethod[method] ? [texts.mergeMethod[method]] : []),
@@ -2371,7 +2407,7 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
     close.setAttribute("aria-label", texts.mergeCancel);
     document.getElementById("merge-dialog-cancel").textContent = texts.mergeCancel;
     const confirm = document.getElementById("merge-dialog-confirm");
-    confirm.textContent = texts.merge;
+    confirm.textContent = review.autoMerge ? texts.autoMergeButton : texts.merge;
     document.getElementById("merge-dialog").showModal();
     confirm.focus();
   }
@@ -2383,18 +2419,24 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
       ? reviewAction("gitlab/unapprove", texts.unapproving)
       : reviewAction("gitlab/approve", texts.approving));
     const dialog = document.getElementById("merge-dialog");
-    document.getElementById("merge").addEventListener("click", () => openMergeDialog());
+    const merge = document.getElementById("merge");
+    merge.addEventListener("click", () => merge.classList.contains("done")
+      ? reviewAction("gitlab/cancel-auto-merge", texts.cancellingAutoMerge)
+      : openMergeDialog());
     document.getElementById("merge-dialog-close").addEventListener("click", () => dialog.close());
     document.getElementById("merge-dialog-cancel").addEventListener("click", () => dialog.close());
     document.getElementById("merge-dialog-confirm").addEventListener("click", async () => {
       dialog.close();
+      const auto = review.autoMerge;
       const squashOption = review.project?.squash_option;
       const merged = await reviewAction("gitlab/merge", texts.merging, {
         // The project decides when it never or always squashes: GitLab refuses any other choice.
         ...(squashOption === "never" || squashOption === "always" ? {} : { squash: document.getElementById("merge-squash").checked }),
         remove_source_branch: document.getElementById("merge-remove-branch").checked,
+        ...(auto ? { auto_merge: true } : {}),
       });
-      if (merged?.state === "merged") document.getElementById("review-actions-status").textContent = texts.mergedDone;
+      const done = merged?.state === "merged" ? texts.mergedDone : auto && merged ? texts.autoMergeSet : "";
+      if (done) document.getElementById("review-actions-status").textContent = done;
     });
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") loadReviewRights();
