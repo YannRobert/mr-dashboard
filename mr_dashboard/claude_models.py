@@ -1,4 +1,4 @@
-"""Models offered for a Claude Code session launched in Orca, and the effort levels of each.
+"""Models offered for a launched Claude Code session, and the effort levels of each.
 
 Claude Code caches the model list of the logged-in account, with the effort levels each accepts, and
 downloads it again by itself once it is more than an hour old: rereading it on every request is enough
@@ -59,11 +59,6 @@ def choices(directory=None):
             versions.setdefault(version["id"], version)
     ordered = sorted(versions.values(), key=lambda version: (ALIASES.index(version["family"]), _number(version)))
     return aliases + [{key: value for key, value in version.items() if key not in ("family", "main")} for version in ordered]
-
-
-def find(model_id):
-    """The offered model with this name, or None."""
-    return next((choice for choice in choices() if choice["id"] == model_id), None)
 
 
 # Sort key of a version, newest first: claude-opus-4-8 before claude-opus-4-6, and

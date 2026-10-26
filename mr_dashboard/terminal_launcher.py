@@ -1,10 +1,10 @@
-"""Opens in a terminal of the user's choice a Claude Code session in charge of an AI button action on a MR.
+"""Opens in a terminal of the user's choice a coding agent's session in charge of an AI button action on a MR.
 
 The terminal is named, never guessed: a preset of PRESETS, or a command template of the user's own. Either opens
-a new tab (or window, for terminals without tabs) on the tracked repository (--repo-dir), running the user's
+a new tab (or window, for terminals without tabs) on the MR's worktree or the tracked repository, running the user's
 login shell, which starts the agent with the prompt and, once it exits, stays open as an ordinary shell.
 
-A template is a command line where {dir} is the tracked repository, {title} the tab's title and {command} the
+A template is a command line where {dir} is the folder of the tab (the MR's worktree or the tracked repository), {title} the tab's title and {command} the
 command line to run, given as a single argument: for instance "mlterm --title {title} -e sh -c {command}".
 """
 import os
@@ -24,7 +24,9 @@ PRESETS = {
     "tmux": ("tmux", "tmux new-window -c {dir} -n {title} {command}"),
     "gnome-terminal": ("GNOME Terminal", "gnome-terminal --tab --working-directory={dir} -- {argv}"),
     "konsole": ("Konsole", "konsole --new-tab --workdir {dir} -e {argv}"),
-    "terminator": ("Terminator", "terminator --new-tab --working-directory={dir} -x {argv}"),
+    # A single command line: a Terminator already open gets the command through DBus, its -x arguments joined with spaces,
+    # their quoting lost.
+    "terminator": ("Terminator", "terminator --new-tab --working-directory={dir} -e {command}"),
     "wezterm": ("WezTerm", "wezterm cli spawn --cwd {dir} -- {argv}"),
     "kitty": ("kitty", "kitty @ launch --type=tab --cwd={dir} --tab-title={title} {argv}"),
     "windows-terminal": ("Windows Terminal", "wt.exe -w 0 new-tab --title {title} wsl.exe -d {distro} --cd {dir} -- {argv}"),
@@ -57,22 +59,38 @@ class TerminalLauncher:
             raise ValueError(f"unknown terminal: {spec} (a preset among {', '.join(PRESETS)}, or a template with {{command}})")
         return cls(shlex.split(spec)[0], spec, repo_dir)
 
+    def unavailable(self):
+        """Why the terminal cannot open a tab now, or None: tmux needs a running session; a terminal that opens its
+        own window always can."""
+        if self._template[:2] != ["tmux", "new-window"]:
+            return None
+        try:
+            result = subprocess.run(["tmux", "has-session"], capture_output=True, timeout=FAILURE_WAIT_S, check=False)
+        except (OSError, subprocess.TimeoutExpired):
+            return "not answering"
+        return None if result.returncode == 0 else "no session"
+
     def launch(
             self,
             iid,
             title,
             prompt,
             model=None,
-            effort=None
+            effort=None,
+            agent=None,
+            worktree=None
     ):
-        """Opens the tab and returns {worktree, confirmed, launch}."""
+        """Opens the tab, in the MR's worktree when given, else at the root of the repository, and returns
+        {worktree, confirmed, launch}."""
         launch = launches.prepare(
             iid,
             prompt,
             model,
-            effort
+            effort,
+            agent
         )
-        argv = self._command(title, launch.shell_command())
+        folder = worktree or self._repo_dir
+        argv = self._command(title, launch.shell_command(), folder)
         try:
             process = subprocess.Popen(
                 argv,
@@ -87,21 +105,22 @@ class TerminalLauncher:
             status = process.wait(timeout=FAILURE_WAIT_S)
         except subprocess.TimeoutExpired:
             process.stderr.close()
-            return launch.result(self._repo_dir, confirmed=True)
+            return launch.result(folder, confirmed=True)
         message = process.stderr.read().decode("utf-8", "replace").strip()
         process.stderr.close()
         if status != 0:
             raise LaunchError(f"{self.name}: {message or f'exit status {status}'}")
-        return launch.result(self._repo_dir, confirmed=True)
+        return launch.result(folder, confirmed=True)
 
-    def _command(self, title, agent_command):
+    def _command(self, title, agent_command, folder):
         """The terminal's command line: the user's login shell sets the tab's title, starts the agent, then
         stays open as an ordinary shell."""
         shell = os.environ.get("SHELL") or "/bin/sh"
         script = f"printf '\\033]0;%s\\007' {shlex.quote(title)}; {agent_command}; exec {shlex.quote(shell)} -l"
-        argv = [shell, "-l", "-c", script]
+        # Login and interactive, as in any tab: the PATH then holds what ~/.zshrc or ~/.bashrc adds (nvm and the like).
+        argv = [shell, "-l", "-i", "-c", script]
         values = {
-            "dir": str(self._repo_dir),
+            "dir": str(folder),
             "title": title,
             "command": shlex.join(argv),
             "distro": os.environ.get("WSL_DISTRO_NAME", ""),

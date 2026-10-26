@@ -20,15 +20,15 @@ review activity: commits, comments, who pushed or commented last.
   branch's pipeline fails.
 
 It also offers a diff viewer built on the local git clone, where threads are opened, answered and
-resolved, a comments page, and an **AI** button that prepares Claude Code prompts for a merge
-request.
+resolved, a comments page, and an **AI** button that prepares prompts for a merge request, for
+Claude Code, Codex or Pi.
 
 Made for agentic development, where coding agents write the code across several worktrees and
 nobody keeps an IDE open on each of them. The diff of every merge request comes from the local git
 clone, without checking anything out, so neither the author nor the reviewer opens an IDE to read
 it. The **AI** button turns the fix of what is red, and the actions the project defines, such as a
 review or an explanation, into a prompt already filled in for that merge request: one click copies
-it, or opens a new tab in Orca, herdr or your terminal and starts Claude Code with it (see
+it, or opens a new tab in Orca, herdr or your terminal and starts Claude Code, Codex or Pi with it (see
 [Where sessions open](#where-sessions-open)).
 
 `mr_dashboard/server.py` serves the page (`web/index.html`) and relays the GitLab and SonarQube APIs, so that tokens
@@ -67,7 +67,7 @@ dated relative to that moment, in a temporary directory removed on exit.
   (`~/.config/glab-cli/config.yml`): run `glab auth login --hostname gitlab.example.com` once.
 - **`SONAR_TOKEN`** in the environment of the shell that starts the server, if the project uses
   SonarQube. Without it, the Sonar badges stay grey.
-- Optional: Claude Code, with [Orca, herdr or a terminal](#where-sessions-open), for the AI button's launch
+- Optional: Claude Code, Codex or Pi, with [Orca, herdr or a terminal](#where-sessions-open), for the AI button's launch
   action.
 
 ## Running
@@ -138,7 +138,7 @@ Options given after the profile are passed to `server.py` and win over the profi
 | `--pit-marker` | unless `--no-pit` | beginning of the mutation testing note posted on the MR — see [Mutation report format](#mutation-report-format) |
 | `--no-pit` | no | project without mutation testing: its column, data and notifications disappear |
 | `--git-fetch-interval` | no | seconds between two automatic `git fetch` of the local git clone, `0` for none (default `300`) |
-| `--launch-in` | no | where the AI button opens its sessions: `auto`, `none`, `orca`, `herdr`, `terminal:<preset>` or `terminal:<template>` (default `auto`: Orca when it is found); see [Where sessions open](#where-sessions-open) |
+| `--launch-in` | no | where the AI button can open its sessions, once per target, offered in the dialog's menu in this order: `auto`, `none`, `orca`, `herdr`, `terminal:<preset>` or `terminal:<template>` (default `auto`: every target found); see [Where sessions open](#where-sessions-open) |
 | `--quiet` | no | do not log each request |
 
 ## Using the dashboard
@@ -274,22 +274,46 @@ The image needs `curl` and `jq`. Then start the dashboard with `--pit-job mutati
 
 ## AI actions
 
-The **AI** button of an open MR offers the actions of the tracked project's catalogue. The dialog
-shows the chosen action's prompt, to copy into Claude Code or to launch in a new tab (see
+The **AI** button of an open MR offers the actions of the tracked project's catalogue, as prompt
+templates, apart from the blank prompt written in the dialog; the dialog says where they come from (see
+[The `ai-actions.toml` catalogue](#the-ai-actionstoml-catalogue)). The dialog
+shows the chosen action's prompt, to copy into your coding agent or to launch in a new tab (see
 [Where sessions open](#where-sessions-open)). The prompt can be edited in the dialog before being copied or
 launched: the edited text is what goes out. It is kept per MR and per action until the page is
-reloaded; **Original prompt** restores it.
+reloaded; the undo icon under the copy icon brings the original prompt back.
 
-- **Model** selects the model of the launched session (`claude --model`): the action's one from the
-  catalogue, preselected, or Claude Code's configured default. Aliases come first (they always map to
-  the latest version), then older specific versions. The list is read from the cache Claude Code
-  maintains itself (`~/.claude/cache/model-catalog/`, reread every time the dialog opens), so new
-  models show up without changing anything here; without that cache, only the aliases are offered.
-- **Effort** selects the effort level (`claude --effort`, from *Low* to *Max*). Only the levels the
-  chosen model supports are listed, the recommended one flagged; a model without effort levels greys
-  the list out.
-- **Close**, Escape or a click outside the dialog close it. The button has a red outline when the MR
-  has something to fix: branch behind or in conflict, imperfect quality indicator, unresolved thread.
+- **Agent** selects the coding agent launched, among those installed: Claude Code (`claude`), Codex
+  (`codex`) and Pi (`pi`). The browser remembers the choice, and each agent's last model and effort level,
+  used unless the catalogue's action sets its own.
+- **Model** selects the model of the launched session, or the agent's configured default:
+  - Claude Code (`claude --model`): the action's one from the catalogue, preselected. Aliases come first
+    (they always map to the latest version), then older specific versions. The list is read from the
+    cache Claude Code maintains itself (`~/.claude/cache/model-catalog/`, reread every time the dialog
+    opens), so new models show up without changing anything here; without that cache, only the aliases
+    are offered.
+  - Codex (`codex -m`): the models of its catalogue, `codex debug models`, but those it hides.
+  - Pi (`pi --model`): the models of `pi --list-models`, grouped by provider.
+
+  Codex's and Pi's lists are read again after 24 hours, or when the server restarts.
+
+  The default choice names what the agent's configuration sets, read in the tracked repository: Claude
+  Code's `model` and `effortLevel` (user, project and local settings, or `ANTHROPIC_MODEL` and
+  `CLAUDE_CODE_EFFORT_LEVEL`), Codex's `model` and `model_reasoning_effort` (`~/.codex/config.toml`, else the
+  model's own default level), Pi's `defaultModel` and `defaultThinkingLevel` (global, then project settings).
+  Where the configuration sets nothing, it only reads *default*: the agent decides.
+- **Effort** selects the effort level: `claude --effort` (from *Low* to *Max*), Codex's
+  `-c model_reasoning_effort` (from *Low* to *Ultra*) or `pi --thinking` (from *Off* to *Max*). Only the levels the chosen model supports are listed, the recommended one
+  flagged; a model without effort levels greys the list out.
+- **Run now in** starts the agent on the prompt at once, without asking. It is greyed out while a launch
+  runs, until its agent starts. Within two minutes of a session started for the same prompt, agent and
+  target, it first asks whether to start another one.
+- **Copy as shell command**, under it, is its alternative: it copies the agent's command line with the model,
+  the effort level and the prompt, quoted for bash and zsh, to paste into a terminal of your own open on the
+  repository.
+- The copy icon in the prompt's top right corner copies the prompt as it stands.
+- The cross in the top right corner, Escape or a click outside the dialog close it. The AI button has a red
+  outline when the MR has something to fix: branch behind or in conflict, imperfect quality indicator,
+  unresolved thread.
 
 The same button sits at the top of an open MR's diff, with the same actions: ask for an explanation
 while reading the diff. The fix action is offered there only if a dashboard tab refreshed its data
@@ -324,17 +348,23 @@ unknown variable is left as is in the displayed prompt.
 
 Without a catalogue, only the fix action is offered, with `{fix_context}` as its prompt. An invalid
 catalogue offers none, and the dialog says why. With or without a catalogue, the last action,
-**Free**, opens an empty prompt to write in the dialog; its id `free` is reserved.
+**Blank**, opens an empty prompt to write in the dialog; its id `free` is reserved.
 
 ### Where sessions open
 
-`--launch-in` (`LAUNCH_IN` in a profile) names where the dialog's **Open in …** button opens a new tab on
-`--repo-dir` and starts a Claude Code session there with the prompt, model and effort chosen. The tab runs
-your login shell, which must understand a POSIX command line, as bash and zsh do.
+`--launch-in` (`LAUNCH_IN` in a profile) names where the dialog's **Run now in …** button can open a new tab on
+`--repo-dir`, or in the MR's worktree when one has its branch checked out (`git worktree list`), and start the
+chosen agent there with the prompt, model and effort chosen. Given several
+times (`--launch-in orca --launch-in terminal:terminator`, or `LAUNCH_IN=(orca terminal:terminator)` in a
+profile), it offers them in the menu beside **Run now in**, in that order: the session opens where you pick at
+the last moment, should one of them fail you, and the browser remembers the choice. Each time the dialog
+opens, the server checks which can open a tab now: Orca or herdr not running, or tmux without a session,
+show greyed out with the reason. The tab runs your login
+shell, which must understand a POSIX command line, as bash and zsh do.
 
 | `--launch-in` | Opens the tab in |
 |---|---|
-| `auto` (default) | Orca when it is found, else nowhere: prompts are copied |
+| `auto` (default) | every target found, in this order: Orca, herdr, the [terminals](#terminals) of the presets installed |
 | `none` | nowhere, even with Orca installed: prompts are copied |
 | `orca` | [Orca](#orca) |
 | `herdr` | [herdr](#herdr) |
@@ -362,7 +392,7 @@ launch, and herdr shows each agent's state in its sidebar.
 
 #### Terminals
 
-A preset opens a new tab, or a new window for terminals without tabs. Once Claude Code exits, the tab
+A preset opens a new tab, or a new window for terminals without tabs. Once the agent exits, the tab
 stays open as an ordinary shell.
 
 | Preset | Opens | Tried |
@@ -474,6 +504,12 @@ See [SECURITY.md](.github/SECURITY.md) to report a vulnerability.
 - Changes to `server.py` or the Python modules it imports require restarting the server.
 - The server serves the files of the directory it was started from: to test a working copy, start the
   server from it.
+- Tests: `python3 -m unittest discover tests`, standard library only. They hold still the command lines
+  the AI button's launches run (terminal presets, herdr, Orca, each agent's start command) against
+  `tests/golden/launch_commands.json`, and run them as each terminal reads them, so that the agent gets its
+  prompt intact. A deliberate change regenerates the file with `MR_DASHBOARD_UPDATE_GOLDEN=1`.
+  `python3 tests/live_launch_check.py` checks the same on the terminals, herdr and Orca installed: it opens
+  real tabs, which close themselves.
 
 See [CONTRIBUTING.md](.github/CONTRIBUTING.md).
 

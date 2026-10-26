@@ -6,13 +6,13 @@ reread on every request: an edited prompt can be tried without restarting the se
     [[action]]
     id = "…"            identifier, unique within the file
     label = "…"         label of the choice in the dialog
-    tab = "… !{iid}"    title of the Orca tab, {iid} replaced by the MR number (default: label)
+    tab = "… !{iid}"    title of the session's tab, {iid} replaced by the MR number (default: label)
     prompt = "…"        prompt, whose variables the page replaces (see README)
     when = "to-fix"     optional: action offered only when the MR has something to fix
-    model = "sonnet"    optional: model preselected for the Orca session, an alias or a specific version
-    effort = "low"      optional: effort level preselected for the Orca session, one of EFFORTS
+    model = "sonnet"    optional: Claude Code's model preselected for the session, an alias or a specific version
+    effort = "low"      optional: Claude Code's effort level preselected for the session, one of EFFORTS
     voice = "…"         optional: English line the dashboard voice appends to "Yes sir!" when the action
-                        is launched in Orca
+                        is launched
 
 Without the file, the catalog comes down to the fix action, with the prompt computed by the page. Either way,
 it ends with the free action, with an empty prompt to write in the dialog.
@@ -20,14 +20,14 @@ it ends with the free action, with an empty prompt to write in the dialog.
 import tomllib
 from pathlib import Path
 
-import claude_models
+import agents
 from claude_models import ALIASES, EFFORTS, SAFE_ID
 
 CATALOG_PATH = Path(".mr-dashboard") / "ai-actions.toml"
 DEFAULT_ACTIONS = [
     {"id": "fix", "label": None, "tab": "Fix MR !{iid}", "prompt": "{fix_context}", "when": "to-fix", "model": None, "effort": None, "voice": None},
 ]
-# Prompt written in the dialog: any model, without typing the claude command in Orca.
+# Prompt written in the dialog: any agent and model, without typing the agent's command in its tab.
 FREE_ACTION = {"id": "free", "label": None, "tab": "Claude MR !{iid}", "prompt": "", "when": None, "model": None, "effort": None, "voice": None}
 WHEN_VALUES = {"to-fix"}
 MAX_TAB_CHARS = 80
@@ -41,19 +41,19 @@ class AiActionsError(Exception):
 class AiActions:
 
     def __init__(self, repo_root):
+        self._repo_root = repo_root
         self._path = repo_root / CATALOG_PATH
 
     def catalog(self):
-        """{"source", "actions", "models", "efforts"}: source is None for the default catalog, when there is no
-        file; models are those Claude Code offers (see claude_models.py)."""
+        """{"source", "actions", "agents"}: source is None for the default catalog, when there is no file; agents
+        are those installed, with their models and effort levels (see agents.py)."""
         try:
             content = self._path.read_bytes()
         except FileNotFoundError:
             return {
                 "source": None,
                 "actions": [*DEFAULT_ACTIONS, FREE_ACTION],
-                "models": claude_models.choices(),
-                "efforts": EFFORTS,
+                "agents": [agent.describe(self._repo_root) for agent in agents.installed()],
             }
         except OSError as error:
             raise AiActionsError(f"{CATALOG_PATH} unreadable: {error}") from error
@@ -64,8 +64,7 @@ class AiActions:
         return {
             "source": str(CATALOG_PATH),
             "actions": [*self._actions(document), FREE_ACTION],
-            "models": claude_models.choices(),
-            "efforts": EFFORTS,
+            "agents": [agent.describe(self._repo_root) for agent in agents.installed()],
         }
 
     def tab_title(

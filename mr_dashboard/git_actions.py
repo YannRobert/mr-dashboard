@@ -298,6 +298,22 @@ class GitActions:
             "fetchedAt": self._last_fetch_at(),
         }
 
+    def worktree_of(self, branch):
+        """The worktree that has the branch checked out, among those of the repository, or None: a MR's session then
+        opens on its branch, rather than at the root of the repository."""
+        try:
+            self._check_branch_names(branch)
+            listing = self._git_output(["worktree", "list", "--porcelain"])
+        except GitError:
+            return None
+        path = None
+        for line in listing.splitlines():
+            if line.startswith("worktree "):
+                path = line[len("worktree "):]
+            elif line == f"branch refs/heads/{branch}" and path and Path(path).is_dir():
+                return Path(path)
+        return None
+
     def _last_fetch_at(self):
         """Date of the last successful fetch, even one run outside the server: that of FETCH_HEAD."""
         try:

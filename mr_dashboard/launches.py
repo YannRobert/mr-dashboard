@@ -15,6 +15,8 @@ import shlex
 import time
 from pathlib import Path
 
+import agents
+
 PROMPT_MAX_CHARS = 20_000
 PROMPT_DIR = Path.home() / ".cache" / "mr-dashboard"
 PROMPT_MAX_AGE_S = 24 * 3600
@@ -36,7 +38,7 @@ class LaunchError(Exception):
 
 class Launch:
     """The files of one launch, written by prepare(). Files are never deleted here on error: the tab may have
-    been created anyway, and its shell would then read them too late. Without the prompt, claude does not start
+    been created anyway, and its shell would then read them too late. Without the prompt, the agent does not start
     at all rather than start with no instructions."""
 
     def __init__(
@@ -45,21 +47,32 @@ class Launch:
             settings_file,
             shell_file,
             model,
-            effort
+            effort,
+            agent=None
     ):
         self.prompt_file = prompt_file
         self.settings_file = settings_file
         self.shell_file = shell_file
         self._model = model
         self._effort = effort
+        self._agent = agent
 
     @property
     def id(self):
         return self.prompt_file.stem
 
     def shell_command(self):
-        """The POSIX command line the tab's shell runs: it marks the shell as started, then starts claude with
-        the prompt, provided the prompt is still there."""
+        """The POSIX command line the tab's shell runs: it marks the shell as started, then starts the agent with
+        the prompt, provided the prompt is still there. Claude Code deletes the prompt once started; another
+        agent has it read and deleted by the shell just before it starts, into a variable whose name no shell
+        reserves (zsh's prompt is its PS1)."""
+        if self._agent is not None and self._agent.id != "claude":
+            agent = agents.command(self._agent, self._agent.options(self._model, self._effort))
+            # The prompt is only taken once the agent is found: otherwise it stays, and the page says the agent did
+            # not start.
+            return (f"rm -f '{self.shell_file}'; [ -f '{self.prompt_file}' ] && command -v {shlex.quote(self._agent.program)} >/dev/null "
+                    f"&& {{ mr_dashboard_prompt=\"$(cat '{self.prompt_file}')\"; "
+                    f"rm -f '{self.prompt_file}' '{self.settings_file}'; {agent} \"$mr_dashboard_prompt\"; }}")
         model_option = f"--model {shlex.quote(self._model)} " if self._model else ""
         effort_option = f"--effort {shlex.quote(self._effort)} " if self._effort else ""
         return (f"rm -f '{self.shell_file}'; [ -f '{self.prompt_file}' ] && claude --settings '{self.settings_file}' "
@@ -74,9 +87,11 @@ def prepare(
         iid,
         prompt,
         model=None,
-        effort=None
+        effort=None,
+        agent=None
 ):
-    """Writes the files of a launch. Without model or effort, claude uses those of its configuration."""
+    """Writes the files of a launch. Without model or effort, the agent uses those of its configuration; without
+    agent, Claude Code."""
     if not prompt.strip() or len(prompt) > PROMPT_MAX_CHARS:
         raise LaunchError("prompt empty or too long")
     PROMPT_DIR.mkdir(parents=True, exist_ok=True)
@@ -84,6 +99,9 @@ def prepare(
         if time.time() - stale.stat().st_mtime > PROMPT_MAX_AGE_S:
             stale.unlink(missing_ok=True)
     prompt_file = PROMPT_DIR / f"MR{iid}-{secrets.token_hex(4)}.md"
+    # A prompt starting with - or @ would be read as an option, or a file for Pi: a line break before it avoids that.
+    if prompt[:1] in ("-", "@"):
+        prompt = "\n" + prompt
     prompt_file.write_text(prompt, encoding="utf-8")
     prompt_file.chmod(0o600)
     settings_file = prompt_file.with_suffix(".settings.json")
@@ -98,15 +116,16 @@ def prepare(
         settings_file,
         shell_file,
         model,
-        effort
+        effort,
+        agent
     )
 
 
 def progress(launch):
-    """{shell, claude}: true once the tab's shell, then the launch's Claude Code session, have started, each
-    deleting its file (the marker, then the prompt through the SessionStart hook). The tab's creation, even
-    confirmed, guarantees neither."""
+    """{shell, agent}: true once the tab's shell, then the launch's agent, have started, each deleting its file (the
+    marker, then the prompt, through Claude Code's SessionStart hook or the shell just before another agent
+    starts). The tab's creation, even confirmed, guarantees neither."""
     if not LAUNCH_ID.fullmatch(launch):
         raise LaunchError("unknown launch")
-    claude = not (PROMPT_DIR / f"{launch}.md").exists()
-    return {"shell": claude or not (PROMPT_DIR / f"{launch}.shell").exists(), "claude": claude}
+    agent = not (PROMPT_DIR / f"{launch}.md").exists()
+    return {"shell": agent or not (PROMPT_DIR / f"{launch}.shell").exists(), "agent": agent}

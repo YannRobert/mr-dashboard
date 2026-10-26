@@ -79,6 +79,8 @@ def build(
     origin = root / "origin.git"
     # A mirror, so that the later commits, kept under refs/demo/later, come along.
     git(root, "clone", "--quiet", "--mirror", str(work), str(origin))
+    # The clone checks out main, whichever branch the building left the work repository on.
+    git(origin, "symbolic-ref", "HEAD", f"refs/heads/{MAIN}")
     for iid, branch in history.BRANCHES.items():
         record = branches[iid]
         git(origin, "update-ref", f"refs/merge-requests/{iid}/head", record.pushes[-1].head)

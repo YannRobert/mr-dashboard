@@ -67,7 +67,8 @@ fi
 [[ -n "$TARGET_BRANCH" ]] && args+=(--target-branch "$TARGET_BRANCH")
 [[ -n "$REPO_DIR" ]] && args+=(--repo-dir "${REPO_DIR/#\~/$HOME}")
 [[ -n "$GIT_FETCH_INTERVAL" ]] && args+=(--git-fetch-interval "$GIT_FETCH_INTERVAL")
-[[ -n "$LAUNCH_IN" ]] && args+=(--launch-in "$LAUNCH_IN")
+# LAUNCH_IN: one target, or a bash array of them, offered in the dialog's menu in this order.
+for target in "${LAUNCH_IN[@]}"; do [[ -n "$target" ]] && args+=(--launch-in "$target"); done
 args+=("$@")
 
 # Port actually used: the last occurrence wins, as in argparse.
