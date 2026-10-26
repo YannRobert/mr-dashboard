@@ -24,11 +24,9 @@ import claude_models
 
 PI_THINKING = ("off", "minimal", "low", "medium", "high", "xhigh", "max")
 MODELS_TIMEOUT_S = 10
-# How long a model list read from an agent's command is reused: models change seldom, and the agent refreshes its
-# own catalogue. A failed reading is not kept, and a restart of the server reads again.
-MODELS_CACHE_S = 24 * 3600
-# A failed reading is tried again after this delay only, so that a broken agent does not slow every dialog down.
-MODELS_RETRY_S = 600
+# Agents and their models are looked up in the background, at startup then every MODELS_REFRESH_S: models change
+# seldom, and the dialog must open at once, on what the last lookup found.
+MODELS_REFRESH_S = 3600
 # Looking an agent up in the user's login shell, whose PATH may hold more than the server's (nvm, ~/.local/bin).
 LOOKUP_TIMEOUT_S = 5
 # A model of `codex debug models`, as `codex -m` takes it.
@@ -48,37 +46,42 @@ class Agent:
         self.id = agent_id
         self.name = name
         self.program = program
-        self._lock = threading.Lock()
-        self._models = None
-        self._models_at = 0
-        self._installed = None
+        # The program's path, found by refresh(); None until then, or when it is not installed.
+        self._path = None
+        self._models = []
 
     def installed(self):
-        """Whether the program is on the server's PATH or on that of the user's login shell, the one its tab runs:
-        an agent installed through nvm or in ~/.local/bin is often only on the latter. Asked once."""
-        if self._installed is None:
-            self._installed = shutil.which(self.program) is not None or self._in_login_shell()
-        return self._installed
+        """Whether the last refresh() found the program."""
+        return self._path is not None
+
+    def refresh(self):
+        """Looks the program up, on the server's PATH or on that of the user's login shell, the one its tab runs (an
+        agent installed through nvm or in ~/.local/bin is often only on the latter), then reads its models. Slow:
+        run in the background only. A failed reading keeps the models of the previous one."""
+        path = shutil.which(self.program) or self._in_login_shell()
+        self._path = path
+        models = self._read_models(path) if path else []
+        if models or not path:
+            self._models = models
 
     def _in_login_shell(self):
+        """The program's path in the user's login shell, or None."""
         try:
             # Interactive too: nvm and the like set the PATH in ~/.zshrc or ~/.bashrc, which a login shell alone skips.
             result = subprocess.run([os.environ.get("SHELL") or "/bin/sh", "-l", "-i", "-c", f"command -v {shlex.quote(self.program)}"],
-                                    stdin=subprocess.DEVNULL, capture_output=True, timeout=LOOKUP_TIMEOUT_S, check=False)
+                                    stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=LOOKUP_TIMEOUT_S, check=False)
         except (OSError, subprocess.TimeoutExpired):
-            return False
-        return result.returncode == 0
+            return None
+        lines = result.stdout.strip().splitlines()
+        return lines[-1] if result.returncode == 0 and lines and lines[-1].startswith("/") else None
 
-    def _cached(self, read):
-        """The model list read(), kept MODELS_CACHE_S; an empty reading is kept MODELS_RETRY_S only."""
-        with self._lock:
-            age = time.time() - self._models_at
-            if self._models is None or age > (MODELS_CACHE_S if self._models else MODELS_RETRY_S):
-                self._models, self._models_at = read(), time.time()
-            return self._models
+    @staticmethod
+    def _read_models(path):
+        """The models the program at path lists; [] when it lists none."""
+        return []
 
     def models(self):
-        return []
+        return self._models
 
     def efforts(self, model):
         """Levels the model accepts; without a model, those the agent offers for the model of its configuration."""
@@ -113,6 +116,12 @@ class Agent:
                 "recommendedIsDefault": self.RECOMMENDED_IS_DEFAULT}
 
 
+def _env(path):
+    """The environment to run the program at path in: its folder first on the PATH, for the interpreter its shebang
+    asks (node, next to pi under nvm) to be the one installed with it."""
+    return {**os.environ, "PATH": os.pathsep.join([str(Path(path).parent), os.environ.get("PATH", "")])}
+
+
 def _json(path):
     """The JSON object of a settings file, or {} when missing or unreadable."""
     try:
@@ -136,6 +145,9 @@ class ClaudeCode(Agent):
 
     def installed(self):
         return True
+
+    def refresh(self):
+        pass
 
     def models(self):
         return claude_models.choices()
@@ -168,14 +180,11 @@ class Codex(Agent):
     def __init__(self):
         super().__init__("codex", "Codex", "codex")
 
-    def models(self):
-        return self._cached(self._read_models)
-
     @staticmethod
-    def _read_models():
+    def _read_models(path):
         try:
-            result = subprocess.run(["codex", "debug", "models"], capture_output=True, text=True, encoding="utf-8",
-                                    timeout=MODELS_TIMEOUT_S, check=False)
+            result = subprocess.run([path, "debug", "models"], capture_output=True, text=True, encoding="utf-8",
+                                    env=_env(path), timeout=MODELS_TIMEOUT_S, check=False)
             catalog = json.loads(result.stdout).get("models", [])
         except (OSError, subprocess.TimeoutExpired, ValueError, AttributeError):
             return []
@@ -223,17 +232,15 @@ class Pi(Agent):
     def __init__(self):
         super().__init__("pi", "Pi", "pi")
 
-    def models(self):
-        return self._cached(self._read_models)
-
     @staticmethod
-    def _read_models():
+    def _read_models(path):
         try:
             result = subprocess.run(
-                ["pi", "--list-models"],
+                [path, "--list-models"],
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
+                env=_env(path),
                 timeout=MODELS_TIMEOUT_S,
                 check=False
             )
@@ -272,6 +279,21 @@ class Pi(Agent):
 
 
 AGENTS = (ClaudeCode(), Codex(), Pi())
+
+
+def refresh():
+    for agent in AGENTS:
+        agent.refresh()
+
+
+def start_periodic_refresh():
+    """Looks the agents and their models up now then every MODELS_REFRESH_S, in a background thread: until the first
+    lookup ends, the dialog offers Claude Code only."""
+    def loop():
+        while True:
+            refresh()
+            time.sleep(MODELS_REFRESH_S)
+    threading.Thread(target=loop, name="agents-refresh", daemon=True).start()
 
 
 def installed():

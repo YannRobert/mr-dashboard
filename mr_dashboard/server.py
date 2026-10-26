@@ -78,7 +78,7 @@ from front_version import FrontVersion, tag as front_version_tag
 from git_actions import GitActions, GitError
 import agents
 import launches
-from launch_targets import LaunchTargetError, TARGETS as LAUNCH_TARGETS, availability as launch_availability, choose_all as choose_launch_targets
+from launch_targets import LaunchTargetError, TARGETS as LAUNCH_TARGETS, Availability as LaunchAvailability, choose_all as choose_launch_targets
 from launches import LaunchError
 from relay_cache import TTL_S, RelayCache
 from request_stats import RequestStats, http_error
@@ -282,6 +282,7 @@ class UpstreamPool:
 def make_handler(
         settings,
         launch_targets,
+        launch_availability,
         git,
         ai_actions,
         stats,
@@ -322,7 +323,7 @@ def make_handler(
             elif self.path == "/avatars":
                 self.send_json(200, avatar_colors.snapshot())
             elif self.path == "/launch/targets":
-                self.send_json(200, launch_availability(launch_targets))
+                self.send_json(200, launch_availability.snapshot())
             elif self.path.startswith("/launch/status?"):
                 self.launch_status(parse_qs(urlsplit(self.path).query))
             elif self.path.startswith("/git/diff?"):
@@ -910,6 +911,7 @@ def main():
         launch_targets = choose_launch_targets(args.launch_in, args.repo_dir)
     except LaunchTargetError as error:
         parser.error(f"--launch-in: {error}")
+    launch_availability = LaunchAvailability(launch_targets)
     stats = RequestStats(TTL_S)
     git = GitActions(
         args.repo_dir,
@@ -946,6 +948,7 @@ def main():
         make_handler(
             settings,
             launch_targets,
+            launch_availability,
             git,
             AiActions(args.repo_dir),
             stats,
@@ -953,6 +956,8 @@ def main():
         )
     )
     git.start_periodic_fetch()
+    launch_availability.start_periodic_refresh()
+    agents.start_periodic_refresh()
     print(f"MisteR Dashboard, the Merge Requests dashboard: http://localhost:{args.port}")
     try:
         server.serve_forever()

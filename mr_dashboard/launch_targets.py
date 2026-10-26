@@ -13,6 +13,8 @@ now (None when it can), and launch(iid, title, prompt, model, effort, agent, wor
 the agent, in the MR's worktree when given, and returns what launches.Launch.result gives.
 """
 import os
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 from herdr_launcher import HerdrLauncher
@@ -80,6 +82,11 @@ def _found(repo_dir):
     return found
 
 
+# How often the targets are asked, in the background, whether they can open a tab: the dialog opens at once, on what
+# the last asking found.
+AVAILABILITY_REFRESH_S = 15
+
+
 def availability(targets):
     """[{"id", "name", "unavailable"}]: why each target cannot open a tab now, or None, all asked at once."""
     if not targets:
@@ -87,3 +94,24 @@ def availability(targets):
     with ThreadPoolExecutor(max_workers=len(targets)) as pool:
         reasons = list(pool.map(lambda target: target.unavailable(), targets))
     return [{"id": target.id, "name": target.name, "unavailable": reason} for target, reason in zip(targets, reasons)]
+
+
+class Availability:
+    """availability(targets), asked every AVAILABILITY_REFRESH_S in a background thread: snapshot() answers at once,
+    every target offered until the first asking ends."""
+
+    def __init__(self, targets):
+        self._targets = targets
+        self._snapshot = [{"id": target.id, "name": target.name, "unavailable": None} for target in targets]
+
+    def snapshot(self):
+        return self._snapshot
+
+    def start_periodic_refresh(self):
+        if not self._targets:
+            return
+        def loop():
+            while True:
+                self._snapshot = availability(self._targets)
+                time.sleep(AVAILABILITY_REFRESH_S)
+        threading.Thread(target=loop, name="launch-targets-availability", daemon=True).start()

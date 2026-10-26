@@ -434,7 +434,8 @@ window.MrAi = (() => {
     if (dialog) applyTexts();
   }
 
-  // Whether each launch target can open a tab now, asked on each dialog opening; on failure, all are offered.
+  // Whether each launch target can open a tab now, as the server last found it in the background (no waiting); on
+  // failure, all are offered.
   async function loadAvailability() {
     unavailable = {};
     if (launchTargets().length < 1) return;
