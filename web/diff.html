@@ -118,6 +118,8 @@
   /* On the left, apart from the viewing controls, aligned right. */
   .review-actions { display: flex; align-items: center; gap: 0.5rem; margin-right: auto; }
   .review-actions[hidden] { display: none; }
+  /* The reviewer's verdicts, then what is done to the branch, in the order it is done. */
+  .review-actions #rebase { margin-left: 0.5rem; }
   .review-actions button:disabled { opacity: 0.45; cursor: default; }
   .review-actions #request-changes.done { color: var(--red-fg); border-color: var(--red-fg); }
   .review-actions #approve.done, .review-actions #merge.done { color: var(--green-fg); border-color: var(--green-fg); }
@@ -367,8 +369,8 @@
     <div class="review-actions" id="review-actions" hidden>
       <button type="button" class="toggle" id="approve"></button>
       <button type="button" class="toggle" id="request-changes"></button>
-      <button type="button" class="toggle" id="merge"></button>
       <button type="button" class="toggle" id="rebase"></button>
+      <button type="button" class="toggle" id="merge"></button>
       <span class="review-actions-status" id="review-actions-status" role="status" aria-live="polite"></span>
     </div>
     <div class="format" role="group" id="format">
@@ -417,7 +419,10 @@
   <h2 id="changes-dialog-title"></h2>
   <button type="button" class="ai-close" id="changes-dialog-close"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
   <ul class="merge-facts" id="changes-facts"></ul>
-  <div class="merge-options"><textarea id="changes-comment" rows="5"></textarea></div>
+  <div class="merge-options">
+    <textarea id="changes-comment" rows="5"></textarea>
+    <label><input type="checkbox" id="changes-thread" checked> <span id="changes-thread-label"></span></label>
+  </div>
   <div class="merge-buttons">
     <button type="button" id="changes-dialog-cancel"></button>
     <button type="button" class="primary" id="changes-dialog-confirm"></button>
@@ -536,6 +541,7 @@ unpushedTitle: "Clic : les commits locaux, que GitLab ne voit pas encore",
       ],
       requestChangesComment: "Commentaire publié dans la MR (facultatif) — Ctrl+Entrée pour valider",
       requestingChanges: "Demande de changements…",
+      requestChangesThread: "En faire un thread, auquel on peut répondre, à résoudre avant le merge",
       autoMerge: "⏱ Merge programmé",
       autoMergeTitle: "Merger la MR dans GitLab dès que son pipeline réussit",
       autoMergeConfirm: p => `Merger !${p.iid} quand le pipeline réussit ?`,
@@ -698,6 +704,7 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
       ],
       requestChangesComment: "Comment published in the MR (optional) — Ctrl+Enter to confirm",
       requestingChanges: "Requesting changes…",
+      requestChangesThread: "Make it a thread, open to replies, to resolve before merging",
       autoMerge: "⏱ Auto-merge set",
       autoMergeTitle: "Merge the MR in GitLab as soon as its pipeline succeeds",
       autoMergeConfirm: p => `Merge !${p.iid} when the pipeline succeeds?`,
@@ -2561,6 +2568,7 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
       document.getElementById("changes-dialog-title").textContent = texts.requestChangesConfirm(mr);
       document.getElementById("changes-facts").innerHTML = texts.requestChangesFacts.map(fact => `<li>${escapeHtml(fact)}</li>`).join("");
       comment.placeholder = texts.requestChangesComment;
+      document.getElementById("changes-thread-label").textContent = texts.requestChangesThread;
       const close = document.getElementById("changes-dialog-close");
       close.title = texts.mergeCancel;
       close.setAttribute("aria-label", texts.mergeCancel);
@@ -2571,7 +2579,10 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
     });
     const requestChanges = async () => {
       changes.close();
-      const sent = await reviewAction("gitlab/request-changes", texts.requestingChanges, { body: comment.value });
+      const sent = await reviewAction("gitlab/request-changes", texts.requestingChanges, {
+        body: comment.value,
+        thread: document.getElementById("changes-thread").checked,
+      });
       if (sent) comment.value = "";
     };
     document.getElementById("changes-dialog-close").addEventListener("click", () => changes.close());

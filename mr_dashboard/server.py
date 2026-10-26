@@ -36,8 +36,8 @@ Local actions, over POST:
                         /gitlab/approve, the two others true or false, or absent for what the MR's settings say;
                         "auto_merge": true merges only once the pipeline succeeds
     /gitlab/cancel-auto-merge  cancels such a merge to come: {"iid"}
-    /gitlab/request-changes  requests changes on a MR, withdrawing the user's approval: {"iid", "body"}, body
-                        an optional comment published first
+    /gitlab/request-changes  requests changes on a MR, withdrawing the user's approval: {"iid", "body", "thread"},
+                        body an optional comment published first, as a thread to resolve when thread is true
     /gitlab/rebase      rebases the source branch of a MR on its target, in GitLab: {"iid"}
     /git/diff   GET ?branch=&target=: diff of a MR from the point where it leaves its target, displayed
                 by diff.html; ?iid=&head=&merge=&target= for a merged MR, found through its commits;
@@ -610,11 +610,11 @@ def make_handler(
             if not request:
                 self.send_json(400, {"message": "invalid request"})
                 return
-            iid, note = request
+            iid, note, thread = request
             if note:
                 posted = self.gitlab_send(
                     "POST",
-                    f"merge_requests/{iid}/notes",
+                    f"merge_requests/{iid}/{'discussions' if thread else 'notes'}",
                     note
                 )
                 if posted is None:
@@ -967,13 +967,14 @@ def resolve_request(payload):
 
 
 def request_changes_request(payload):
-    """(iid, JSON body of the comment to publish first, or None) of a request for changes, None if it is invalid."""
+    """(iid, JSON body of the comment to publish first, or None, whether it opens a thread) of a request for changes,
+    None if it is invalid."""
     if not isinstance(payload, dict):
         return None
-    iid, body = payload.get("iid"), payload.get("body", "")
-    if not is_positive(iid) or not isinstance(body, str):
+    iid, body, thread = payload.get("iid"), payload.get("body", ""), payload.get("thread", False)
+    if not is_positive(iid) or not isinstance(body, str) or not isinstance(thread, bool):
         return None
-    return iid, json.dumps({"body": body}).encode() if body.strip() else None
+    return iid, json.dumps({"body": body}).encode() if body.strip() else None, thread
 
 
 def head_request(payload):
