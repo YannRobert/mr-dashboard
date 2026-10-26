@@ -368,6 +368,7 @@
       <button type="button" class="toggle" id="approve"></button>
       <button type="button" class="toggle" id="request-changes"></button>
       <button type="button" class="toggle" id="merge"></button>
+      <button type="button" class="toggle" id="rebase"></button>
       <span class="review-actions-status" id="review-actions-status" role="status" aria-live="polite"></span>
     </div>
     <div class="format" role="group" id="format">
@@ -420,6 +421,15 @@
   <div class="merge-buttons">
     <button type="button" id="changes-dialog-cancel"></button>
     <button type="button" class="primary" id="changes-dialog-confirm"></button>
+  </div>
+</dialog>
+<dialog class="ai-prompt merge-confirm" id="rebase-dialog" aria-labelledby="rebase-dialog-title">
+  <h2 id="rebase-dialog-title"></h2>
+  <button type="button" class="ai-close" id="rebase-dialog-close"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+  <ul class="merge-facts" id="rebase-facts"></ul>
+  <div class="merge-buttons">
+    <button type="button" id="rebase-dialog-cancel"></button>
+    <button type="button" class="primary" id="rebase-dialog-confirm"></button>
   </div>
 </dialog>
 <script src="ai.js"></script>
@@ -502,6 +512,18 @@ unpushedTitle: "Clic : les commits locaux, que GitLab ne voit pas encore",
       mergeSquashRequired: "Squasher les commits en un seul (imposé par le projet)",
       mergeRemoveBranch: p => `Supprimer la branche <code>${p.branch}</code> après le merge`,
       mergeCancel: "Annuler",
+      rebase: "Rebaser",
+      rebaseTitle: p => `Rebaser la branche sur ${p.target} dans GitLab`,
+      rebaseUpToDate: p => `La branche est à jour de ${p.target}`,
+      cannotRebase: "GitLab ne vous permet pas de pousser sur la branche de cette MR",
+      rebaseConfirm: p => `Rebaser !${p.iid} ?`,
+      rebaseFacts: p => [
+        `<code>${p.branch}</code> a ${p.behind} commit${p.behind > 1 ? "s" : ""} de retard sur <code>${p.target}</code>`,
+        "GitLab rejoue ses commits sur la cible et force-pousse la branche : qui l'a en local devra la récupérer",
+        "s'il y a des conflits, GitLab ne rebase pas : à résoudre en local",
+      ],
+      rebasing: "Rebase…",
+      rebasedDone: "Rebasée : git fetch, puis rechargez",
       requestChanges: "✋ Demander des changements",
       requestChangesTitle: "Demander des changements dans GitLab : la MR ne peut plus être mergée tant que vous ne l'approuvez pas",
       changesRequested: "✋ Changements demandés",
@@ -652,6 +674,18 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
       mergeSquashRequired: "Squash the commits into one (required by the project)",
       mergeRemoveBranch: p => `Delete the <code>${p.branch}</code> branch after the merge`,
       mergeCancel: "Cancel",
+      rebase: "Rebase",
+      rebaseTitle: p => `Rebase the branch on ${p.target} in GitLab`,
+      rebaseUpToDate: p => `The branch is up to date with ${p.target}`,
+      cannotRebase: "GitLab does not let you push to this MR's branch",
+      rebaseConfirm: p => `Rebase !${p.iid}?`,
+      rebaseFacts: p => [
+        `<code>${p.branch}</code> is ${p.behind} commit${p.behind > 1 ? "s" : ""} behind <code>${p.target}</code>`,
+        "GitLab replays its commits on the target and force-pushes the branch: whoever has it locally will have to fetch it",
+        "on conflicts, GitLab does not rebase: they are to resolve locally",
+      ],
+      rebasing: "Rebasing…",
+      rebasedDone: "Rebased: git fetch, then reload",
       requestChanges: "✋ Request changes",
       requestChangesTitle: "Request changes in GitLab: the MR cannot be merged until you approve it",
       changesRequested: "✋ Changes requested",
@@ -2317,7 +2351,8 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
   // project: the project's squash_option and merge_method, read once.
   // autoMerge: the merge offered waits for the pipeline.
   // user: the token's user, read once.
-  const review = { sha: null, busy: false, detail: null, project: null, autoMerge: false, user: null };
+  // behind: commits of the target the branch lacks.
+  const review = { sha: null, busy: false, detail: null, project: null, autoMerge: false, user: null, behind: 0 };
 
   function reviewedHead() {
     return commits?.filter(c => !c.local).at(-1)?.sha ?? null;
@@ -2338,7 +2373,7 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
     let detail, approvals, reviewers;
     try {
       [detail, approvals, reviewers] = await Promise.all([
-        freshJson(`gitlab/projects/${project}/merge_requests/${encodeURIComponent(mr.iid)}`),
+        freshJson(`gitlab/projects/${project}/merge_requests/${encodeURIComponent(mr.iid)}?include_diverged_commits_count=true&include_rebase_in_progress=true`),
         freshJson(`gitlab/projects/${project}/merge_requests/${encodeURIComponent(mr.iid)}/approvals`),
         freshJson(`gitlab/projects/${project}/merge_requests/${encodeURIComponent(mr.iid)}/reviewers`),
       ]);
@@ -2348,7 +2383,7 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
     }
     // Merged or closed meanwhile: only the status of the last action stays, if any.
     if (detail.state !== "opened") {
-      for (const id of ["approve", "request-changes", "merge"]) document.getElementById(id).hidden = true;
+      for (const id of ["approve", "request-changes", "merge", "rebase"]) document.getElementById(id).hidden = true;
       document.getElementById("review-actions").hidden = !document.getElementById("review-actions-status").textContent;
       return;
     }
@@ -2393,7 +2428,22 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
       : review.autoMerge ? texts.autoMergeTitle
       : status !== "mergeable" ? texts.mergeStatus[status] ?? texts.mergeBlocked(status)
       : texts.mergeTitle(mr);
+    // Rebasing pushes to the source branch: offered while it is behind its target, to whom GitLab lets push to it.
+    const rebase = document.getElementById("rebase");
+    const behind = detail.diverged_commits_count ?? 0;
+    const canPush = behind > 0 && await canPushToSource(project);
+    rebase.textContent = texts.rebase;
+    rebase.disabled = detail.rebase_in_progress || !behind || !canPush;
+    rebase.title = detail.rebase_in_progress ? texts.rebasing
+      : !behind ? texts.rebaseUpToDate(mr) : canPush ? texts.rebaseTitle(mr) : texts.cannotRebase;
+    review.behind = behind;
     document.getElementById("review-actions").hidden = false;
+  }
+
+  async function canPushToSource(project) {
+    const query = `{ project(fullPath: ${JSON.stringify(decodeURIComponent(project))}) { mergeRequest(iid: ${JSON.stringify(String(mr.iid))}) { userPermissions { pushToSourceBranch } } } }`;
+    const result = await freshJson(`graphql?query=${encodeURIComponent(query)}`).catch(() => null);
+    return !!result?.data?.project?.mergeRequest?.userPermissions?.pushToSourceBranch;
   }
 
   // Only the pipeline keeps the MR from being merged, and it may still succeed.
@@ -2401,6 +2451,23 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
     const active = ["created", "waiting_for_resource", "preparing", "pending", "running", "scheduled"];
     return ["ci_still_running", "ci_must_pass"].includes(detail.detailed_merge_status)
       && active.includes(detail.head_pipeline?.status);
+  }
+
+  // GitLab rebases in the background: its outcome, a new head or merge_error, is awaited for up to a minute.
+  async function waitForRebase() {
+    const status = document.getElementById("review-actions-status");
+    const project = await gitlabProject();
+    status.classList.remove("error");
+    status.textContent = texts.rebasing;
+    for (let attempt = 0; attempt < 30; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      const detail = await freshJson(`gitlab/projects/${project}/merge_requests/${encodeURIComponent(mr.iid)}?include_rebase_in_progress=true`).catch(() => null);
+      if (!detail || detail.rebase_in_progress) continue;
+      status.classList.toggle("error", !!detail.merge_error);
+      status.textContent = detail.merge_error ? texts.reviewFailed(detail.merge_error) : texts.rebasedDone;
+      break;
+    }
+    await loadReviewRights();
   }
 
   async function reviewAction(path, pending, options = {}) {
@@ -2512,6 +2579,26 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
     document.getElementById("changes-dialog-confirm").addEventListener("click", requestChanges);
     comment.addEventListener("keydown", event => {
       if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) requestChanges();
+    });
+    const rebaseDialog = document.getElementById("rebase-dialog");
+    document.getElementById("rebase").addEventListener("click", () => {
+      const names = { branch: escapeHtml(mr.branch), target: escapeHtml(mr.target), behind: review.behind };
+      document.getElementById("rebase-dialog-title").textContent = texts.rebaseConfirm(mr);
+      document.getElementById("rebase-facts").innerHTML = texts.rebaseFacts(names).map(fact => `<li>${fact}</li>`).join("");
+      const close = document.getElementById("rebase-dialog-close");
+      close.title = texts.mergeCancel;
+      close.setAttribute("aria-label", texts.mergeCancel);
+      document.getElementById("rebase-dialog-cancel").textContent = texts.mergeCancel;
+      const confirm = document.getElementById("rebase-dialog-confirm");
+      confirm.textContent = texts.rebase;
+      rebaseDialog.showModal();
+      confirm.focus();
+    });
+    document.getElementById("rebase-dialog-close").addEventListener("click", () => rebaseDialog.close());
+    document.getElementById("rebase-dialog-cancel").addEventListener("click", () => rebaseDialog.close());
+    document.getElementById("rebase-dialog-confirm").addEventListener("click", async () => {
+      rebaseDialog.close();
+      if (await reviewAction("gitlab/rebase", texts.rebasing)) await waitForRebase();
     });
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") loadReviewRights();

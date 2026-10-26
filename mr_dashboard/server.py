@@ -38,6 +38,7 @@ Local actions, over POST:
     /gitlab/cancel-auto-merge  cancels such a merge to come: {"iid"}
     /gitlab/request-changes  requests changes on a MR, withdrawing the user's approval: {"iid", "body"}, body
                         an optional comment published first
+    /gitlab/rebase      rebases the source branch of a MR on its target, in GitLab: {"iid"}
     /git/diff   GET ?branch=&target=: diff of a MR from the point where it leaves its target, displayed
                 by diff.html; ?iid=&head=&merge=&target= for a merged MR, found through its commits;
                 &first=&last= for what its commits from first to last brought together
@@ -380,6 +381,7 @@ def make_handler(
                 "/gitlab/merge": self.gitlab_merge,
                 "/gitlab/cancel-auto-merge": self.gitlab_cancel_auto_merge,
                 "/gitlab/request-changes": self.gitlab_request_changes,
+                "/gitlab/rebase": self.gitlab_rebase,
                 "/avatars": self.avatars
             }
             action = actions.get(self.path)
@@ -589,6 +591,17 @@ def make_handler(
             self.gitlab_write(
                 "POST",
                 f"merge_requests/{iid}/cancel_merge_when_pipeline_succeeds",
+                b"{}"
+            )
+
+        def gitlab_rebase(self, payload):
+            iid = payload.get("iid") if isinstance(payload, dict) else None
+            if not is_positive(iid):
+                self.send_json(400, {"message": "invalid request"})
+                return
+            self.gitlab_write(
+                "PUT",
+                f"merge_requests/{iid}/rebase",
                 b"{}"
             )
 
