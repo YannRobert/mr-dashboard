@@ -36,6 +36,8 @@ Local actions, over POST:
                         /gitlab/approve, the two others true or false, or absent for what the MR's settings say;
                         "auto_merge": true merges only once the pipeline succeeds
     /gitlab/cancel-auto-merge  cancels such a merge to come: {"iid"}
+    /gitlab/request-changes  requests changes on a MR, withdrawing the user's approval: {"iid", "body"}, body
+                        an optional comment published first
     /git/diff   GET ?branch=&target=: diff of a MR from the point where it leaves its target, displayed
                 by diff.html; ?iid=&head=&merge=&target= for a merged MR, found through its commits;
                 &first=&last= for what its commits from first to last brought together
@@ -377,6 +379,7 @@ def make_handler(
                 "/gitlab/unapprove": self.gitlab_unapprove,
                 "/gitlab/merge": self.gitlab_merge,
                 "/gitlab/cancel-auto-merge": self.gitlab_cancel_auto_merge,
+                "/gitlab/request-changes": self.gitlab_request_changes,
                 "/avatars": self.avatars
             }
             action = actions.get(self.path)
@@ -589,6 +592,50 @@ def make_handler(
                 b"{}"
             )
 
+        def gitlab_request_changes(self, payload):
+            request = request_changes_request(payload)
+            if not request:
+                self.send_json(400, {"message": "invalid request"})
+                return
+            iid, note = request
+            if note:
+                posted = self.gitlab_send(
+                    "POST",
+                    f"merge_requests/{iid}/notes",
+                    note
+                )
+                if posted is None:
+                    return
+                if not 200 <= posted[0] < 300:
+                    self.send_body(*posted)
+                    return
+            # Only GraphQL requests changes; GitLab answers its refusals with a 200 that lists them.
+            response = self.upstream_send(
+                "POST",
+                f"{settings['gitlab_host']}/api/graphql",
+                json.dumps({
+                    "query": "mutation($path: ID!, $iid: String!) {"
+                             " mergeRequestRequestChanges(input: {projectPath: $path, iid: $iid}) { errors } }",
+                    "variables": {"path": settings["public"]["gitlabProject"], "iid": str(iid)}
+                }).encode()
+            )
+            if response is None:
+                return
+            status, content, upstream_headers = response
+            if not 200 <= status < 300:
+                self.send_body(*response)
+                return
+            try:
+                result = json.loads(content)
+                errors = [error.get("message") for error in result.get("errors") or []] \
+                    or result["data"]["mergeRequestRequestChanges"]["errors"]
+            except (ValueError, KeyError, TypeError, AttributeError):
+                errors = ["unexpected GitLab answer"]
+            if errors:
+                self.send_json(422, {"message": errors})
+                return
+            self.send_json(200, {"requested_changes": True})
+
         def gitlab_write(
                 self,
                 method,
@@ -613,10 +660,23 @@ def make_handler(
             """(status, content, headers) of an already validated write sent to GitLab for the tracked project; None,
             the 502 already answered, when GitLab could not be reached."""
             project = quote(settings["public"]["gitlabProject"], safe="")
+            return self.upstream_send(
+                method,
+                f"{settings['gitlab_host']}/api/v4/projects/{project}/{path}",
+                body
+            )
+
+        def upstream_send(
+                self,
+                method,
+                url,
+                body
+        ):
+            """gitlab_send to any GitLab URL."""
             try:
                 status, content, upstream_headers = upstream.write(
                     method,
-                    f"{settings['gitlab_host']}/api/v4/projects/{project}/{path}",
+                    url,
                     {"PRIVATE-TOKEN": settings["gitlab_token"], "Content-Type": "application/json"},
                     body
                 )
@@ -891,6 +951,16 @@ def resolve_request(payload):
     if not isinstance(resolved, bool):
         return None
     return *target, json.dumps({"resolved": resolved}).encode()
+
+
+def request_changes_request(payload):
+    """(iid, JSON body of the comment to publish first, or None) of a request for changes, None if it is invalid."""
+    if not isinstance(payload, dict):
+        return None
+    iid, body = payload.get("iid"), payload.get("body", "")
+    if not is_positive(iid) or not isinstance(body, str):
+        return None
+    return iid, json.dumps({"body": body}).encode() if body.strip() else None
 
 
 def head_request(payload):

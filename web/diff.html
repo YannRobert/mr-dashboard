@@ -119,11 +119,13 @@
   .review-actions { display: flex; align-items: center; gap: 0.5rem; margin-right: auto; }
   .review-actions[hidden] { display: none; }
   .review-actions button:disabled { opacity: 0.45; cursor: default; }
+  .review-actions #request-changes.done { color: var(--red-fg); border-color: var(--red-fg); }
   .review-actions #approve.done, .review-actions #merge.done { color: var(--green-fg); border-color: var(--green-fg); }
   /* Both labels in the same cell, the one of the other state hidden: the button keeps the width of the longer. */
-  #approve, #merge { display: inline-grid; }
-  #approve > span, #merge > span { grid-area: 1 / 1; }
+  #approve, #request-changes, #merge { display: inline-grid; }
+  #approve > span, #request-changes > span, #merge > span { grid-area: 1 / 1; }
   #approve:not(.done) > .when-approved, #approve.done > .when-not-approved,
+  #request-changes:not(.done) > .when-approved, #request-changes.done > .when-not-approved,
   #merge:not(.done) > .when-approved, #merge.done > .when-not-approved { visibility: hidden; }
   .review-actions #merge:not(:disabled):not(.done) { color: var(--accent-fg); background: var(--accent); border-color: var(--accent); }
   .review-actions-status { font-size: 0.8rem; color: var(--muted); }
@@ -364,6 +366,7 @@
   <div class="controls">
     <div class="review-actions" id="review-actions" hidden>
       <button type="button" class="toggle" id="approve"></button>
+      <button type="button" class="toggle" id="request-changes"></button>
       <button type="button" class="toggle" id="merge"></button>
       <span class="review-actions-status" id="review-actions-status" role="status" aria-live="polite"></span>
     </div>
@@ -407,6 +410,16 @@
   <div class="merge-buttons">
     <button type="button" id="merge-dialog-cancel"></button>
     <button type="button" class="primary" id="merge-dialog-confirm"></button>
+  </div>
+</dialog>
+<dialog class="ai-prompt merge-confirm" id="changes-dialog" aria-labelledby="changes-dialog-title">
+  <h2 id="changes-dialog-title"></h2>
+  <button type="button" class="ai-close" id="changes-dialog-close"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+  <ul class="merge-facts" id="changes-facts"></ul>
+  <div class="merge-options"><textarea id="changes-comment" rows="5"></textarea></div>
+  <div class="merge-buttons">
+    <button type="button" id="changes-dialog-cancel"></button>
+    <button type="button" class="primary" id="changes-dialog-confirm"></button>
   </div>
 </dialog>
 <script src="ai.js"></script>
@@ -489,6 +502,18 @@ unpushedTitle: "Clic : les commits locaux, que GitLab ne voit pas encore",
       mergeSquashRequired: "Squasher les commits en un seul (imposé par le projet)",
       mergeRemoveBranch: p => `Supprimer la branche <code>${p.branch}</code> après le merge`,
       mergeCancel: "Annuler",
+      requestChanges: "✋ Demander des changements",
+      requestChangesTitle: "Demander des changements dans GitLab : la MR ne peut plus être mergée tant que vous ne l'approuvez pas",
+      changesRequested: "✋ Changements demandés",
+      changesRequestedTitle: "Vous avez demandé des changements : approuvez la MR pour lever cette demande",
+      cannotRequestChanges: "GitLab ne vous permet pas de relire cette MR",
+      requestChangesConfirm: p => `Demander des changements sur !${p.iid} ?`,
+      requestChangesFacts: [
+        "GitLab bloque le merge jusqu'à ce que vous approuviez la MR",
+        "votre approbation, s'il y en a une, est retirée",
+      ],
+      requestChangesComment: "Commentaire publié dans la MR (facultatif) — Ctrl+Entrée pour valider",
+      requestingChanges: "Demande de changements…",
       autoMerge: "⏱ Merge programmé",
       autoMergeTitle: "Merger la MR dans GitLab dès que son pipeline réussit",
       autoMergeConfirm: p => `Merger !${p.iid} quand le pipeline réussit ?`,
@@ -627,6 +652,18 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
       mergeSquashRequired: "Squash the commits into one (required by the project)",
       mergeRemoveBranch: p => `Delete the <code>${p.branch}</code> branch after the merge`,
       mergeCancel: "Cancel",
+      requestChanges: "✋ Request changes",
+      requestChangesTitle: "Request changes in GitLab: the MR cannot be merged until you approve it",
+      changesRequested: "✋ Changes requested",
+      changesRequestedTitle: "You requested changes: approve the MR to lift this request",
+      cannotRequestChanges: "GitLab does not let you review this MR",
+      requestChangesConfirm: p => `Request changes on !${p.iid}?`,
+      requestChangesFacts: [
+        "GitLab blocks the merge until you approve the MR",
+        "your approval, if any, is withdrawn",
+      ],
+      requestChangesComment: "Comment published in the MR (optional) — Ctrl+Enter to confirm",
+      requestingChanges: "Requesting changes…",
       autoMerge: "⏱ Auto-merge set",
       autoMergeTitle: "Merge the MR in GitLab as soon as its pipeline succeeds",
       autoMergeConfirm: p => `Merge !${p.iid} when the pipeline succeeds?`,
@@ -2279,7 +2316,8 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
   // on each opening and each return to the tab, at the head commit this diff shows, which GitLab checks again.
   // project: the project's squash_option and merge_method, read once.
   // autoMerge: the merge offered waits for the pipeline.
-  const review = { sha: null, busy: false, detail: null, project: null, autoMerge: false };
+  // user: the token's user, read once.
+  const review = { sha: null, busy: false, detail: null, project: null, autoMerge: false, user: null };
 
   function reviewedHead() {
     return commits?.filter(c => !c.local).at(-1)?.sha ?? null;
@@ -2297,18 +2335,20 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
     const head = reviewedHead();
     if (!head) return;
     const project = await gitlabProject();
-    let detail, approvals;
+    let detail, approvals, reviewers;
     try {
-      [detail, approvals] = await Promise.all([
+      [detail, approvals, reviewers] = await Promise.all([
         freshJson(`gitlab/projects/${project}/merge_requests/${encodeURIComponent(mr.iid)}`),
         freshJson(`gitlab/projects/${project}/merge_requests/${encodeURIComponent(mr.iid)}/approvals`),
+        freshJson(`gitlab/projects/${project}/merge_requests/${encodeURIComponent(mr.iid)}/reviewers`),
       ]);
+      review.user ??= await freshJson("gitlab/user");
     } catch (ignored) {
       return;
     }
     // Merged or closed meanwhile: only the status of the last action stays, if any.
     if (detail.state !== "opened") {
-      for (const id of ["approve", "merge"]) document.getElementById(id).hidden = true;
+      for (const id of ["approve", "request-changes", "merge"]) document.getElementById(id).hidden = true;
       document.getElementById("review-actions").hidden = !document.getElementById("review-actions-status").textContent;
       return;
     }
@@ -2325,6 +2365,16 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
     approve.disabled = approvals.user_has_approved ? false : stale || !approvals.user_can_approve;
     approve.title = approvals.user_has_approved ? texts.unapproveTitle
       : stale ? texts.staleHead : approvals.user_can_approve ? texts.approveTitle : texts.cannotApprove;
+    // Requesting changes is reviewing: offered to whom GitLab lets approve; approving lifts it.
+    const changes = document.getElementById("request-changes");
+    const requested = reviewers.some(r => r.user?.id === review.user.id && r.state === "requested_changes");
+    const canReview = approvals.user_can_approve || approvals.user_has_approved;
+    if (!changes.firstElementChild) {
+      changes.innerHTML = `<span class="when-not-approved">${escapeHtml(texts.requestChanges)}</span><span class="when-approved">${escapeHtml(texts.changesRequested)}</span>`;
+    }
+    changes.classList.toggle("done", requested);
+    changes.disabled = requested || !canReview;
+    changes.title = requested ? texts.changesRequestedTitle : canReview ? texts.requestChangesTitle : texts.cannotRequestChanges;
     const merge = document.getElementById("merge");
     const status = detail.detailed_merge_status;
     if (!merge.firstElementChild) {
@@ -2437,6 +2487,31 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
       });
       const done = merged?.state === "merged" ? texts.mergedDone : auto && merged ? texts.autoMergeSet : "";
       if (done) document.getElementById("review-actions-status").textContent = done;
+    });
+    const changes = document.getElementById("changes-dialog");
+    const comment = document.getElementById("changes-comment");
+    document.getElementById("request-changes").addEventListener("click", () => {
+      document.getElementById("changes-dialog-title").textContent = texts.requestChangesConfirm(mr);
+      document.getElementById("changes-facts").innerHTML = texts.requestChangesFacts.map(fact => `<li>${escapeHtml(fact)}</li>`).join("");
+      comment.placeholder = texts.requestChangesComment;
+      const close = document.getElementById("changes-dialog-close");
+      close.title = texts.mergeCancel;
+      close.setAttribute("aria-label", texts.mergeCancel);
+      document.getElementById("changes-dialog-cancel").textContent = texts.mergeCancel;
+      document.getElementById("changes-dialog-confirm").textContent = texts.requestChanges;
+      changes.showModal();
+      comment.focus();
+    });
+    const requestChanges = async () => {
+      changes.close();
+      const sent = await reviewAction("gitlab/request-changes", texts.requestingChanges, { body: comment.value });
+      if (sent) comment.value = "";
+    };
+    document.getElementById("changes-dialog-close").addEventListener("click", () => changes.close());
+    document.getElementById("changes-dialog-cancel").addEventListener("click", () => changes.close());
+    document.getElementById("changes-dialog-confirm").addEventListener("click", requestChanges);
+    comment.addEventListener("keydown", event => {
+      if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) requestChanges();
     });
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") loadReviewRights();
