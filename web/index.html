@@ -102,18 +102,27 @@
     display: grid; place-items: center; font-weight: 800; font-size: 0.9rem;
     color: var(--accent-fg); background: var(--accent);
   }
-  header .identity { display: flex; align-items: center; gap: 0.6rem; }
+  header .identity { display: flex; align-items: center; position: relative; }
+  /* The logo and the name open the about panel, without looking like a button: they stay a title. */
+  header button.about-btn {
+    display: flex; align-items: center; gap: 0.6rem; padding: 0; border: 0; background: none;
+    color: inherit; font: inherit; text-align: left; cursor: pointer;
+  }
+  /* Anchored under the logo, sized on its text, each line whole while the window allows. */
+  .about-panel { right: auto; left: 0; min-width: 0; width: max-content; max-width: min(32rem, calc(100vw - 2rem)); font-size: var(--fs-small); }
+  .about-panel p { margin: 0.4rem 0 0; }
+  .about-panel ul { margin: 0.6rem 0; padding: 0; list-style: none; display: grid; gap: 0.3rem; }
   header .header-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1.1rem; }
   header .header-row.commands { grid-column: 1 / -1; grid-row: 2; }
   header .header-row.prefs { gap: 0.5rem 0.7rem; justify-content: flex-end; }
   /* Header controls at the table's text size: they must not outweigh the data. */
   header button { font-size: var(--fs-small); }
   /* The tagline under the name, level with the "MR" badge: takes less width. */
-  header h1 { margin: 0; display: flex; flex-direction: column; font-size: 1.4rem; font-weight: 700; letter-spacing: -0.01em; }
-  header h1 .name { font-size: 1rem; line-height: 1.15; }
+  header .title { margin: 0; display: flex; flex-direction: column; font-size: 1.4rem; font-weight: 700; letter-spacing: -0.01em; }
+  header .title .name { font-size: 1rem; line-height: 1.15; }
   /* The M and R of "MisteR" use the colour of the primary buttons. */
-  header h1 .initial { font-weight: inherit; color: var(--accent); }
-  header h1 .tagline { font-size: var(--fs-small); font-weight: 500; color: var(--muted); letter-spacing: 0; }
+  header .title .initial { font-weight: inherit; color: var(--accent); }
+  header .title .tagline { font-size: var(--fs-small); font-weight: 500; color: var(--muted); letter-spacing: 0; }
   .summary-bar .project {
     font-size: var(--fs-small); color: var(--muted); background: var(--surface-2);
     border: 1px solid var(--border); border-radius: 999px; padding: 0.1em 0.6em;
@@ -635,7 +644,7 @@
     .table-wrap { overflow-x: auto; }
   }
   @media (max-width: 720px) {
-    header h1 .tagline { display: none; }
+    header .title .tagline { display: none; }
     header .divider { display: none; }
     header, .summary-bar { padding-left: 16px; padding-right: 16px; }
     .filters { margin-left: 16px; margin-right: 16px; }
@@ -647,8 +656,18 @@
 <body>
 <header>
   <div class="identity">
-    <span class="brand" aria-hidden="true" title="MisteR = MR">MR</span>
-    <h1><span class="name"><b class="initial">M</b>iste<b class="initial">R</b> Dashboard</span> <span class="tagline" data-i18n="tagline">Very Fast Merge Requests Dashboard</span></h1>
+    <button type="button" class="about-btn" id="about" aria-expanded="false" aria-controls="about-panel" data-i18n-title="about.title"><span class="brand" aria-hidden="true">MR</span>
+    <span class="title"><span class="name"><b class="initial">M</b>iste<b class="initial">R</b> Dashboard</span> <span class="tagline" data-i18n="tagline">Very Fast Merge Requests Dashboard</span></span></button>
+    <div class="load-panel about-panel" id="about-panel" hidden>
+      <h4>MisteR Dashboard</h4>
+      <p data-i18n="about.pitch">A local dashboard to manage the merge requests of a GitLab project, from the first push to the merge, with features geared to AI-assisted and agentic engineering: a coding agent started on a merge request in one click.</p>
+      <ul>
+        <li><a href="https://yannrobert.github.io/mr-dashboard/" target="_blank" rel="noopener" data-i18n="about.website">Project website</a></li>
+        <li><a href="https://github.com/YannRobert/mr-dashboard" target="_blank" rel="noopener" data-i18n="about.project">Project page on GitHub</a></li>
+        <li><a href="https://github.com/YannRobert/mr-dashboard/issues" target="_blank" rel="noopener" data-i18n="about.issues">Report a bug, suggest an idea</a></li>
+      </ul>
+      <p><span data-i18n="about.license">Free software under the</span> <a href="https://github.com/YannRobert/mr-dashboard/blob/main/LICENSE" target="_blank" rel="noopener" data-i18n="about.licenseLink">MIT license</a>.</p>
+    </div>
   </div>
   <div class="header-row commands">
     <div class="status" role="status" aria-live="polite">
@@ -1036,6 +1055,13 @@ const I18N = {
   fr: {
     "page.title": "MisteR Dashboard : le dashboard des Merge Requests",
     "tagline": "Le dashboard très rapide des Merge Requests",
+    "about.title": "À propos de MisteR Dashboard",
+    "about.pitch": "Un dashboard local pour gérer les merge requests d'un projet GitLab, du premier push jusqu'au merge, avec des fonctions pensées pour l'ingénierie assistée par IA et l'agentic engineering : un agent de code lancé sur une merge request en un clic.",
+    "about.website": "Site web du projet",
+    "about.project": "Page du projet sur GitHub",
+    "about.issues": "Signaler un bug, proposer une idée",
+    "about.license": "Logiciel libre sous",
+    "about.licenseLink": "licence MIT",
     "lang.group": "Langue",
     "theme.group": "Thème",
     "theme.light": "Thème clair",
@@ -1351,6 +1377,13 @@ const I18N = {
   en: {
     "page.title": "MisteR Dashboard: the Merge Requests dashboard",
     "tagline": "Very Fast Merge Requests Dashboard",
+    "about.title": "About MisteR Dashboard",
+    "about.pitch": "A local dashboard to manage the merge requests of a GitLab project, from the first push to the merge, with features geared to AI-assisted and agentic engineering: a coding agent started on a merge request in one click.",
+    "about.website": "Project website",
+    "about.project": "Project page on GitHub",
+    "about.issues": "Report a bug, suggest an idea",
+    "about.license": "Free software under the",
+    "about.licenseLink": "MIT license",
     "lang.group": "Language",
     "theme.group": "Theme",
     "theme.light": "Light theme",
@@ -5995,12 +6028,23 @@ setInterval(loadGitFetchStatus, 30 * 1000);
 loadRequestStats();
 setInterval(loadRequestStats, REQUEST_STATS_POLL_MS);
 $("load").addEventListener("click", () => toggleRequestStats($("load-panel").hidden));
+$("about").addEventListener("click", () => toggleAbout($("about-panel").hidden));
 document.addEventListener("click", e => {
   if (!$("load-panel").hidden && !e.target.closest("#request-stats")) toggleRequestStats(false);
+  if (!$("about-panel").hidden && !e.target.closest(".identity")) toggleAbout(false);
 });
 document.addEventListener("keydown", e => {
   if (e.key === "Escape" && !$("load-panel").hidden) toggleRequestStats(false);
+  if (e.key === "Escape" && !$("about-panel").hidden) {
+    toggleAbout(false);
+    $("about").focus();
+  }
 });
+
+function toggleAbout(open) {
+  $("about-panel").hidden = !open;
+  $("about").setAttribute("aria-expanded", String(open));
+}
 $("git-fetch").addEventListener("click", () => gitFetch());
 $("git-fetch-auto").addEventListener("change", e => setGitFetchAuto(e.target.checked));
 
