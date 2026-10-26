@@ -114,6 +114,30 @@
     border: 1px solid var(--border-strong); padding: 0.3em 0.8em;
   }
   .notes-nav { display: flex; align-items: center; gap: 0.25rem; }
+  /* Approve and Merge, as GitLab allows them now: greyed out, with why in their tooltip, when it does not. */
+  /* On the left, apart from the viewing controls, aligned right. */
+  .review-actions { display: flex; align-items: center; gap: 0.5rem; margin-right: auto; }
+  .review-actions[hidden] { display: none; }
+  .review-actions button:disabled { opacity: 0.45; cursor: default; }
+  .review-actions #approve.done { color: var(--green-fg); border-color: var(--green-fg); }
+  /* Both labels in the same cell, the one of the other state hidden: the button keeps the width of the longer. */
+  #approve { display: inline-grid; }
+  #approve > span { grid-area: 1 / 1; }
+  #approve:not(.done) > .when-approved, #approve.done > .when-not-approved { visibility: hidden; }
+  .review-actions #merge:not(:disabled) { color: var(--accent-fg); background: var(--accent); border-color: var(--accent); }
+  .review-actions-status { font-size: 0.8rem; color: var(--muted); }
+  /* The merge confirmation: the AI dialog's look (ai.css), narrower, saying what the merge will do. */
+  dialog.merge-confirm { width: min(30rem, calc(100vw - 32px)); }
+  dialog.merge-confirm h2 { padding-right: 2rem; overflow-wrap: anywhere; }
+  .merge-facts { margin: 0.6rem 0 1.1rem; padding-left: 1.2rem; display: grid; gap: 0.3rem; font-size: 0.9rem; }
+  .merge-facts code { font-size: 0.85rem; }
+  .merge-options { display: grid; gap: 0.4rem; margin: 0 0 1.1rem; font-size: 0.9rem; }
+  .merge-options label { display: flex; align-items: baseline; gap: 0.45rem; cursor: pointer; }
+  .merge-options label[hidden] { display: none; }
+  .merge-options label:has(input:disabled) { cursor: default; color: var(--muted); }
+  .merge-options code { font-size: 0.85rem; }
+  .merge-buttons { display: flex; justify-content: flex-end; gap: 0.6rem; }
+  .review-actions-status.error { color: var(--red-fg); }
   /* Space kept even when hidden: showing ‹ › does not shift the other controls. */
   .notes-nav.off { visibility: hidden; }
   .notes-nav button { border-radius: 0.5rem; padding: 0.3em 0.6em; }
@@ -337,6 +361,11 @@
     <span class="loaded-at" id="loaded-at"></span>
   </div>
   <div class="controls">
+    <div class="review-actions" id="review-actions" hidden>
+      <button type="button" class="toggle" id="approve"></button>
+      <button type="button" class="toggle" id="merge"></button>
+      <span class="review-actions-status" id="review-actions-status" role="status" aria-live="polite"></span>
+    </div>
     <div class="format" role="group" id="format">
       <button type="button" data-format="side-by-side" id="side-by-side"></button>
       <button type="button" data-format="line-by-line" id="line-by-line"></button>
@@ -366,6 +395,19 @@
 <script src="vendor/diff2html/diff2html-ui-slim.min.js"></script>
 <script src="notes.js"></script>
 <script src="tabs.js"></script>
+<dialog class="ai-prompt merge-confirm" id="merge-dialog" aria-labelledby="merge-dialog-title">
+  <h2 id="merge-dialog-title"></h2>
+  <button type="button" class="ai-close" id="merge-dialog-close"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+  <ul class="merge-facts" id="merge-facts"></ul>
+  <div class="merge-options">
+    <label id="merge-squash-option"><input type="checkbox" id="merge-squash"> <span id="merge-squash-label"></span></label>
+    <label><input type="checkbox" id="merge-remove-branch"> <span id="merge-remove-branch-label"></span></label>
+  </div>
+  <div class="merge-buttons">
+    <button type="button" id="merge-dialog-cancel"></button>
+    <button type="button" class="primary" id="merge-dialog-confirm"></button>
+  </div>
+</dialog>
 <script src="ai.js"></script>
 <script src="avatars.js"></script>
 <script src="dates.js"></script>
@@ -426,6 +468,45 @@ unpushedTitle: "Clic : les commits locaux, que GitLab ne voit pas encore",
       notes: "💬 Diff notes",
       comments: "🗨 Commentaires",
       commentsTitle: "Afficher les commentaires",
+      approve: "✓ Approuver",
+      approveTitle: "Approuver la MR dans GitLab, sur le dernier commit de ce diff",
+      approved: "✓ Approuvée par vous",
+      unapproveTitle: "Clic : retirer votre approbation",
+      unapproving: "Retrait de l'approbation…",
+      cannotApprove: "GitLab ne vous permet pas d'approuver cette MR maintenant",
+      merge: "Merger",
+      mergeTitle: p => `Merger la MR dans ${p.target}, comme le disent ses réglages GitLab (squash, suppression de la branche)`,
+      mergeConfirm: p => `Merger !${p.iid} ?`,
+      mergeInto: p => `dans <code>${p.target}</code>`,
+      mergeCommits: n => `${n} commit${n > 1 ? "s" : ""}`,
+      mergeMethod: {
+        merge: "avec un commit de merge",
+        rebase_merge: "avec un commit de merge, la branche devant être à jour de la cible",
+        ff: "en fast-forward, sans commit de merge",
+      },
+      mergeSquash: "Squasher les commits en un seul",
+      mergeSquashRequired: "Squasher les commits en un seul (imposé par le projet)",
+      mergeRemoveBranch: p => `Supprimer la branche <code>${p.branch}</code> après le merge`,
+      mergeCancel: "Annuler",
+      cannotMerge: "Vous n'avez pas le droit de merger cette MR",
+      mergeStatus: {
+        not_approved: "La MR attend encore des approbations",
+        ci_must_pass: "Le pipeline doit réussir",
+        ci_still_running: "Le pipeline tourne encore",
+        discussions_not_resolved: "Des threads ne sont pas résolus",
+        draft_status: "La MR est en draft",
+        conflict: "La MR a des conflits",
+        need_rebase: "La MR doit être rebasée",
+        requested_changes: "Des changements sont demandés",
+        checking: "GitLab vérifie encore si la MR peut être mergée",
+        unchecked: "GitLab vérifie encore si la MR peut être mergée",
+      },
+      mergeBlocked: status => `GitLab ne permet pas de merger maintenant (${status})`,
+      staleHead: "GitLab a des commits que ce diff ne montre pas : git fetch, puis rechargez",
+      approving: "Approbation…",
+      merging: "Merge…",
+      mergedDone: "Mergée",
+      reviewFailed: message => `Échec : ${message}`,
       notesCount: n => `${n} diff note${n > 1 ? "s" : ""} dans la MR`,
       placedNotes: n => `${n} diff note${n > 1 ? "s" : ""} placée${n > 1 ? "s" : ""} dans le diff affiché`,
       notesTitle: "Afficher les diff notes GitLab sous les lignes commentées ; désactivé, la page ne les charge pas. "
@@ -517,6 +598,45 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
       notes: "💬 Diff notes",
       comments: "🗨 Comments",
       commentsTitle: "Show comments",
+      approve: "✓ Approve",
+      approveTitle: "Approve the MR in GitLab, at the last commit of this diff",
+      approved: "✓ Approved by you",
+      unapproveTitle: "Click: withdraw your approval",
+      unapproving: "Withdrawing the approval…",
+      cannotApprove: "GitLab does not let you approve this MR now",
+      merge: "Merge",
+      mergeTitle: p => `Merge the MR into ${p.target}, as its GitLab settings say (squash, branch removal)`,
+      mergeConfirm: p => `Merge !${p.iid}?`,
+      mergeInto: p => `into <code>${p.target}</code>`,
+      mergeCommits: n => `${n} commit${n > 1 ? "s" : ""}`,
+      mergeMethod: {
+        merge: "with a merge commit",
+        rebase_merge: "with a merge commit, the branch having to be up to date with the target",
+        ff: "fast-forward, without a merge commit",
+      },
+      mergeSquash: "Squash the commits into one",
+      mergeSquashRequired: "Squash the commits into one (required by the project)",
+      mergeRemoveBranch: p => `Delete the <code>${p.branch}</code> branch after the merge`,
+      mergeCancel: "Cancel",
+      cannotMerge: "You are not allowed to merge this MR",
+      mergeStatus: {
+        not_approved: "The MR still needs approvals",
+        ci_must_pass: "The pipeline must succeed",
+        ci_still_running: "The pipeline is still running",
+        discussions_not_resolved: "Some threads are unresolved",
+        draft_status: "The MR is a draft",
+        conflict: "The MR has conflicts",
+        need_rebase: "The MR needs a rebase",
+        requested_changes: "Changes are requested",
+        checking: "GitLab is still checking whether the MR can be merged",
+        unchecked: "GitLab is still checking whether the MR can be merged",
+      },
+      mergeBlocked: status => `GitLab does not allow a merge now (${status})`,
+      staleHead: "GitLab has commits this diff does not show: git fetch, then reload",
+      approving: "Approving…",
+      merging: "Merging…",
+      mergedDone: "Merged",
+      reviewFailed: message => `Failed: ${message}`,
       notesCount: n => `${n} diff note${n > 1 ? "s" : ""} in the MR`,
       placedNotes: n => `${n} diff note${n > 1 ? "s" : ""} placed in the displayed diff`,
       notesTitle: "Show the GitLab diff notes under the commented lines; off, the page does not load them. "
@@ -2138,6 +2258,149 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
 
   // AI button: the catalog actions, as in the dashboard; the fix, only from the
   // prompt the dashboard computes and stores (see MrAi.readFixContext). Not on a merged MR.
+  // Approve and Merge, for an open MR: what GitLab allows the token's user now, read again without the relay's cache
+  // on each opening and each return to the tab, at the head commit this diff shows, which GitLab checks again.
+  // project: the project's squash_option and merge_method, read once.
+  const review = { sha: null, busy: false, detail: null, project: null };
+
+  function reviewedHead() {
+    return commits?.filter(c => !c.local).at(-1)?.sha ?? null;
+  }
+
+  const freshJson = async url => {
+    const response = await fetch(url, { headers: { "Cache-Control": "no-cache" } });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.message || `HTTP ${response.status}`);
+    return body;
+  };
+
+  async function loadReviewRights() {
+    if (mr.merge || !mr.iid || review.busy) return;
+    const head = reviewedHead();
+    if (!head) return;
+    const project = await gitlabProject();
+    let detail, approvals;
+    try {
+      [detail, approvals] = await Promise.all([
+        freshJson(`gitlab/projects/${project}/merge_requests/${encodeURIComponent(mr.iid)}`),
+        freshJson(`gitlab/projects/${project}/merge_requests/${encodeURIComponent(mr.iid)}/approvals`),
+      ]);
+    } catch (ignored) {
+      return;
+    }
+    // Merged or closed meanwhile: only the status of the last action stays, if any.
+    if (detail.state !== "opened") {
+      for (const id of ["approve", "merge"]) document.getElementById(id).hidden = true;
+      document.getElementById("review-actions").hidden = !document.getElementById("review-actions-status").textContent;
+      return;
+    }
+    review.sha = detail.sha;
+    review.detail = detail;
+    if (!review.project) review.project = await freshJson(`gitlab/projects/${project}`).catch(() => null);
+    const stale = detail.sha !== head;
+    const approve = document.getElementById("approve");
+    approve.classList.toggle("done", !!approvals.user_has_approved);
+    if (!approve.firstElementChild) {
+      approve.innerHTML = `<span class="when-not-approved">${escapeHtml(texts.approve)}</span><span class="when-approved">${escapeHtml(texts.approved)}</span>`;
+    }
+    // Withdrawing an approval needs no up-to-date diff: only giving one does.
+    approve.disabled = approvals.user_has_approved ? false : stale || !approvals.user_can_approve;
+    approve.title = approvals.user_has_approved ? texts.unapproveTitle
+      : stale ? texts.staleHead : approvals.user_can_approve ? texts.approveTitle : texts.cannotApprove;
+    const merge = document.getElementById("merge");
+    const status = detail.detailed_merge_status;
+    merge.textContent = texts.merge;
+    merge.disabled = stale || !detail.user?.can_merge || status !== "mergeable";
+    merge.title = stale ? texts.staleHead
+      : !detail.user?.can_merge ? texts.cannotMerge
+      : status !== "mergeable" ? texts.mergeStatus[status] ?? texts.mergeBlocked(status)
+      : texts.mergeTitle(mr);
+    document.getElementById("review-actions").hidden = false;
+  }
+
+  async function reviewAction(path, pending, options = {}) {
+    const status = document.getElementById("review-actions-status");
+    const buttons = document.querySelectorAll("#review-actions button");
+    review.busy = true;
+    buttons.forEach(b => { b.disabled = true; });
+    status.classList.remove("error");
+    status.textContent = pending;
+    try {
+      const response = await fetch(path, {
+        method: "POST",
+        headers: { "X-MR-Dashboard": "1", "Content-Type": "application/json" },
+        body: JSON.stringify({ iid: Number(mr.iid), sha: review.sha, ...options }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.message ?? result.error ?? `HTTP ${response.status}`);
+      status.textContent = "";
+      return result;
+    } catch (failure) {
+      status.classList.add("error");
+      status.textContent = texts.reviewFailed(Array.isArray(failure.message) ? failure.message.join(", ") : failure.message);
+      return null;
+    } finally {
+      review.busy = false;
+      await loadReviewRights();
+    }
+  }
+
+  // What the merge will do, and its two choices as GitLab offers them: the squash, as the project's squash_option
+  // allows it (never: not offered; always: imposed), and the source branch removal, both checked as the MR says.
+  function openMergeDialog() {
+    const detail = review.detail;
+    const count = commits?.filter(c => !c.local).length ?? 0;
+    const names = { branch: escapeHtml(mr.branch), target: escapeHtml(mr.target) };
+    const method = review.project?.merge_method;
+    document.getElementById("merge-dialog-title").textContent = texts.mergeConfirm(mr);
+    document.getElementById("merge-facts").innerHTML = [
+      texts.mergeInto(names),
+      texts.mergeCommits(count),
+      ...(texts.mergeMethod[method] ? [texts.mergeMethod[method]] : []),
+    ].map(fact => `<li>${fact}</li>`).join("");
+    const squashOption = review.project?.squash_option;
+    const squash = document.getElementById("merge-squash");
+    document.getElementById("merge-squash-option").hidden = squashOption === "never";
+    squash.checked = squashOption === "always" || !!detail?.squash;
+    squash.disabled = squashOption === "always";
+    document.getElementById("merge-squash-label").textContent = squashOption === "always" ? texts.mergeSquashRequired : texts.mergeSquash;
+    document.getElementById("merge-remove-branch").checked = !!detail?.force_remove_source_branch;
+    document.getElementById("merge-remove-branch-label").innerHTML = texts.mergeRemoveBranch(names);
+    const close = document.getElementById("merge-dialog-close");
+    close.title = texts.mergeCancel;
+    close.setAttribute("aria-label", texts.mergeCancel);
+    document.getElementById("merge-dialog-cancel").textContent = texts.mergeCancel;
+    const confirm = document.getElementById("merge-dialog-confirm");
+    confirm.textContent = texts.merge;
+    document.getElementById("merge-dialog").showModal();
+    confirm.focus();
+  }
+
+  function initReviewActions() {
+    if (mr.merge || !mr.iid) return;
+    const approve = document.getElementById("approve");
+    approve.addEventListener("click", () => approve.classList.contains("done")
+      ? reviewAction("gitlab/unapprove", texts.unapproving)
+      : reviewAction("gitlab/approve", texts.approving));
+    const dialog = document.getElementById("merge-dialog");
+    document.getElementById("merge").addEventListener("click", () => openMergeDialog());
+    document.getElementById("merge-dialog-close").addEventListener("click", () => dialog.close());
+    document.getElementById("merge-dialog-cancel").addEventListener("click", () => dialog.close());
+    document.getElementById("merge-dialog-confirm").addEventListener("click", async () => {
+      dialog.close();
+      const squashOption = review.project?.squash_option;
+      const merged = await reviewAction("gitlab/merge", texts.merging, {
+        // The project decides when it never or always squashes: GitLab refuses any other choice.
+        ...(squashOption === "never" || squashOption === "always" ? {} : { squash: document.getElementById("merge-squash").checked }),
+        remove_source_branch: document.getElementById("merge-remove-branch").checked,
+      });
+      if (merged?.state === "merged") document.getElementById("review-actions-status").textContent = texts.mergedDone;
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") loadReviewRights();
+    });
+  }
+
   function initAi() {
     if (mr.merge || !mr.iid) return;
     let launchTargets = [];
@@ -2389,7 +2652,8 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
     renderHeader();
     if (mr.author) renderAuthor();
     initAi();
-    load();
+    initReviewActions();
+    load().then(loadReviewRights);
   });
 </script>
 </body>

@@ -29,6 +29,11 @@ Local actions, over POST:
                 {"iid", "body", "position"}, position in the GitLab API format
     /gitlab/reply       replies to a thread of a MR of the tracked project: {"iid", "discussion", "body"}
     /gitlab/resolve     resolves a thread, or reopens it: {"iid", "discussion", "resolved": true|false}
+    /gitlab/approve     approves a MR: {"iid", "sha"}, sha the head commit the user reviewed, which GitLab
+                        refuses when the MR has another one
+    /gitlab/unapprove   withdraws the user's approval of a MR: {"iid"}
+    /gitlab/merge       merges a MR: {"iid", "sha", "squash", "remove_source_branch"}, sha as for
+                        /gitlab/approve, the two others true or false, or absent for what the MR's settings say
     /git/diff   GET ?branch=&target=: diff of a MR from the point where it leaves its target, displayed
                 by diff.html; ?iid=&head=&merge=&target= for a merged MR, found through its commits;
                 &first=&last= for what its commits from first to last brought together
@@ -366,6 +371,9 @@ def make_handler(
                 "/gitlab/discussion": self.gitlab_discussion,
                 "/gitlab/reply": self.gitlab_reply,
                 "/gitlab/resolve": self.gitlab_resolve,
+                "/gitlab/approve": self.gitlab_approve,
+                "/gitlab/unapprove": self.gitlab_unapprove,
+                "/gitlab/merge": self.gitlab_merge,
                 "/avatars": self.avatars
             }
             action = actions.get(self.path)
@@ -519,6 +527,54 @@ def make_handler(
                 body
             )
 
+        def gitlab_approve(self, payload):
+            request = head_request(payload)
+            if not request:
+                self.send_json(400, {"message": "invalid request"})
+                return
+            iid, body = request
+            self.gitlab_write(
+                "POST",
+                f"merge_requests/{iid}/approve",
+                body
+            )
+
+        def gitlab_unapprove(self, payload):
+            iid = payload.get("iid") if isinstance(payload, dict) else None
+            if not is_positive(iid):
+                self.send_json(400, {"message": "invalid request"})
+                return
+            self.gitlab_write(
+                "POST",
+                f"merge_requests/{iid}/unapprove",
+                b"{}"
+            )
+
+        def gitlab_merge(self, payload):
+            request = merge_request(payload)
+            if not request:
+                self.send_json(400, {"message": "invalid request"})
+                return
+            iid, body = request
+            # The MR's own "delete source branch" setting wins over the merge's option: a branch to keep is first
+            # unticked on the MR itself.
+            if payload.get("remove_source_branch") is False:
+                kept = self.gitlab_send(
+                    "PUT",
+                    f"merge_requests/{iid}",
+                    json.dumps({"remove_source_branch": False}).encode()
+                )
+                if kept is None:
+                    return
+                if not 200 <= kept[0] < 300:
+                    self.send_body(*kept)
+                    return
+            self.gitlab_write(
+                "PUT",
+                f"merge_requests/{iid}/merge",
+                body
+            )
+
         def gitlab_write(
                 self,
                 method,
@@ -526,6 +582,22 @@ def make_handler(
                 body
         ):
             """Forwards to GitLab, for the tracked project, an already validated write; path relative to the project."""
+            response = self.gitlab_send(
+                method,
+                path,
+                body
+            )
+            if response is not None:
+                self.send_body(*response)
+
+        def gitlab_send(
+                self,
+                method,
+                path,
+                body
+        ):
+            """(status, content, headers) of an already validated write sent to GitLab for the tracked project; None,
+            the 502 already answered, when GitLab could not be reached."""
             project = quote(settings["public"]["gitlabProject"], safe="")
             try:
                 status, content, upstream_headers = upstream.write(
@@ -545,17 +617,13 @@ def make_handler(
                     502,
                     {"message": f"relay failed: {error}"}
                 )
-                return
+                return None
             stats.record(
                 "gitlab-write",
                 http_error(status)
             )
             relay_cache.clear()
-            self.send_body(
-                status,
-                content,
-                upstream_headers
-            )
+            return status, content, upstream_headers
 
         def git_diff(self, query):
             first, last = (query.get(name, [None])[0] for name in ("first", "last"))
@@ -809,6 +877,30 @@ def resolve_request(payload):
     if not isinstance(resolved, bool):
         return None
     return *target, json.dumps({"resolved": resolved}).encode()
+
+
+def head_request(payload):
+    """(iid, JSON body for GitLab) of a request to approve or merge a MR at the head commit the user reviewed,
+    None if it is invalid: GitLab refuses it when the MR's head is another commit."""
+    if not isinstance(payload, dict):
+        return None
+    iid, sha = payload.get("iid"), payload.get("sha")
+    if not is_positive(iid) or not is_sha(sha):
+        return None
+    return iid, json.dumps({"sha": sha}).encode()
+
+
+def merge_request(payload):
+    """(iid, JSON body for GitLab) of a merge request at the reviewed head, with the squash and the source branch
+    removal chosen, None if it is invalid."""
+    request = head_request(payload)
+    if not request:
+        return None
+    options = {"squash": payload.get("squash"), "should_remove_source_branch": payload.get("remove_source_branch")}
+    if not all(value is None or isinstance(value, bool) for value in options.values()):
+        return None
+    iid, body = request
+    return iid, json.dumps({**json.loads(body), **{name: value for name, value in options.items() if value is not None}}).encode()
 
 
 def discussion_target(payload):
