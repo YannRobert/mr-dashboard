@@ -888,6 +888,9 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
   let anchor = null;
   // MR pushes, from its GitLab versions: [first, last] commit index and date.
   let pushes = [];
+  let commitListObserver = null;
+  // Commit list scrolled to its end: kept there as it is redrawn or shrinks.
+  let commitsAtEnd = true;
   // Last commit read when the page opened, not at each displayed range: otherwise new ones
   // would stop being new at first glance. -1: nothing read, or a commit no longer in the MR.
   let seenAtOpen = -1;
@@ -1060,8 +1063,7 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
     if (commits?.length) {
       // A list scrolled to its end, as it opens, stays there: push separators lengthen it.
       const list = document.getElementById("commit-list");
-      const atEnd = !list || list.scrollTop + list.clientHeight >= list.scrollHeight - 2;
-      renderCommits(atEnd ? null : list.scrollTop);
+      renderCommits(!list || commitsAtEnd ? null : list.scrollTop);
     }
     const container = document.getElementById("diff-files");
     if (!container || !diffText?.trim()) return;
@@ -1662,6 +1664,22 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
     applyCommitsShare(readCommitsShare());
     if (listScroll !== null) list.scrollTop = listScroll;
     else list.scrollTop = list.scrollHeight;
+    // A list at its end stays there when it shrinks: the file list drawn after it, the header taller once
+    // GitLab has answered.
+    // A scroll event comes after the layout: one of the scrolls done here may then find the list already
+    // shrunk, no longer at its end; only the user's scrolls, to another position, are measured.
+    let pinned = list.scrollTop;
+    commitsAtEnd = list.scrollTop + list.clientHeight >= list.scrollHeight - 2;
+    list.addEventListener("scroll", () => {
+      if (list.scrollTop !== pinned) commitsAtEnd = list.scrollTop + list.clientHeight >= list.scrollHeight - 2;
+    });
+    commitListObserver?.disconnect();
+    commitListObserver = new ResizeObserver(() => {
+      if (!commitsAtEnd) return;
+      list.scrollTop = list.scrollHeight;
+      pinned = list.scrollTop;
+    });
+    commitListObserver.observe(list);
   }
 
   function readCommitsShare() {
