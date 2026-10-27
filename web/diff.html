@@ -161,7 +161,7 @@
   #approve:not(.done) > .when-approved, #approve.done > .when-not-approved,
   #request-changes:not(.done) > .when-approved, #request-changes.done > .when-not-approved,
   #merge:not(.done) > .when-approved, #merge.done > .when-not-approved { visibility: hidden; }
-  .review-actions #merge:not(:disabled):not(.done) { color: var(--accent-fg); background: var(--accent); border-color: var(--accent); }
+  .review-actions #merge:not(:disabled):not(.done) { color: var(--accent); border-color: var(--accent); }
   .review-actions-status { font-size: 0.8rem; color: var(--muted); }
   /* The merge confirmation: the AI dialog's look (ai.css), narrower, saying what the merge will do. */
   dialog.merge-confirm { width: min(30rem, calc(100vw - 32px)); }
