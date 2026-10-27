@@ -1056,7 +1056,12 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
   // Pushes and diff notes come from GitLab after the diff is shown: the commit list is redrawn with its pushes,
   // and the notes added to the diff in place, unless a render since has already placed them.
   function showGitlabParts() {
-    if (commits?.length) renderCommits(document.getElementById("commit-list")?.scrollTop ?? null);
+    if (commits?.length) {
+      // A list scrolled to its end, as it opens, stays there: push separators lengthen it.
+      const list = document.getElementById("commit-list");
+      const atEnd = !list || list.scrollTop + list.clientHeight >= list.scrollHeight - 2;
+      renderCommits(atEnd ? null : list.scrollTop);
+    }
     const container = document.getElementById("diff-files");
     if (!container || !diffText?.trim()) return;
     if (readNotesEnabled() && !("notesPlaced" in container.dataset)) placeNotes(container);
@@ -1652,9 +1657,10 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
       + `<button type="button" data-range="all" aria-pressed="${!range}" title="${escapeHtml(texts.allTitle)}">${escapeHtml(texts.all)}</button></div>`
       + `<div class="commits-hint">${escapeHtml(texts.hint)}</div>${warning}<ol id="commit-list">${items}</ol>`;
     const list = document.getElementById("commit-list");
+    // After the split, which sets the list's height: before, the end of the list would not be in view.
+    applyCommitsShare(readCommitsShare());
     if (listScroll !== null) list.scrollTop = listScroll;
     else list.scrollTop = list.scrollHeight;
-    applyCommitsShare(readCommitsShare());
   }
 
   function readCommitsShare() {
