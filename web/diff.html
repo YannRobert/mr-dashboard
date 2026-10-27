@@ -197,15 +197,23 @@
   /* No bold when active: a button that widens shifts the controls to its left. */
   .toggle[aria-pressed="true"] { font-weight: inherit; }
   main { padding: 1rem; }
-  /* File list in an always-visible panel that scrolls on its own; its width is set by its corner. */
-  main.with-files { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 1rem; align-items: start; }
+  /* File list in an always-visible panel that scrolls on its own; its width is set by the handle beside it. */
+  main.with-files { display: grid; grid-template-columns: auto 1rem minmax(0, 1fr); align-items: start; }
   /* Commits above the files, in the same panel: each scrolls independently. */
   #side {
     position: sticky; top: calc(var(--header-height, 0px) + 1rem);
     display: flex; flex-direction: column;
-    height: calc(100vh - var(--header-height, 0px) - 2rem); overflow: hidden; resize: horizontal;
+    height: calc(100vh - var(--header-height, 0px) - 2rem); overflow: hidden;
     width: 22rem; min-width: 12rem; max-width: 60vw;
   }
+  /* Handle between the panel and the diff, as the one between commits and files: drag to set the panel's width,
+     double-click to give it back its default. */
+  #side-split {
+    position: sticky; top: calc(var(--header-height, 0px) + 1rem); height: calc(100vh - var(--header-height, 0px) - 2rem);
+    cursor: col-resize; touch-action: none; display: flex; align-items: center; justify-content: center;
+  }
+  #side-split::before { content: ""; width: 3px; height: 2.5rem; border-radius: 2px; background: var(--border-strong); }
+  #side-split:hover::before, #side-split.dragging::before { background: var(--accent); }
   #files {
     flex: 1 1 auto; min-height: 6rem; overflow: auto;
     background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem;
@@ -294,7 +302,8 @@
   .unfold { display: block; width: 100%; padding: 0.6rem 1rem; font-size: 0.85rem; border: none; border-radius: 0; color: var(--muted); }
   @media (max-width: 900px) {
     main.with-files { display: block; }
-    #side { position: static; width: auto; max-width: none; height: auto; max-height: 60vh; resize: none; margin-bottom: 1rem; }
+    #side { position: static; width: auto !important; max-width: none; height: auto; max-height: 60vh; margin-bottom: 1rem; }
+    #side-split { display: none; }
   }
   /* GitLab discussions under the commented line; pinned left, as the column may scroll on long lines. */
   tr.note-row > td { padding: 0; background: var(--bg); }
@@ -495,6 +504,7 @@
   const DASHBOARD_TEXT_SCALE_KEY = "mr-dashboard.textScale";
   const TEXT_SCALE_KEY = "mr-dashboard.diffTextRatio";
   const COMMITS_SHARE_KEY = "mr-dashboard.diffCommitsShare";
+  const SIDE_WIDTH_KEY = "mr-dashboard.diffSideWidth";
   const NOTES_KEY = "mr-dashboard.diffNotes";
   const FILE_FILTERS_KEY = "mr-dashboard.diffFileFilters";
   const REVIEW_PROGRESS_KEY = "mr-dashboard.diffReviewProgress";
@@ -530,6 +540,7 @@
       allTitle: "Tout le diff de la MR, depuis le point où elle part de sa cible",
       hint: "Clic : un commit · Maj+clic : jusqu'à ce commit",
       splitTitle: "Glisser pour répartir la hauteur entre commits et fichiers · double-clic : répartition par défaut",
+      sideSplitTitle: "Glisser pour élargir ou rétrécir le panneau des commits et fichiers · double-clic : largeur par défaut",
       range: p => p.first === p.last ? `commit ${p.first} sur ${p.total}` : `commits ${p.first} à ${p.last} sur ${p.total}`,
       mergeWarning: "La plage contient un merge de la cible : le diff montre aussi ce que ce merge a apporté.",
       emptyRange: "Aucune différence dans cette plage de commits.",
@@ -696,6 +707,7 @@ unpushedTitle: "Clic : les commits locaux, que GitLab ne voit pas encore",
       allTitle: "The whole MR diff, from where it leaves its target",
       hint: "Click: one commit · Shift+click: up to this commit",
       splitTitle: "Drag to share the height between commits and files · double-click: default split",
+      sideSplitTitle: "Drag to widen or narrow the commits and files panel · double-click: default width",
       range: p => p.first === p.last ? `commit ${p.first} of ${p.total}` : `commits ${p.first} to ${p.last} of ${p.total}`,
       mergeWarning: "The range contains a merge of the target: the diff also shows what that merge brought in.",
       emptyRange: "No difference in this range of commits.",
@@ -998,7 +1010,8 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
     for (const id of ["diff-size", "review-progress", "review-bar"]) document.getElementById(id).hidden = true;
     const main = document.getElementById("diff");
     const listScroll = document.getElementById("commit-list")?.scrollTop ?? null;
-    main.innerHTML = `<aside id="side"><section id="commits" hidden></section><div id="split" role="separator" aria-orientation="horizontal" title="${escapeHtml(texts.splitTitle)}"></div><div id="files"></div></aside><div id="diff-files"></div>`;
+    main.innerHTML = `<aside id="side"><section id="commits" hidden></section><div id="split" role="separator" aria-orientation="horizontal" title="${escapeHtml(texts.splitTitle)}"></div><div id="files"></div></aside><div id="side-split" role="separator" aria-orientation="vertical" title="${escapeHtml(texts.sideSplitTitle)}"></div><div id="diff-files"></div>`;
+    applySideWidth(readSideWidth());
     main.classList.add("with-files");
     clearFileFilter = null;
     showPartialDiff(null);
@@ -1681,6 +1694,59 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
     split.addEventListener("pointermove", move);
     split.addEventListener("pointerup", end, { once: true });
     split.addEventListener("pointercancel", end, { once: true });
+  });
+
+  // Width of the commits and files panel, in pixels; null: the stylesheet's.
+  function readSideWidth() {
+    try {
+      const width = Number(localStorage.getItem(SIDE_WIDTH_KEY));
+      return width > 0 ? width : null;
+    } catch (ignored) {
+      return null;
+    }
+  }
+
+  function saveSideWidth(width) {
+    try {
+      if (width === null) localStorage.removeItem(SIDE_WIDTH_KEY);
+      else localStorage.setItem(SIDE_WIDTH_KEY, String(Math.round(width)));
+    } catch (ignored) { /* storage unavailable: the width is not kept */ }
+  }
+
+  function applySideWidth(width) {
+    const side = document.getElementById("side");
+    if (side) side.style.width = width === null ? "" : `${width}px`;
+  }
+
+  document.addEventListener("pointerdown", event => {
+    const handle = event.target.closest?.("#side-split");
+    if (!handle || event.button !== 0) return;
+    event.preventDefault();
+    const side = document.getElementById("side");
+    const startX = event.clientX;
+    const startWidth = side.getBoundingClientRect().width;
+    let width = null;
+    handle.setPointerCapture(event.pointerId);
+    handle.classList.add("dragging");
+    // min-width and max-width of the stylesheet bound it.
+    const move = moveEvent => {
+      applySideWidth(startWidth + moveEvent.clientX - startX);
+      width = side.getBoundingClientRect().width;
+    };
+    const end = () => {
+      handle.removeEventListener("pointermove", move);
+      handle.classList.remove("dragging");
+      if (width !== null) saveSideWidth(width);
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", end, { once: true });
+    handle.addEventListener("pointercancel", end, { once: true });
+  });
+
+  document.addEventListener("dblclick", event => {
+    if (!event.target.closest?.("#side-split")) return;
+    saveSideWidth(null);
+    applySideWidth(null);
   });
 
   document.addEventListener("dblclick", event => {
