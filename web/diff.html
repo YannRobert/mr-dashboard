@@ -161,7 +161,7 @@
   #approve:not(.done) > .when-approved, #approve.done > .when-not-approved,
   #request-changes:not(.done) > .when-approved, #request-changes.done > .when-not-approved,
   #merge:not(.done) > .when-approved, #merge.done > .when-not-approved { visibility: hidden; }
-  .review-actions #merge:not(:disabled):not(.done) { color: var(--accent-fg); background: var(--accent); border-color: var(--accent); }
+  .review-actions #merge:not(:disabled):not(.done) { color: var(--accent); border-color: var(--accent); }
   .review-actions-status { font-size: 0.8rem; color: var(--muted); }
   /* The merge confirmation: the AI dialog's look (ai.css), narrower, saying what the merge will do. */
   dialog.merge-confirm { width: min(30rem, calc(100vw - 32px)); }
@@ -1045,8 +1045,27 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
     showFileList(container);
     showDiffSize();
     if (readNotesEnabled()) placeNotes(container);
+    updateCanComment(container);
+  }
+
+  function updateCanComment(container) {
     // Diff notes hidden: a click on a line number shows them before commenting it.
     container.classList.toggle("can-comment", canComment() || (!readNotesEnabled() && !commentBlocker()));
+  }
+
+  // Pushes and diff notes come from GitLab after the diff is shown: the commit list is redrawn with its pushes,
+  // and the notes added to the diff in place, unless a render since has already placed them.
+  function showGitlabParts() {
+    if (commits?.length) {
+      // A list scrolled to its end, as it opens, stays there: push separators lengthen it.
+      const list = document.getElementById("commit-list");
+      const atEnd = !list || list.scrollTop + list.clientHeight >= list.scrollHeight - 2;
+      renderCommits(atEnd ? null : list.scrollTop);
+    }
+    const container = document.getElementById("diff-files");
+    if (!container || !diffText?.trim()) return;
+    if (readNotesEnabled() && !("notesPlaced" in container.dataset)) placeNotes(container);
+    updateCanComment(container);
   }
 
   // Highlighting of a single file, in slices of lines: in one block, a large file would freeze scrolling.
@@ -1638,9 +1657,10 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
       + `<button type="button" data-range="all" aria-pressed="${!range}" title="${escapeHtml(texts.allTitle)}">${escapeHtml(texts.all)}</button></div>`
       + `<div class="commits-hint">${escapeHtml(texts.hint)}</div>${warning}<ol id="commit-list">${items}</ol>`;
     const list = document.getElementById("commit-list");
+    // After the split, which sets the list's height: before, the end of the list would not be in view.
+    applyCommitsShare(readCommitsShare());
     if (listScroll !== null) list.scrollTop = listScroll;
     else list.scrollTop = list.scrollHeight;
-    applyCommitsShare(readCommitsShare());
   }
 
   function readCommitsShare() {
@@ -2038,10 +2058,12 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
   function placeNotes(container) {
     document.getElementById("notes-status")?.remove();
     if (discussionsError) {
+      container.dataset.notesPlaced = "";
       container.insertAdjacentHTML("afterbegin", `<p class="message error">${escapeHtml(texts.notesFailed(discussionsError))}</p>`);
       return;
     }
     if (!discussions) return;
+    container.dataset.notesPlaced = "";
     const wrappers = new Map();
     for (const wrapper of container.querySelectorAll(".d2h-file-wrapper")) {
       for (const path of wrapperPaths(wrapper)) wrappers.set(path, wrapper);
@@ -2816,12 +2838,21 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
       anchor = range[0];
     }
     renderRangeLabel();
-    if (commits?.length) {
-      seenAtOpen = readSeen();
-      await loadPushes();
-    }
-    if (readNotesEnabled()) await ensureDiscussions();
+    if (commits?.length) seenAtOpen = readSeen();
+    // GitLab is only needed for the pushes of the commit list and for the diff notes: the diff, read from the
+    // local clone, is shown without waiting for it.
+    const notes = readNotesEnabled();
+    const gitlab = Promise.all([
+      commits?.length ? loadPushes() : null,
+      notes ? ensureDiscussions() : null,
+    ]);
     await loadDiff();
+    if (notes && discussions === null && discussionsError === null) {
+      document.getElementById("diff-files")
+        ?.insertAdjacentHTML("afterbegin", `<p class="notes-status" id="notes-status">${escapeHtml(texts.notesLoading)}</p>`);
+    }
+    await gitlab;
+    showGitlabParts();
   }
 
   async function loadDiff() {
