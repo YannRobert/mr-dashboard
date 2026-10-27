@@ -4575,7 +4575,11 @@ function commentsLink(mr) {
 }
 
 function openGitDiff(mr) {
-  MrTabs.open(`diff.html?${new URLSearchParams({ iid: mr.iid })}`, "diff", mr.iid);
+  // An open MR's branches let the diff show from the local clone without waiting for GitLab, even down.
+  const known = mr.state === "opened"
+    ? { branch: mr.source_branch, target: mr.target_branch, title: mr.title, author: mr.author?.name ?? "", url: mr.web_url }
+    : {};
+  MrTabs.open(`diff.html?${new URLSearchParams({ iid: mr.iid, ...known })}`, "diff", mr.iid);
 }
 
 // ---------- Local repository fetch ----------

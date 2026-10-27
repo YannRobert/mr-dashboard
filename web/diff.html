@@ -864,14 +864,15 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
   }
 
   const texts = TEXTS[lang];
-  // The URL carries only the MR number: the rest is read from GitLab (loadMr), always current.
+  // The URL carries the MR number and, from the dashboard, an open MR's branches, title, author and link: the
+  // diff then shows from the local clone without waiting for GitLab, which updates them (loadMr).
   const mr = {
     iid: params.get("iid") ?? "",
-    title: "",
-    branch: "",
-    target: "",
-    url: "",
-    author: "",
+    title: (params.get("title") ?? "").replace(/^Draft:\s*/i, ""),
+    branch: params.get("branch") ?? "",
+    target: params.get("target") ?? "",
+    url: params.get("url") ?? "",
+    author: params.get("author") ?? "",
     // Merged MR: its last commit and its merge commit, as the source branch may be gone.
     head: "",
     merge: "",
@@ -2484,14 +2485,17 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
     close.dataset.closeRefused = texts.closeRefused;
     const showAll = document.getElementById("partial-diff-clear");
     showAll.textContent = texts.showAllFiles;
-    showAll.addEventListener("click", () => clearFileFilter?.());
+    // A property, not a listener: the header is drawn again once GitLab has answered.
+    showAll.onclick = () => clearFileFilter?.();
     const gitlab = document.getElementById("gitlab");
     if (/^https:\/\//.test(mr.url)) {
       gitlab.href = `${mr.url}/diffs`;
       gitlab.textContent = texts.gitlab;
       gitlab.hidden = false;
     }
-    document.getElementById("loading").textContent = texts.loading;
+    // Gone once the diff is shown, the header then being drawn again when GitLab answers.
+    const loading = document.getElementById("loading");
+    if (loading) loading.textContent = texts.loading;
     applyTextScale(readTextScale());
   }
 
@@ -3034,13 +3038,25 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
     if (button) goToNote(Number(button.dataset.noteStep));
   });
   renderNotesToggle();
-  loadMr().then(() => {
-    renderHeader();
-    if (mr.author) renderAuthor();
+  // Branches known from the URL: the diff is loaded at once, GitLab answering or not; again once GitLab has
+  // answered only if they have changed meanwhile.
+  const knownBranches = mr.branch && mr.target ? `${mr.branch}\n${mr.target}` : null;
+  const early = knownBranches && showHeader() && load();
+  loadMr().then(async () => {
+    showHeader();
+    renderRangeLabel();
     initAi();
     initReviewActions();
-    load().then(loadReviewRights);
+    if (early && !mr.merge && `${mr.branch}\n${mr.target}` === knownBranches) await early;
+    else await load();
+    loadReviewRights();
   });
+
+  function showHeader() {
+    renderHeader();
+    if (mr.author) renderAuthor();
+    return true;
+  }
 </script>
 </body>
 </html>
