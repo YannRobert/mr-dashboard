@@ -256,6 +256,8 @@
   #files .d2h-file-list-wrapper { margin: 0; border: none; }
   #files .d2h-file-list-header { padding: 0.4rem 0.75rem; font-size: 0.85rem; border-bottom: 1px solid var(--border); }
   #files .d2h-file-list-header { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+  /* The file count and filter stay at the top of the list as it scrolls. */
+  #files .d2h-file-list-header { position: sticky; top: 0; z-index: 1; background: var(--surface); }
   .file-filter { display: flex; align-items: center; gap: 0.3rem; flex: 1 1 10rem; min-width: 0; }
   .file-filter input {
     flex: 1 1 auto; min-width: 0; padding: 0.15em 0.45em; font: 0.78rem Menlo, Consolas, monospace;
