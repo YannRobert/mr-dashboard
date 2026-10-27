@@ -73,6 +73,14 @@
   /* One row per group — title, branches, controls aligned right — so they do not mix as lines wrap. */
   header .controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0.5rem 1.4rem; }
   header h1 { margin: 0; font-size: 1.05rem; overflow-wrap: anywhere; }
+  /* The MR's title, then who opened it. */
+  .title-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 1.6rem; }
+  .mr-author-by { color: var(--muted); }
+  .title-row .mr-author { flex-shrink: 0; }
+  /* Closing the tab, top right, where a window closes. */
+  .title-row #close-tab { align-self: flex-start; }
+  /* When the diff was loaded, at the end of the title's line, just before closing. */
+  .title-row .loaded-at { margin-left: auto; }
   /* Page kind, before the title: an MR's diff and comments pages share the same header. */
   .page-kind {
     display: inline-block; margin-right: 0.6em; padding: 0.1em 0.6em; border-radius: 0.4rem; vertical-align: 0.1em;
@@ -84,12 +92,12 @@
   /* MR author, with badge: who opened it, even in a tab opened long ago. */
   .mr-author { display: inline-flex; align-items: center; gap: 0.4em; font-size: 0.9rem; white-space: nowrap; }
   .mr-author[hidden] { display: none; }
+  /* The branches, then the size of what they bring: one group in the subtitle. */
+  .mr-origin { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 1.6rem; }
   .mr-author .avatar { font-size: 0.7rem; }
   .subtitle { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.3rem 1.4rem; }
   .loaded-at { color: var(--muted); font-size: 0.8rem; white-space: nowrap; }
   .loaded-at.stale { color: #ea8a0c; font-weight: 600; }
-  .large-diff { color: var(--muted); font-size: 0.8rem; white-space: nowrap; }
-  .large-diff[hidden] { display: none; }
   .diff-size { display: flex; gap: 0.5rem; font-size: 0.85rem; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .diff-size[hidden] { display: none; }
   .diff-size .added { color: var(--green-fg); }
@@ -100,6 +108,11 @@
   .review-bar { position: absolute; left: 0; right: 0; bottom: -1px; height: 3px; background: var(--border); }
   .review-bar > span { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.3s; }
   .format { display: flex; gap: 0; }
+  /* Four groups across the whole width, the free space shared equally between them: review (progress, AI,
+     actions), content consulted (comments, diff notes), display settings, leaving (GitLab, close). */
+  .controls #comments-link, .controls .format, #gitlab { margin-left: auto; }
+  .format button { display: inline-flex; align-items: center; padding-inline: 0.55em; }
+  .format svg { display: block; }
   button {
     font: inherit; font-size: 0.9rem; color: var(--text); background: var(--surface);
     border: 1px solid var(--border-strong); padding: 0.3em 0.8em; cursor: pointer;
@@ -114,6 +127,60 @@
     border: 1px solid var(--border-strong); padding: 0.3em 0.8em;
   }
   .notes-nav { display: flex; align-items: center; gap: 0.25rem; }
+  /* The diff notes' switch above their navigation, both half as tall: one column, as wide as the wider. */
+  .notes-group { display: grid; gap: 2px; }
+  .notes-group #notes-toggle { padding-block: 0.05em; font-size: 0.8rem; line-height: 1.2; }
+  .notes-group .notes-nav { justify-content: space-between; grid-row: 2; grid-column: 1; }
+  .notes-group #notes-toggle { grid-row: 1; grid-column: 1; }
+  /* Half as tall, half as round: a full radius would make pills of them. */
+  .notes-group #notes-toggle, .notes-group .notes-nav button { border-radius: 0.25rem; }
+  /* Notes off, no navigation: the switch takes the whole height back, over the hidden navigation that keeps the width. */
+  .notes-group:has(.notes-nav.off) #notes-toggle {
+    grid-row: 1 / 3; font-size: 0.9rem; padding-block: 0; border-radius: 0.5rem;
+  }
+  .notes-group .notes-nav button { padding-block: 0; line-height: 1.2; font-size: 0.8rem; }
+  .notes-group .notes-nav output { font-size: 0.75rem; line-height: 1.2; }
+  /* Approve and Merge, as GitLab allows them now: greyed out, with why in their tooltip, when it does not. */
+  /* On the left, apart from the viewing controls, aligned right. */
+  .review-actions { display: flex; align-items: center; gap: 0.5rem; }
+  .review-actions[hidden] { display: none; }
+  /* The share reviewed, just before the actions it leads to; alone, it still keeps the viewing controls right. */
+  /* The AI help, before the verdicts it may lead to; its place is kept until it is known whether it is offered,
+     so that the actions do not move when it shows. Never offered on a merged MR: not there at all. */
+  #ai-button { margin-right: 0.5rem; }
+  #ai-button.unoffered { visibility: hidden; }
+  #ai-button[hidden] { display: none; }
+  /* The reviewer's verdicts, then what is done to the branch, in the order it is done. */
+  .review-actions #rebase { margin-left: 0.5rem; }
+  .review-actions button:disabled { opacity: 0.45; cursor: default; }
+  .review-actions #request-changes.done { color: var(--red-fg); border-color: var(--red-fg); }
+  .review-actions #approve.done, .review-actions #merge.done { color: var(--green-fg); border-color: var(--green-fg); }
+  /* Both labels in the same cell, the one of the other state hidden: the button keeps the width of the longer. */
+  #approve, #request-changes, #merge { display: inline-grid; }
+  #approve > span, #request-changes > span, #merge > span { grid-area: 1 / 1; }
+  #approve:not(.done) > .when-approved, #approve.done > .when-not-approved,
+  #request-changes:not(.done) > .when-approved, #request-changes.done > .when-not-approved,
+  #merge:not(.done) > .when-approved, #merge.done > .when-not-approved { visibility: hidden; }
+  .review-actions #merge:not(:disabled):not(.done) { color: var(--accent-fg); background: var(--accent); border-color: var(--accent); }
+  .review-actions-status { font-size: 0.8rem; color: var(--muted); }
+  /* The merge confirmation: the AI dialog's look (ai.css), narrower, saying what the merge will do. */
+  dialog.merge-confirm { width: min(30rem, calc(100vw - 32px)); }
+  /* Two methods to compare: half the window, their lines not cut short. */
+  dialog.update-confirm { width: min(max(50vw, 30rem), calc(100vw - 32px)); }
+  .update-confirm .merge-options label { align-items: center; gap: 0.6rem; padding: 0.35rem 0; }
+  .update-icon { flex-shrink: 0; color: var(--muted); }
+  .update-confirm input:checked ~ .update-icon { color: var(--accent); }
+  .update-method-hint { display: block; color: var(--muted); font-size: 0.85rem; }
+  dialog.merge-confirm h2 { padding-right: 2rem; overflow-wrap: anywhere; }
+  .merge-facts { margin: 0.6rem 0 1.1rem; padding-left: 1.2rem; display: grid; gap: 0.3rem; font-size: 0.9rem; }
+  .merge-facts code { font-size: 0.85rem; }
+  .merge-options { display: grid; gap: 0.4rem; margin: 0 0 1.1rem; font-size: 0.9rem; }
+  .merge-options label { display: flex; align-items: baseline; gap: 0.45rem; cursor: pointer; }
+  .merge-options label[hidden] { display: none; }
+  .merge-options label:has(input:disabled) { cursor: default; color: var(--muted); }
+  .merge-options code { font-size: 0.85rem; }
+  .merge-buttons { display: flex; justify-content: flex-end; gap: 0.6rem; }
+  .review-actions-status.error { color: var(--red-fg); }
   /* Space kept even when hidden: showing ‹ › does not shift the other controls. */
   .notes-nav.off { visibility: hidden; }
   .notes-nav button { border-radius: 0.5rem; padding: 0.3em 0.6em; }
@@ -327,35 +394,47 @@
 <body>
 <header>
   <div class="review-bar" id="review-bar" hidden><span></span></div>
-  <h1><span class="page-kind" id="page-kind"></span><span id="title"></span></h1>
-  <div class="subtitle">
+  <div class="title-row">
+    <h1><span class="page-kind" id="page-kind"></span><span id="title"></span></h1>
     <span class="mr-author" id="mr-author" hidden></span>
-    <span class="branches" id="branches"></span>
-    <span class="diff-size" id="diff-size" hidden><span class="added"></span><span class="deleted"></span></span>
-    <span class="large-diff" id="large-diff" hidden></span>
-    <span class="review-progress" id="review-progress" hidden></span>
     <span class="loaded-at" id="loaded-at"></span>
+    <button type="button" class="toggle" id="close-tab" data-close-tab></button>
+  </div>
+  <div class="subtitle">
+    <span class="mr-origin">
+      <span class="branches" id="branches"></span>
+      <span class="diff-size" id="diff-size" hidden><span class="added"></span><span class="deleted"></span></span>
+    </span>
   </div>
   <div class="controls">
+    <span class="review-progress" id="review-progress" hidden></span>
+    <button type="button" class="toggle ai unoffered" id="ai-button"></button>
+    <div class="review-actions" id="review-actions" hidden>
+      <button type="button" class="toggle" id="approve"></button>
+      <button type="button" class="toggle" id="request-changes"></button>
+      <button type="button" class="toggle" id="rebase"></button>
+      <button type="button" class="toggle" id="merge"></button>
+      <span class="review-actions-status" id="review-actions-status" role="status" aria-live="polite"></span>
+    </div>
+    <a class="toggle" id="comments-link" target="_blank" data-tab="comments"></a>
+    <div class="notes-group">
+      <button type="button" class="toggle" id="notes-toggle" aria-pressed="false"></button>
+      <div class="notes-nav off" id="notes-nav">
+        <button type="button" data-note-step="-1">‹</button>
+        <output id="note-position"></output>
+        <button type="button" data-note-step="1">›</button>
+      </div>
+    </div>
     <div class="format" role="group" id="format">
-      <button type="button" data-format="side-by-side" id="side-by-side"></button>
-      <button type="button" data-format="line-by-line" id="line-by-line"></button>
+      <button type="button" data-format="side-by-side" id="side-by-side"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><rect x="1.5" y="2.5" width="5.5" height="11" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="9" y="2.5" width="5.5" height="11" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/></svg></button>
+      <button type="button" data-format="line-by-line" id="line-by-line"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><rect x="2.5" y="2.5" width="11" height="11" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M5 6h6M5 8h6M5 10h6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></button>
     </div>
     <div class="text-size" role="group" id="text-size">
       <button type="button" data-text-step="-1">A−</button>
       <output id="text-scale"></output>
       <button type="button" data-text-step="1">A+</button>
     </div>
-    <button type="button" class="toggle" id="notes-toggle" aria-pressed="false"></button>
-    <div class="notes-nav off" id="notes-nav">
-      <button type="button" data-note-step="-1">‹</button>
-      <output id="note-position"></output>
-      <button type="button" data-note-step="1">›</button>
-    </div>
-    <button type="button" class="toggle ai" id="ai-button" hidden></button>
-    <a class="toggle" id="comments-link" target="_blank" data-tab="comments"></a>
     <a id="gitlab" target="_blank" rel="noopener" hidden></a>
-    <button type="button" class="toggle" id="close-tab" data-close-tab></button>
   </div>
   <div class="partial-diff" id="partial-diff" role="status" hidden>
     <span id="partial-diff-text"></span>
@@ -366,6 +445,45 @@
 <script src="vendor/diff2html/diff2html-ui-slim.min.js"></script>
 <script src="notes.js"></script>
 <script src="tabs.js"></script>
+<dialog class="ai-prompt merge-confirm" id="merge-dialog" aria-labelledby="merge-dialog-title">
+  <h2 id="merge-dialog-title"></h2>
+  <button type="button" class="ai-close" id="merge-dialog-close"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+  <ul class="merge-facts" id="merge-facts"></ul>
+  <div class="merge-options">
+    <label id="merge-squash-option"><input type="checkbox" id="merge-squash"> <span id="merge-squash-label"></span></label>
+    <label><input type="checkbox" id="merge-remove-branch"> <span id="merge-remove-branch-label"></span></label>
+  </div>
+  <div class="merge-buttons">
+    <button type="button" id="merge-dialog-cancel"></button>
+    <button type="button" class="primary" id="merge-dialog-confirm"></button>
+  </div>
+</dialog>
+<dialog class="ai-prompt merge-confirm" id="changes-dialog" aria-labelledby="changes-dialog-title">
+  <h2 id="changes-dialog-title"></h2>
+  <button type="button" class="ai-close" id="changes-dialog-close"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+  <ul class="merge-facts" id="changes-facts"></ul>
+  <div class="merge-options">
+    <textarea id="changes-comment" rows="5"></textarea>
+    <label><input type="checkbox" id="changes-thread" checked> <span id="changes-thread-label"></span></label>
+  </div>
+  <div class="merge-buttons">
+    <button type="button" id="changes-dialog-cancel"></button>
+    <button type="button" class="primary" id="changes-dialog-confirm"></button>
+  </div>
+</dialog>
+<dialog class="ai-prompt merge-confirm update-confirm" id="rebase-dialog" aria-labelledby="rebase-dialog-title">
+  <h2 id="rebase-dialog-title"></h2>
+  <button type="button" class="ai-close" id="rebase-dialog-close"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+  <ul class="merge-facts" id="rebase-facts"></ul>
+  <div class="merge-options">
+    <label><input type="radio" name="update-method" value="merge" id="update-merge" checked> <svg class="update-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="6" cy="5" r="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="6" cy="19" r="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="18" cy="9" r="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M6 7.2v9.6M18 11.2c0 4-6 3.5-11 6.3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span id="update-merge-label"></span></label>
+    <label><input type="radio" name="update-method" value="rebase" id="update-rebase"> <svg class="update-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="6" cy="4" r="2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="6" cy="12" r="2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="6" cy="20" r="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M6 6v4M6 14v4" stroke="currentColor" stroke-width="1.6"/><path d="M18 5v13M15 15l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span id="update-rebase-label"></span></label>
+  </div>
+  <div class="merge-buttons">
+    <button type="button" id="rebase-dialog-cancel"></button>
+    <button type="button" class="primary" id="rebase-dialog-confirm"></button>
+  </div>
+</dialog>
 <script src="ai.js"></script>
 <script src="avatars.js"></script>
 <script src="dates.js"></script>
@@ -391,6 +509,7 @@
       branches: p => `<code>${p.branch}</code> comparée à <code>${p.target}</code>, depuis leur point de divergence`,
       mergedBranches: p => `<code>${p.branch}</code> telle que mergée dans <code>${p.target}</code>`,
       author: "Auteur de la MR",
+      by: "par",
       sideBySide: "Côte à côte",
       lineByLine: "Ligne à ligne",
       textSize: "Taille du texte du diff, par rapport à celle du dashboard ; sans toucher au zoom du navigateur ni donc au dashboard",
@@ -426,6 +545,80 @@ unpushedTitle: "Clic : les commits locaux, que GitLab ne voit pas encore",
       notes: "💬 Diff notes",
       comments: "🗨 Commentaires",
       commentsTitle: "Afficher les commentaires",
+      approve: "✓ Approuver",
+      approveTitle: "Approuver la MR dans GitLab, sur le dernier commit de ce diff",
+      approved: "✓ Approuvée par vous",
+      unapproveTitle: "Clic : retirer votre approbation",
+      unapproving: "Retrait de l'approbation…",
+      cannotApprove: "GitLab ne vous permet pas d'approuver cette MR maintenant",
+      merge: "Merger",
+      mergeTitle: p => `Merger la MR dans ${p.target}, comme le disent ses réglages GitLab (squash, suppression de la branche)`,
+      mergeConfirm: p => `Merger !${p.iid} ?`,
+      mergeInto: p => `dans <code>${p.target}</code>`,
+      mergeCommits: n => `${n} commit${n > 1 ? "s" : ""}`,
+      mergeMethod: {
+        merge: "avec un commit de merge",
+        rebase_merge: "avec un commit de merge, la branche devant être à jour de la cible",
+        ff: "en fast-forward, sans commit de merge",
+      },
+      mergeSquash: "Squasher les commits en un seul",
+      mergeSquashRequired: "Squasher les commits en un seul (imposé par le projet)",
+      mergeRemoveBranch: p => `Supprimer la branche <code>${p.branch}</code> après le merge`,
+      mergeCancel: "Annuler",
+      rebase: "Mettre à jour",
+      rebaseTitle: p => `Mettre la branche à jour de ${p.target} : par un merge, ou par un rebase dans GitLab`,
+      rebaseUpToDate: p => `La branche est à jour de ${p.target}`,
+      cannotRebase: "GitLab ne vous permet pas de pousser sur la branche de cette MR",
+      rebaseConfirm: p => `Mettre !${p.iid} à jour ?`,
+      rebaseFacts: p => [
+        `<code>${p.branch}</code> a ${p.behind} commit${p.behind > 1 ? "s" : ""} de retard sur <code>${p.target}</code>`,
+        "s'il y a des conflits, rien n'est poussé : à résoudre en local",
+      ],
+      updateMerge: p => `<strong>Merger <code>${p.target}</code> dans la branche</strong><span class="update-method-hint">historique conservé · poussé avec vos identifiants git</span>`,
+      updateRebase: p => `<strong>Rebaser sur <code>${p.target}</code></strong><span class="update-method-hint">historique réécrit · force-push par GitLab</span>`,
+      rebasing: "Rebase…",
+      merging: "Merge…",
+      rebasedDone: "Rebasée : rechargez",
+      mergedTargetDone: p => `${p.target} mergée dans la branche : rechargez`,
+      requestChanges: "Demander des changements",
+      requestChangesTitle: "Demander des changements dans GitLab : la MR ne peut plus être mergée tant que vous ne l'approuvez pas",
+      changesRequested: "Changements demandés",
+      changesRequestedTitle: "Vous avez demandé des changements : approuvez la MR pour lever cette demande",
+      cannotRequestChanges: "GitLab ne vous permet pas de relire cette MR",
+      requestChangesConfirm: p => `Demander des changements sur !${p.iid} ?`,
+      requestChangesFacts: [
+        "GitLab bloque le merge jusqu'à ce que vous approuviez la MR",
+        "votre approbation, s'il y en a une, est retirée",
+      ],
+      requestChangesComment: "Commentaire publié dans la MR (facultatif) — Ctrl+Entrée pour valider",
+      requestingChanges: "Demande de changements…",
+      requestChangesThread: "En faire un thread, auquel on peut répondre, à résoudre avant le merge",
+      autoMerge: "⏱ Merge programmé",
+      autoMergeTitle: "Merger la MR dans GitLab dès que son pipeline réussit",
+      autoMergeConfirm: p => `Merger !${p.iid} quand le pipeline réussit ?`,
+      autoMergeFact: "le pipeline tourne encore : GitLab mergera dès qu'il réussit, et pas s'il échoue",
+      autoMergeButton: "Merger quand le pipeline réussit",
+      autoMergeSet: "Merge programmé",
+      autoMergeSetTitle: p => `GitLab mergera la MR quand le pipeline réussira (programmé par ${p.user}). Clic : annuler ce merge`,
+      cancellingAutoMerge: "Annulation du merge programmé…",
+      cannotMerge: "Vous n'avez pas le droit de merger cette MR",
+      mergeStatus: {
+        not_approved: "La MR attend encore des approbations",
+        ci_must_pass: "Le pipeline doit réussir",
+        ci_still_running: "Le pipeline tourne encore",
+        discussions_not_resolved: "Des threads ne sont pas résolus",
+        draft_status: "La MR est en draft",
+        conflict: "La MR a des conflits",
+        need_rebase: "La MR doit être rebasée",
+        requested_changes: "Des changements sont demandés",
+        checking: "GitLab vérifie encore si la MR peut être mergée",
+        unchecked: "GitLab vérifie encore si la MR peut être mergée",
+      },
+      mergeBlocked: status => `GitLab ne permet pas de merger maintenant (${status})`,
+      staleHead: "GitLab a des commits que ce diff ne montre pas : git fetch, puis rechargez",
+      approving: "Approbation…",
+      mergedDone: "Mergée",
+      reviewFailed: message => `Échec : ${message}`,
       notesCount: n => `${n} diff note${n > 1 ? "s" : ""} dans la MR`,
       placedNotes: n => `${n} diff note${n > 1 ? "s" : ""} placée${n > 1 ? "s" : ""} dans le diff affiché`,
       notesTitle: "Afficher les diff notes GitLab sous les lignes commentées ; désactivé, la page ne les charge pas. "
@@ -482,6 +675,7 @@ unpushedTitle: "Clic : les commits locaux, que GitLab ne voit pas encore",
       branches: p => `<code>${p.branch}</code> compared with <code>${p.target}</code>, from where they diverge`,
       mergedBranches: p => `<code>${p.branch}</code> as merged into <code>${p.target}</code>`,
       author: "Author of the MR",
+      by: "by",
       sideBySide: "Side by side",
       lineByLine: "Line by line",
       textSize: "Diff text size, relative to the dashboard's; leaves the browser zoom, hence the dashboard, untouched",
@@ -517,6 +711,80 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
       notes: "💬 Diff notes",
       comments: "🗨 Comments",
       commentsTitle: "Show comments",
+      approve: "✓ Approve",
+      approveTitle: "Approve the MR in GitLab, at the last commit of this diff",
+      approved: "✓ Approved by you",
+      unapproveTitle: "Click: withdraw your approval",
+      unapproving: "Withdrawing the approval…",
+      cannotApprove: "GitLab does not let you approve this MR now",
+      merge: "Merge",
+      mergeTitle: p => `Merge the MR into ${p.target}, as its GitLab settings say (squash, branch removal)`,
+      mergeConfirm: p => `Merge !${p.iid}?`,
+      mergeInto: p => `into <code>${p.target}</code>`,
+      mergeCommits: n => `${n} commit${n > 1 ? "s" : ""}`,
+      mergeMethod: {
+        merge: "with a merge commit",
+        rebase_merge: "with a merge commit, the branch having to be up to date with the target",
+        ff: "fast-forward, without a merge commit",
+      },
+      mergeSquash: "Squash the commits into one",
+      mergeSquashRequired: "Squash the commits into one (required by the project)",
+      mergeRemoveBranch: p => `Delete the <code>${p.branch}</code> branch after the merge`,
+      mergeCancel: "Cancel",
+      rebase: "Update",
+      rebaseTitle: p => `Bring the branch up to date with ${p.target}: by a merge, or by a rebase in GitLab`,
+      rebaseUpToDate: p => `The branch is up to date with ${p.target}`,
+      cannotRebase: "GitLab does not let you push to this MR's branch",
+      rebaseConfirm: p => `Update !${p.iid}?`,
+      rebaseFacts: p => [
+        `<code>${p.branch}</code> is ${p.behind} commit${p.behind > 1 ? "s" : ""} behind <code>${p.target}</code>`,
+        "on conflicts, nothing is pushed: they are to resolve locally",
+      ],
+      updateMerge: p => `<strong>Merge <code>${p.target}</code> into the branch</strong><span class="update-method-hint">history kept · pushed with your git credentials</span>`,
+      updateRebase: p => `<strong>Rebase on <code>${p.target}</code></strong><span class="update-method-hint">history rewritten · force-pushed by GitLab</span>`,
+      rebasing: "Rebasing…",
+      rebasedDone: "Rebased: reload",
+      mergedTargetDone: p => `${p.target} merged into the branch: reload`,
+      requestChanges: "Request changes",
+      requestChangesTitle: "Request changes in GitLab: the MR cannot be merged until you approve it",
+      changesRequested: "Changes requested",
+      changesRequestedTitle: "You requested changes: approve the MR to lift this request",
+      cannotRequestChanges: "GitLab does not let you review this MR",
+      requestChangesConfirm: p => `Request changes on !${p.iid}?`,
+      requestChangesFacts: [
+        "GitLab blocks the merge until you approve the MR",
+        "your approval, if any, is withdrawn",
+      ],
+      requestChangesComment: "Comment published in the MR (optional) — Ctrl+Enter to confirm",
+      requestingChanges: "Requesting changes…",
+      requestChangesThread: "Make it a thread, open to replies, to resolve before merging",
+      autoMerge: "⏱ Auto-merge set",
+      autoMergeTitle: "Merge the MR in GitLab as soon as its pipeline succeeds",
+      autoMergeConfirm: p => `Merge !${p.iid} when the pipeline succeeds?`,
+      autoMergeFact: "the pipeline is still running: GitLab will merge as soon as it succeeds, not if it fails",
+      autoMergeButton: "Merge when pipeline succeeds",
+      autoMergeSet: "Auto-merge set",
+      autoMergeSetTitle: p => `GitLab will merge the MR when the pipeline succeeds (set by ${p.user}). Click: cancel this merge`,
+      cancellingAutoMerge: "Cancelling the auto-merge…",
+      cannotMerge: "You are not allowed to merge this MR",
+      mergeStatus: {
+        not_approved: "The MR still needs approvals",
+        ci_must_pass: "The pipeline must succeed",
+        ci_still_running: "The pipeline is still running",
+        discussions_not_resolved: "Some threads are unresolved",
+        draft_status: "The MR is a draft",
+        conflict: "The MR has conflicts",
+        need_rebase: "The MR needs a rebase",
+        requested_changes: "Changes are requested",
+        checking: "GitLab is still checking whether the MR can be merged",
+        unchecked: "GitLab is still checking whether the MR can be merged",
+      },
+      mergeBlocked: status => `GitLab does not allow a merge now (${status})`,
+      staleHead: "GitLab has commits this diff does not show: git fetch, then reload",
+      approving: "Approving…",
+      merging: "Merging…",
+      mergedDone: "Merged",
+      reviewFailed: message => `Failed: ${message}`,
       notesCount: n => `${n} diff note${n > 1 ? "s" : ""} in the MR`,
       placedNotes: n => `${n} diff note${n > 1 ? "s" : ""} placed in the displayed diff`,
       notesTitle: "Show the GitLab diff notes under the commented lines; off, the page does not load them. "
@@ -725,7 +993,7 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
     highlightObserver = null;
     reviewTracking?.abort();
     reviewTracking = null;
-    for (const id of ["diff-size", "large-diff", "review-progress", "review-bar"]) document.getElementById(id).hidden = true;
+    for (const id of ["diff-size", "review-progress", "review-bar"]) document.getElementById(id).hidden = true;
     const main = document.getElementById("diff");
     const listScroll = document.getElementById("commit-list")?.scrollTop ?? null;
     main.innerHTML = `<aside id="side"><section id="commits" hidden></section><div id="split" role="separator" aria-orientation="horizontal" title="${escapeHtml(texts.splitTitle)}"></div><div id="files"></div></aside><div id="diff-files"></div>`;
@@ -792,9 +1060,10 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
     const wrappers = [...changed.keys()];
     const total = [...changed.values()].reduce((sum, lines) => sum + lines, 0);
     const large = total > LARGE_DIFF_LINES;
-    const badge = document.getElementById("large-diff");
-    badge.hidden = !large;
-    badge.textContent = large ? texts.largeDiff({ lines: total }) : "";
+    // A detail of how the page shows it, not worth the subtitle: told by the diff size's tooltip.
+    const size = document.getElementById("diff-size");
+    size.dataset.large = large ? texts.largeDiff({ lines: total }) : "";
+    size.title = diffSizeTitle(size);
     if (large) {
       highlightObserver = new IntersectionObserver(entries => {
         for (const entry of entries) {
@@ -844,9 +1113,11 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
     const [added, deleted] = size.children;
     added.textContent = `+${sum(".d2h-lines-added").toLocaleString(lang)}`;
     deleted.textContent = `−${sum(".d2h-lines-deleted").toLocaleString(lang)}`;
-    size.title = texts.diffSize;
+    size.title = diffSizeTitle(size);
     size.hidden = false;
   }
+
+  const diffSizeTitle = size => size.dataset.large ? `${texts.diffSize} — ${size.dataset.large}` : texts.diffSize;
 
   // "Wrap lines" checkbox before "Viewed", same look, in each file header.
   function addWrapToggles(container) {
@@ -2013,7 +2284,7 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
   function renderAuthor() {
     const element = document.getElementById("mr-author");
     element.title = texts.author;
-    element.innerHTML = `<span class="avatar" style="--avatar-color:${Avatars.color(mr.author)}" aria-hidden="true">${escapeHtml(Avatars.initials(mr.author))}</span>`
+    element.innerHTML = `<span class="mr-author-by">${escapeHtml(texts.by)}</span><span class="avatar" style="--avatar-color:${Avatars.color(mr.author)}" aria-hidden="true">${escapeHtml(Avatars.initials(mr.author))}</span>`
       + escapeHtml(mr.author);
     element.hidden = false;
   }
@@ -2102,8 +2373,12 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
     const branches = mr.merge ? texts.mergedBranches : texts.branches;
     document.getElementById("branches").innerHTML = branches({ branch: escapeHtml(mr.branch), target: escapeHtml(mr.target) })
       + '<span id="range"></span>';
-    document.getElementById("side-by-side").textContent = texts.sideBySide;
-    document.getElementById("line-by-line").textContent = texts.lineByLine;
+    // Icons, as most diff viewers show them, their name in the tooltip.
+    for (const [id, label] of [["side-by-side", texts.sideBySide], ["line-by-line", texts.lineByLine]]) {
+      const button = document.getElementById(id);
+      button.title = label;
+      button.setAttribute("aria-label", label);
+    }
     document.getElementById("text-size").title = texts.textSize;
     const [smaller, larger] = document.querySelectorAll("[data-text-step]");
     smaller.setAttribute("aria-label", texts.smaller);
@@ -2138,8 +2413,283 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
 
   // AI button: the catalog actions, as in the dashboard; the fix, only from the
   // prompt the dashboard computes and stores (see MrAi.readFixContext). Not on a merged MR.
-  function initAi() {
+  // Approve and Merge, for an open MR: what GitLab allows the token's user now, read again without the relay's cache
+  // on each opening and each return to the tab, at the head commit this diff shows, which GitLab checks again.
+  // project: the project's squash_option and merge_method, read once.
+  // autoMerge: the merge offered waits for the pipeline.
+  // user: the token's user, read once.
+  // behind: commits of the target the branch lacks.
+  const review = { sha: null, busy: false, detail: null, project: null, autoMerge: false, user: null, behind: 0 };
+
+  function reviewedHead() {
+    return commits?.filter(c => !c.local).at(-1)?.sha ?? null;
+  }
+
+  const freshJson = async url => {
+    const response = await fetch(url, { headers: { "Cache-Control": "no-cache" } });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.message || `HTTP ${response.status}`);
+    return body;
+  };
+
+  async function loadReviewRights() {
+    if (mr.merge || !mr.iid || review.busy) return;
+    const head = reviewedHead();
+    if (!head) return;
+    const project = await gitlabProject();
+    let detail, approvals, reviewers;
+    try {
+      [detail, approvals, reviewers] = await Promise.all([
+        freshJson(`gitlab/projects/${project}/merge_requests/${encodeURIComponent(mr.iid)}?include_diverged_commits_count=true&include_rebase_in_progress=true`),
+        freshJson(`gitlab/projects/${project}/merge_requests/${encodeURIComponent(mr.iid)}/approvals`),
+        freshJson(`gitlab/projects/${project}/merge_requests/${encodeURIComponent(mr.iid)}/reviewers`),
+      ]);
+      review.user ??= await freshJson("gitlab/user");
+    } catch (ignored) {
+      return;
+    }
+    // Merged or closed meanwhile: only the status of the last action stays, if any.
+    if (detail.state !== "opened") {
+      for (const id of ["approve", "request-changes", "merge", "rebase"]) document.getElementById(id).hidden = true;
+      document.getElementById("review-actions").hidden = !document.getElementById("review-actions-status").textContent;
+      return;
+    }
+    review.sha = detail.sha;
+    review.detail = detail;
+    if (!review.project) review.project = await freshJson(`gitlab/projects/${project}`).catch(() => null);
+    const stale = detail.sha !== head;
+    const approve = document.getElementById("approve");
+    approve.classList.toggle("done", !!approvals.user_has_approved);
+    if (!approve.firstElementChild) {
+      approve.innerHTML = `<span class="when-not-approved">${escapeHtml(texts.approve)}</span><span class="when-approved">${escapeHtml(texts.approved)}</span>`;
+    }
+    // Withdrawing an approval needs no up-to-date diff: only giving one does.
+    approve.disabled = approvals.user_has_approved ? false : stale || !approvals.user_can_approve;
+    approve.title = approvals.user_has_approved ? texts.unapproveTitle
+      : stale ? texts.staleHead : approvals.user_can_approve ? texts.approveTitle : texts.cannotApprove;
+    // Requesting changes is reviewing: offered to whom GitLab lets approve; approving lifts it.
+    const changes = document.getElementById("request-changes");
+    const requested = reviewers.some(r => r.user?.id === review.user.id && r.state === "requested_changes");
+    const canReview = approvals.user_can_approve || approvals.user_has_approved;
+    if (!changes.firstElementChild) {
+      changes.innerHTML = `<span class="when-not-approved">${escapeHtml(texts.requestChanges)}</span><span class="when-approved">${escapeHtml(texts.changesRequested)}</span>`;
+    }
+    changes.classList.toggle("done", requested);
+    changes.disabled = requested || !canReview;
+    changes.title = requested ? texts.changesRequestedTitle : canReview ? texts.requestChangesTitle : texts.cannotRequestChanges;
+    const merge = document.getElementById("merge");
+    const status = detail.detailed_merge_status;
+    if (!merge.firstElementChild) {
+      merge.innerHTML = `<span class="when-not-approved">${escapeHtml(texts.merge)}</span><span class="when-approved">${escapeHtml(texts.autoMerge)}</span>`;
+    }
+    // A merge already set to come is cancelled with a click, as an approval is withdrawn; one is offered while only
+    // the pipeline still runs.
+    const autoMergeSet = !!detail.merge_when_pipeline_succeeds;
+    review.autoMerge = !autoMergeSet && pipelineRunning(detail);
+    merge.classList.toggle("done", autoMergeSet);
+    merge.disabled = autoMergeSet ? !detail.user?.can_merge
+      : stale || !detail.user?.can_merge || !(status === "mergeable" || review.autoMerge);
+    merge.title = autoMergeSet ? texts.autoMergeSetTitle({ user: detail.merge_user?.name ?? "?" })
+      : stale ? texts.staleHead
+      : !detail.user?.can_merge ? texts.cannotMerge
+      : review.autoMerge ? texts.autoMergeTitle
+      : status !== "mergeable" ? texts.mergeStatus[status] ?? texts.mergeBlocked(status)
+      : texts.mergeTitle(mr);
+    // Rebasing pushes to the source branch: offered while it is behind its target, to whom GitLab lets push to it.
+    const rebase = document.getElementById("rebase");
+    const behind = detail.diverged_commits_count ?? 0;
+    const canPush = behind > 0 && await canPushToSource(project);
+    rebase.textContent = texts.rebase;
+    rebase.disabled = detail.rebase_in_progress || !behind || !canPush;
+    rebase.title = detail.rebase_in_progress ? texts.rebasing
+      : !behind ? texts.rebaseUpToDate(mr) : canPush ? texts.rebaseTitle(mr) : texts.cannotRebase;
+    review.behind = behind;
+    document.getElementById("review-actions").hidden = false;
+  }
+
+  async function canPushToSource(project) {
+    const query = `{ project(fullPath: ${JSON.stringify(decodeURIComponent(project))}) { mergeRequest(iid: ${JSON.stringify(String(mr.iid))}) { userPermissions { pushToSourceBranch } } } }`;
+    const result = await freshJson(`graphql?query=${encodeURIComponent(query)}`).catch(() => null);
+    return !!result?.data?.project?.mergeRequest?.userPermissions?.pushToSourceBranch;
+  }
+
+  // Only the pipeline keeps the MR from being merged, and it may still succeed.
+  function pipelineRunning(detail) {
+    const active = ["created", "waiting_for_resource", "preparing", "pending", "running", "scheduled"];
+    return ["ci_still_running", "ci_must_pass"].includes(detail.detailed_merge_status)
+      && active.includes(detail.head_pipeline?.status);
+  }
+
+  // GitLab rebases in the background: its outcome, a new head or merge_error, is awaited for up to a minute.
+  async function waitForRebase() {
+    const status = document.getElementById("review-actions-status");
+    const project = await gitlabProject();
+    status.classList.remove("error");
+    status.textContent = texts.rebasing;
+    for (let attempt = 0; attempt < 30; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      const detail = await freshJson(`gitlab/projects/${project}/merge_requests/${encodeURIComponent(mr.iid)}?include_rebase_in_progress=true`).catch(() => null);
+      if (!detail || detail.rebase_in_progress) continue;
+      status.classList.toggle("error", !!detail.merge_error);
+      status.textContent = detail.merge_error ? texts.reviewFailed(detail.merge_error) : texts.rebasedDone;
+      break;
+    }
+    await loadReviewRights();
+  }
+
+  async function reviewAction(path, pending, options = {}) {
+    const status = document.getElementById("review-actions-status");
+    const buttons = document.querySelectorAll("#review-actions button");
+    review.busy = true;
+    buttons.forEach(b => { b.disabled = true; });
+    status.classList.remove("error");
+    status.textContent = pending;
+    try {
+      const response = await fetch(path, {
+        method: "POST",
+        headers: { "X-MR-Dashboard": "1", "Content-Type": "application/json" },
+        body: JSON.stringify({ iid: Number(mr.iid), sha: review.sha, ...options }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.message ?? result.error ?? `HTTP ${response.status}`);
+      status.textContent = "";
+      return result;
+    } catch (failure) {
+      status.classList.add("error");
+      status.textContent = texts.reviewFailed(Array.isArray(failure.message) ? failure.message.join(", ") : failure.message);
+      return null;
+    } finally {
+      review.busy = false;
+      await loadReviewRights();
+    }
+  }
+
+  // What the merge will do, and its two choices as GitLab offers them: the squash, as the project's squash_option
+  // allows it (never: not offered; always: imposed), and the source branch removal, both checked as the MR says.
+  function openMergeDialog() {
+    const detail = review.detail;
+    const count = commits?.filter(c => !c.local).length ?? 0;
+    const names = { branch: escapeHtml(mr.branch), target: escapeHtml(mr.target) };
+    const method = review.project?.merge_method;
+    document.getElementById("merge-dialog-title").textContent = review.autoMerge ? texts.autoMergeConfirm(mr) : texts.mergeConfirm(mr);
+    document.getElementById("merge-facts").innerHTML = [
+      ...(review.autoMerge ? [texts.autoMergeFact] : []),
+      texts.mergeInto(names),
+      texts.mergeCommits(count),
+      ...(texts.mergeMethod[method] ? [texts.mergeMethod[method]] : []),
+    ].map(fact => `<li>${fact}</li>`).join("");
+    const squashOption = review.project?.squash_option;
+    const squash = document.getElementById("merge-squash");
+    document.getElementById("merge-squash-option").hidden = squashOption === "never";
+    squash.checked = squashOption === "always" || !!detail?.squash;
+    squash.disabled = squashOption === "always";
+    document.getElementById("merge-squash-label").textContent = squashOption === "always" ? texts.mergeSquashRequired : texts.mergeSquash;
+    document.getElementById("merge-remove-branch").checked = !!detail?.force_remove_source_branch;
+    document.getElementById("merge-remove-branch-label").innerHTML = texts.mergeRemoveBranch(names);
+    const close = document.getElementById("merge-dialog-close");
+    close.title = texts.mergeCancel;
+    close.setAttribute("aria-label", texts.mergeCancel);
+    document.getElementById("merge-dialog-cancel").textContent = texts.mergeCancel;
+    const confirm = document.getElementById("merge-dialog-confirm");
+    confirm.textContent = review.autoMerge ? texts.autoMergeButton : texts.merge;
+    document.getElementById("merge-dialog").showModal();
+    confirm.focus();
+  }
+
+  function initReviewActions() {
     if (mr.merge || !mr.iid) return;
+    const approve = document.getElementById("approve");
+    approve.addEventListener("click", () => approve.classList.contains("done")
+      ? reviewAction("gitlab/unapprove", texts.unapproving)
+      : reviewAction("gitlab/approve", texts.approving));
+    const dialog = document.getElementById("merge-dialog");
+    const merge = document.getElementById("merge");
+    merge.addEventListener("click", () => merge.classList.contains("done")
+      ? reviewAction("gitlab/cancel-auto-merge", texts.cancellingAutoMerge)
+      : openMergeDialog());
+    document.getElementById("merge-dialog-close").addEventListener("click", () => dialog.close());
+    document.getElementById("merge-dialog-cancel").addEventListener("click", () => dialog.close());
+    document.getElementById("merge-dialog-confirm").addEventListener("click", async () => {
+      dialog.close();
+      const auto = review.autoMerge;
+      const squashOption = review.project?.squash_option;
+      const merged = await reviewAction("gitlab/merge", texts.merging, {
+        // The project decides when it never or always squashes: GitLab refuses any other choice.
+        ...(squashOption === "never" || squashOption === "always" ? {} : { squash: document.getElementById("merge-squash").checked }),
+        remove_source_branch: document.getElementById("merge-remove-branch").checked,
+        ...(auto ? { auto_merge: true } : {}),
+      });
+      const done = merged?.state === "merged" ? texts.mergedDone : auto && merged ? texts.autoMergeSet : "";
+      if (done) document.getElementById("review-actions-status").textContent = done;
+    });
+    const changes = document.getElementById("changes-dialog");
+    const comment = document.getElementById("changes-comment");
+    document.getElementById("request-changes").addEventListener("click", () => {
+      document.getElementById("changes-dialog-title").textContent = texts.requestChangesConfirm(mr);
+      document.getElementById("changes-facts").innerHTML = texts.requestChangesFacts.map(fact => `<li>${escapeHtml(fact)}</li>`).join("");
+      comment.placeholder = texts.requestChangesComment;
+      document.getElementById("changes-thread-label").textContent = texts.requestChangesThread;
+      const close = document.getElementById("changes-dialog-close");
+      close.title = texts.mergeCancel;
+      close.setAttribute("aria-label", texts.mergeCancel);
+      document.getElementById("changes-dialog-cancel").textContent = texts.mergeCancel;
+      document.getElementById("changes-dialog-confirm").textContent = texts.requestChanges;
+      changes.showModal();
+      comment.focus();
+    });
+    const requestChanges = async () => {
+      changes.close();
+      const sent = await reviewAction("gitlab/request-changes", texts.requestingChanges, {
+        body: comment.value,
+        thread: document.getElementById("changes-thread").checked,
+      });
+      if (sent) comment.value = "";
+    };
+    document.getElementById("changes-dialog-close").addEventListener("click", () => changes.close());
+    document.getElementById("changes-dialog-cancel").addEventListener("click", () => changes.close());
+    document.getElementById("changes-dialog-confirm").addEventListener("click", requestChanges);
+    comment.addEventListener("keydown", event => {
+      if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) requestChanges();
+    });
+    const rebaseDialog = document.getElementById("rebase-dialog");
+    document.getElementById("rebase").addEventListener("click", () => {
+      const names = { branch: escapeHtml(mr.branch), target: escapeHtml(mr.target), behind: review.behind };
+      document.getElementById("rebase-dialog-title").textContent = texts.rebaseConfirm(mr);
+      document.getElementById("rebase-facts").innerHTML = texts.rebaseFacts(names).map(fact => `<li>${fact}</li>`).join("");
+      document.getElementById("update-merge-label").innerHTML = texts.updateMerge(names);
+      document.getElementById("update-rebase-label").innerHTML = texts.updateRebase(names);
+      // Merging by default: the history is kept.
+      document.getElementById("update-merge").checked = true;
+      const close = document.getElementById("rebase-dialog-close");
+      close.title = texts.mergeCancel;
+      close.setAttribute("aria-label", texts.mergeCancel);
+      document.getElementById("rebase-dialog-cancel").textContent = texts.mergeCancel;
+      const confirm = document.getElementById("rebase-dialog-confirm");
+      confirm.textContent = texts.rebase;
+      rebaseDialog.showModal();
+      confirm.focus();
+    });
+    document.getElementById("rebase-dialog-close").addEventListener("click", () => rebaseDialog.close());
+    document.getElementById("rebase-dialog-cancel").addEventListener("click", () => rebaseDialog.close());
+    document.getElementById("rebase-dialog-confirm").addEventListener("click", async () => {
+      rebaseDialog.close();
+      if (document.getElementById("update-rebase").checked) {
+        if (await reviewAction("gitlab/rebase", texts.rebasing)) await waitForRebase();
+        return;
+      }
+      const merged = await reviewAction("git/merge-target", texts.merging, { branch: mr.branch, target: mr.target });
+      if (merged) document.getElementById("review-actions-status").textContent = texts.mergedTargetDone(mr);
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") loadReviewRights();
+    });
+  }
+
+  function initAi() {
+    if (mr.merge || !mr.iid) {
+      document.getElementById("ai-button").hidden = true;
+      return;
+    }
     let launchTargets = [];
     config().then(c => { launchTargets = c.launchTargets ?? []; }).catch(() => { /* no config, prompts are copied */ });
     MrAi.init({ lang, launchTargets: () => launchTargets });
@@ -2148,7 +2698,7 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
     button.textContent = MrAi.t("ai");
     const render = () => {
       const { toFix } = MrAi.readFixContext(mr.iid);
-      button.hidden = !MrAi.offered(toFix);
+      button.classList.toggle("unoffered", !MrAi.offered(toFix));
       button.classList.toggle("to-fix", toFix);
       button.title = MrAi.buttonTitle(toFix);
     };
@@ -2389,7 +2939,8 @@ unpushedTitle: "Click: the local commits, not yet seen by GitLab",
     renderHeader();
     if (mr.author) renderAuthor();
     initAi();
-    load();
+    initReviewActions();
+    load().then(loadReviewRights);
   });
 </script>
 </body>
