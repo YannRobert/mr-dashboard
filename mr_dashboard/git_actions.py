@@ -12,6 +12,7 @@ checking anything out there: it holds the work in progress.
 import os
 import re
 import subprocess
+import tempfile
 import threading
 import time
 from collections import deque
@@ -19,6 +20,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 FETCH_TIMEOUT_S = 60
+# A push runs the clone's hooks, which may build or test.
+PUSH_TIMEOUT_S = 300
 DIFF_TIMEOUT_S = 30
 MAX_DIFF_BYTES = 5_000_000
 # Context of a whole-file diff: more lines than any file has.
@@ -29,7 +32,7 @@ SHA = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 # MR states already reported, remembered so as not to fetch again when a page replays an old one.
 SEEN_SIGNATURES = 100
 # Commands that query the remote repository, hence GitLab.
-REMOTE_COMMANDS = ("fetch", "ls-remote")
+REMOTE_COMMANDS = ("fetch", "ls-remote", "push")
 
 
 class GitError(Exception):
@@ -172,6 +175,60 @@ class GitActions:
         published = f"refs/remotes/origin/{branch}"
         head = self._unpushed_head(branch)
         return f"refs/remotes/origin/{target}", head or published, published if head else None
+
+    def merge_target(
+            self,
+            branch,
+            target,
+            head
+    ):
+        """Merges origin/<target> into the MR's branch and pushes it, to bring it up to date without rewriting
+        its history; head is the branch's commit the user saw, the merge refused if it has moved since. Done in
+        a temporary worktree, the tracked repository's checkout untouched; with conflicts, nothing is pushed.
+        Returns the new head."""
+        self._check_branch_names(
+            branch,
+            target
+        )
+        self._fetch(
+            branch,
+            target
+        )
+        published = f"refs/remotes/origin/{branch}"
+        if self._git_output(["rev-parse", published]) != head:
+            raise GitError(f"{branch} has moved on origin since it was displayed: reload")
+        if self._git(["merge-base", "--is-ancestor", f"refs/remotes/origin/{target}", published]).returncode == 0:
+            raise GitError(f"{branch} is already up to date with {target}")
+        with tempfile.TemporaryDirectory(prefix="mr-dashboard-merge-") as parent:
+            worktree = str(Path(parent) / "worktree")
+            self._git_output(["worktree", "add", "--detach", worktree, published])
+            try:
+                merged = self._git(
+                    ["merge", "--no-ff", "--no-edit", "-m", f"Merge branch '{target}' into '{branch}'",
+                     f"refs/remotes/origin/{target}"],
+                    timeout=FETCH_TIMEOUT_S,
+                    cwd=worktree
+                )
+                if merged.returncode != 0:
+                    conflicts = self._git(["diff", "--name-only", "--diff-filter=U"], cwd=worktree).stdout.split()
+                    raise GitError(f"conflicts to resolve locally: {', '.join(conflicts)}" if conflicts
+                                   else last_line(merged.stderr or merged.stdout) or "git merge failed")
+                new_head = self._git_output(["rev-parse", "HEAD"], cwd=worktree)
+                try:
+                    # Not forced: GitLab refuses it if the branch has moved meanwhile.
+                    pushed = self._git(
+                        ["push", "origin", f"HEAD:refs/heads/{branch}"],
+                        timeout=PUSH_TIMEOUT_S,
+                        cwd=worktree
+                    )
+                except subprocess.TimeoutExpired as error:
+                    raise GitError(f"no response from git push within {PUSH_TIMEOUT_S} s") from error
+                if pushed.returncode != 0:
+                    raise GitError(last_line(pushed.stderr) or "git push failed")
+            finally:
+                self._git(["worktree", "remove", "--force", worktree])
+        self._fetch(branch)
+        return new_head
 
     def _unpushed_head(self, branch):
         """The local branch when it is strictly ahead of origin/<branch>, otherwise None: a local branch that
@@ -322,8 +379,15 @@ class GitActions:
             return None
         return datetime.fromtimestamp(mtime, timezone.utc).isoformat()
 
-    def _git_output(self, args):
-        completed = self._git(args)
+    def _git_output(
+            self,
+            args,
+            cwd=None
+    ):
+        completed = self._git(
+            args,
+            cwd=cwd
+        )
         if completed.returncode != 0:
             raise GitError(last_line(completed.stderr) or f"git {args[0]} failed")
         return completed.stdout.strip()
@@ -386,12 +450,13 @@ class GitActions:
     def _git(
             self,
             args,
-            timeout=10
+            timeout=10,
+            cwd=None
     ):
         remote = args[0] in REMOTE_COMMANDS
         try:
             completed = subprocess.run(
-                ["git", "-C", str(self._repo_dir), *args],
+                ["git", "-C", str(cwd or self._repo_dir), *args],
                 capture_output=True,
                 text=True,
                 env=GIT_ENV,

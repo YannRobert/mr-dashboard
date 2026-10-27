@@ -39,6 +39,8 @@ Local actions, over POST:
     /gitlab/request-changes  requests changes on a MR, withdrawing the user's approval: {"iid", "body", "thread"},
                         body an optional comment published first, as a thread to resolve when thread is true
     /gitlab/rebase      rebases the source branch of a MR on its target, in GitLab: {"iid"}
+    /git/merge-target   merges the target of a MR into its branch and pushes it, from the local clone:
+                        {"branch", "target", "sha"}, sha the branch's head the user saw
     /git/diff   GET ?branch=&target=: diff of a MR from the point where it leaves its target, displayed
                 by diff.html; ?iid=&head=&merge=&target= for a merged MR, found through its commits;
                 &first=&last= for what its commits from first to last brought together
@@ -373,6 +375,7 @@ def make_handler(
                 "/launch": self.launch,
                 "/git/fetch": self.git_fetch,
                 "/git/auto": self.git_auto,
+                "/git/merge-target": self.git_merge_target,
                 "/gitlab/discussion": self.gitlab_discussion,
                 "/gitlab/reply": self.gitlab_reply,
                 "/gitlab/resolve": self.gitlab_resolve,
@@ -478,6 +481,24 @@ def make_handler(
                 self.send_json(400, {"message": "invalid request"})
                 return
             self.send_json(200, git.status())
+
+        def git_merge_target(self, payload):
+            branch, target, sha = (payload.get(name) if isinstance(payload, dict) else None
+                                   for name in ("branch", "target", "sha"))
+            if not isinstance(branch, str) or not isinstance(target, str) or not is_sha(sha):
+                self.send_json(400, {"message": "invalid request"})
+                return
+            try:
+                head = git.merge_target(
+                    branch,
+                    target,
+                    sha
+                )
+            except GitError as error:
+                self.send_json(409, {"message": str(error)})
+                return
+            relay_cache.clear()
+            self.send_json(200, {"sha": head})
 
         def avatars(self, payload):
             names = payload.get("names") if isinstance(payload, dict) else None
