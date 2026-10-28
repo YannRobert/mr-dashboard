@@ -2390,7 +2390,7 @@ const GRAPHQL_MR_FIELDS = `
 // the last one came from someone else than the MR author. No comment body (tool reports weigh
 // tens of kilobytes); system notes by their first line only, enough to recognize a push.
 const GRAPHQL_OPEN_MR_FIELDS = `${GRAPHQL_MR_FIELDS}
-  lastComments: notes(filter: ONLY_COMMENTS, last: ${LAST_NOTES_SAMPLE}) { nodes { id createdAt author { username name } } }
+  lastComments: notes(filter: ONLY_COMMENTS, last: ${LAST_NOTES_SAMPLE}) { nodes { body createdAt author { username name } } }
   lastActivity: notes(filter: ONLY_ACTIVITY, last: ${LAST_NOTES_SAMPLE}) { nodes { bodyFirstLineHtml createdAt author { username name } } }
   headPipeline { id jobs(retried: false) { nodes { id name status startedAt finishedAt webPath } } }`;
 // A merged MR has no pipeline left to follow; its oldest commit dates the start of development.
@@ -2583,7 +2583,6 @@ async function loadSignals(mr) {
     signals.previousPipeline = previousPipeline;
     const job = name => jobs.filter(j => j.name === name).sort((a, b) => b.id - a.id)[0];
     if (pitTracked()) signals.pit = pitSignal(job(state.config.pitJob), pitNote, mr);
-    signals.pitNoteId = pitNote?.id ?? null;
     if (sonarTracked()) signals.sonar = await sonarSignal(job(state.config.sonarJob), mr);
   } catch (error) {
     signals.error = error.message;
@@ -4933,8 +4932,8 @@ function blockedByPills(mr) {
 // notes only serve here.
 function keepLastActors(mr) {
   mr.lastComments = (mr.graphql?.lastComments?.nodes ?? [])
-    .filter(n => !BOT_USERNAME.test(n.author.username))
-    .map(n => ({ id: Number(n.id.split("/").pop()), createdAt: n.createdAt, author: n.author }));
+    .filter(n => !isToolReport(n))
+    .map(n => ({ createdAt: n.createdAt, author: n.author }));
   const push = (mr.graphql?.lastActivity?.nodes ?? []).filter(n => /^(<p>)?added \d+ commits?\b/.test(n.bodyFirstLineHtml)).at(-1);
   mr.lastPush = push ? { createdAt: push.createdAt, author: push.author } : null;
   if (mr.graphql) {
@@ -4943,11 +4942,15 @@ function keepLastActors(mr) {
   }
 }
 
-// The mutation score is a tool report, even when published under a personal account: recognized
-// by the id of its note, loaded with the signals.
+// The mutation score is a tool report, even when published or updated under a personal account:
+// recognized by its marker, whoever its author.
+function isToolReport(note) {
+  const pitMarker = pitTracked() ? state.config.pitMarker : "";
+  return BOT_USERNAME.test(note.author.username) || Boolean(pitMarker && note.body?.startsWith(pitMarker));
+}
+
 function lastHumanComment(mr) {
-  const pitNoteId = signalsOf(mr).pitNoteId;
-  return (mr.lastComments ?? []).filter(n => n.id !== pitNoteId).at(-1) ?? null;
+  return (mr.lastComments ?? []).at(-1) ?? null;
 }
 
 // Shown only when someone else than the author acted last: a fact, the reader judges what follows from it.
@@ -5092,8 +5095,6 @@ function commentsOf(
   notes
 ) {
   // The mutation score is a tool report, even when published under a personal account.
-  const pitMarker = pitTracked() ? state.config.pitMarker : "";
-  const isToolReport = n => BOT_USERNAME.test(n.author.username) || Boolean(pitMarker && n.body?.startsWith(pitMarker));
   return notes
     .filter(n => !n.system && !isToolReport(n))
     .map(n => ({ date: new Date(n.created_at).getTime(), author: n.author.name, mine: n.author.username === mr.author.username }))

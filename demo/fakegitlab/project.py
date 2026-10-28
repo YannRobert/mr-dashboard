@@ -612,7 +612,7 @@ class Project:
             comments = [note for note in mr.notes if not note.system][-10:]
             activity = [note for note in mr.notes if note.system][-10:]
             node["lastComments"] = {"nodes": [{
-                "id": self.gid("Note", note.id), "createdAt": self.iso(note.at),
+                "body": note.body, "createdAt": self.iso(note.at),
                 "author": {"username": note.author, "name": self.dataset.PEOPLE[note.author]},
             } for note in comments]}
             node["lastActivity"] = {"nodes": [{
