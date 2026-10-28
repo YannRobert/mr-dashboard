@@ -117,6 +117,7 @@
   /* State carried by the badge and, for the only state needing action, by color: an ordinary or resolved
      thread stays neutral. */
   .thread {
+    scroll-margin-top: 6.5rem;
     background: var(--surface); border: 1px solid var(--border-strong);
     border-radius: 0.5rem; overflow: hidden;
   }
@@ -426,7 +427,19 @@
     }
     const container = document.getElementById("comments");
     container.innerHTML = general.map(d => threadHtml(d, gitlabWeb)).join("");
+    scrollToAttention(container);
     return container;
+  }
+
+  // Opens on the first unresolved thread, or on the latest comments when none is left. The saved copy
+  // and the fresh data render in turn: the second render only repeats the jump if the reader has not scrolled.
+  let autoScrollY = null;
+  function scrollToAttention(container) {
+    if (autoScrollY !== null && Math.abs(window.scrollY - autoScrollY) > 2) return;
+    const target = container.querySelector(".thread.unresolved");
+    if (target) target.scrollIntoView({ block: "start" });
+    else window.scrollTo(0, document.documentElement.scrollHeight);
+    autoScrollY = window.scrollY;
   }
 
   // Saved copy shown read-only: a reply or resolution would start from a possibly stale state.
