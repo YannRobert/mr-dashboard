@@ -19,6 +19,7 @@
 </script>
 <link rel="stylesheet" href="avatars.css">
 <link rel="stylesheet" href="ai.css">
+<link rel="stylesheet" href="shortcuts.css">
 <style>
   :root {
     --bg: #dcdfe6;
@@ -721,6 +722,7 @@
         <p id="sound-test-status" hidden></p>
       </div>
     </div>
+    </div>
   </div>
   <div class="header-row prefs">
     <div class="lang-switch" role="group" aria-label="Language" data-i18n-aria-label="Language">
@@ -739,6 +741,18 @@
     <span class="divider" aria-hidden="true"></span>
     <button type="button" class="icon-button anonymize" data-anonymize aria-pressed="false" aria-label="Anonymize" data-i18n-aria-label="Anonymize" data-i18n-title="anonymize.title"><span aria-hidden="true">🕶</span></button>
     <button type="button" id="clear-storage" class="icon-button" aria-label="Clear local data" data-i18n-aria-label="Clear local data" data-i18n-title="clearStorage.title"><span aria-hidden="true">🧹</span></button>
+    <div class="shortcuts" id="shortcuts">
+      <button type="button" class="icon-button shortcuts-btn" id="shortcuts-btn" aria-expanded="false" aria-controls="shortcuts-panel" aria-label="Keyboard shortcuts" data-i18n-aria-label="Keyboard shortcuts" data-i18n-title="shortcuts.title"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6.5 10h.01M10 10h.01M13.5 10h.01M17 10h.01M8 14h8"/></svg></button>
+      <div class="shortcuts-panel" id="shortcuts-panel" hidden>
+        <h4 data-i18n="shortcuts.heading">Keyboard shortcuts</h4>
+        <table>
+          <tr><td><kbd>r</kbd></td><td data-i18n="shortcuts.refresh">Refresh from GitLab</td></tr>
+          <tr id="shortcut-git-fetch"><td><kbd>f</kbd></td><td data-i18n="shortcuts.gitFetch">git fetch of the local repository</td></tr>
+          <tr><td><kbd>Page Up</kbd> <kbd>Page Down</kbd></td><td data-i18n="shortcuts.page">Scroll the list by one screen</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td data-i18n="shortcuts.escape">Close the open panel</td></tr>
+          <tr><td><kbd>?</kbd></td><td data-i18n="shortcuts.list">This list</td></tr>
+        </table>
+      </div>
   </div>
 </header>
 
@@ -797,6 +811,7 @@
 <section class="branch-pipeline" id="branch-pipeline" hidden aria-labelledby="branch-pipeline-title"></section>
 
 <script src="tabs.js"></script>
+<script src="shortcuts.js"></script>
 <script src="ai.js"></script>
 <script src="avatars.js"></script>
 <script src="dates.js"></script>
@@ -1086,6 +1101,14 @@ const I18N = {
     "autoRefresh.title": () => `Recharge les données toutes les ${AUTO_REFRESH_MS / 60000} minutes`,
     "notify": "Notifications",
     "sound": "Sons",
+    "shortcuts.title": "Raccourcis clavier (?)",
+    "Keyboard shortcuts": "Raccourcis clavier",
+    "shortcuts.heading": "Raccourcis clavier",
+    "shortcuts.refresh": "Rafraîchir depuis GitLab",
+    "shortcuts.gitFetch": "git fetch du dépôt local",
+    "shortcuts.page": "Faire défiler la liste d'un écran",
+    "shortcuts.escape": "Fermer le panneau ouvert",
+    "shortcuts.list": "Cette liste",
     "soundTest": "Écouter les sons, pour vérifier qu'ils te conviennent et sortent sur le bon appareil",
     "soundTest.positive": "Bonnes nouvelles",
     "soundTest.negative": "Mauvaises nouvelles",
@@ -1408,6 +1431,14 @@ const I18N = {
     "autoRefresh.title": () => `Reloads the data every ${AUTO_REFRESH_MS / 60000} minutes`,
     "notify": "Notifications",
     "sound": "Sounds",
+    "shortcuts.title": "Keyboard shortcuts (?)",
+    "Keyboard shortcuts": "Keyboard shortcuts",
+    "shortcuts.heading": "Keyboard shortcuts",
+    "shortcuts.refresh": "Refresh from GitLab",
+    "shortcuts.gitFetch": "git fetch of the local repository",
+    "shortcuts.page": "Scroll the list by one screen",
+    "shortcuts.escape": "Close the open panel",
+    "shortcuts.list": "This list",
     "soundTest": "Listen to the sounds, to check you like them and they play on the right device",
     "soundTest.positive": "Good news",
     "soundTest.negative": "Bad news",
@@ -4725,6 +4756,7 @@ function renderGitFetch() {
   const enabled = gitFetchEnabled();
   $("git-fetch-control").hidden = !enabled;
   $("git-fetch-divider").hidden = !enabled;
+  $("shortcut-git-fetch").hidden = !enabled;
   if (!enabled) return;
   const { status, running } = state.gitFetch;
   const time = iso => new Date(iso).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
@@ -6044,6 +6076,11 @@ document.addEventListener("keydown", e => {
     toggleAbout(false);
     $("about").focus();
   }
+});
+
+MrShortcuts.attach($("shortcuts"), {
+  r: () => $("refresh").click(),
+  f: () => gitFetchEnabled() ? $("git-fetch").click() : false,
 });
 
 function toggleAbout(open) {
