@@ -452,6 +452,9 @@
     showLoadedAt(document.getElementById("loaded-at"), lang, entry.at);
   }
 
+  // Reloading (Retry) renders into the same container: its listeners are added only once.
+  let threadsHandled = false;
+
   async function load() {
     const cached = readCache()[iid];
     if (cached) {
@@ -470,7 +473,8 @@
       showBanner(null);
       showLoadedAt(document.getElementById("loaded-at"), lang, entry.at);
       const container = render(entry);
-      if (!container) return;
+      if (!container || threadsHandled) return;
+      threadsHandled = true;
       // After a reply or resolution: only this thread is re-rendered, the others keep their state.
       GitlabNotes.handleThreads(container, {
         iid,
