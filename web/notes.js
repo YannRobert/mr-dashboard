@@ -32,6 +32,11 @@ window.GitlabNotes = (() => {
   function render(html, gitlabWeb) {
     const doc = new DOMParser().parseFromString(`<body>${html ?? ""}</body>`, "text/html");
     doc.querySelectorAll(DROPPED).forEach(element => element.remove());
+    // GitLab sometimes ends a body with an empty paragraph, heading or line break: blank space only.
+    const EMPTY = "p, h1, h2, h3, h4, h5, h6";
+    for (let last = doc.body.lastElementChild; last && (last.tagName === "BR" || (last.matches(EMPTY) && !last.textContent.trim() && !last.querySelector("img, input"))); last = doc.body.lastElementChild) {
+      last.remove();
+    }
     // Only task list checkboxes remain, read-only.
     for (const input of doc.querySelectorAll("input")) {
       if (input.type === "checkbox") input.setAttribute("disabled", "");

@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3E%3Cdefs%3E%3ClinearGradient%20id='g'%20x1='0'%20y1='0'%20x2='1'%20y2='1'%3E%3Cstop%20offset='0'%20stop-color='%234f46e5'/%3E%3Cstop%20offset='1'%20stop-color='%237c3aed'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect%20width='64'%20height='64'%20rx='15'%20fill='url(%23g)'/%3E%3Ctext%20x='32'%20y='28'%20text-anchor='middle'%20font-family='system-ui,Segoe%20UI,Arial,sans-serif'%20font-size='26'%20font-weight='800'%20fill='%23fff'%3EMR%3C/text%3E%3Cg%20transform='translate(32%2045)%20scale(0.45)%20translate(-32%20-34)'%3E%3Cpath%20d='M14%2014h36a4%204%200%200%201%204%204v22a4%204%200%200%201-4%204H30L18%2054V44h-4a4%204%200%200%201-4-4V18a4%204%200%200%201%204-4z'%20fill='%23fff'/%3E%3C/g%3E%3C/svg%3E">
 <title>Commentaires — MisteR Dashboard</title>
 <script>
   // Dashboard theme and text size, set before the first render.
@@ -18,6 +19,7 @@
 </script>
 <link rel="stylesheet" href="notes.css">
 <link rel="stylesheet" href="avatars.css">
+<link rel="stylesheet" href="shortcuts.css">
 <style>
   :root {
     --bg: #dcdfe6;
@@ -90,10 +92,10 @@
     border: 1px solid var(--border-strong); border-radius: 0.5rem; background: var(--surface);
   }
   .links button.anonymize[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
-  main { box-sizing: border-box; max-width: 62rem; margin: 0 auto; padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
+  main { box-sizing: border-box; margin: 0; padding: 1rem; display: flex; flex-direction: column; gap: 1.25rem; }
   .message { color: var(--muted); }
   .cached-banner {
-    box-sizing: border-box; max-width: 62rem; margin: 0.75rem auto 0; padding: 0.4rem 0.8rem;
+    box-sizing: border-box; margin: 0.75rem 1rem 0; padding: 0.4rem 0.8rem;
     color: var(--muted); font-size: 0.85rem; border: 1px dashed var(--border-strong); border-radius: 0.5rem;
   }
   .cached-banner[hidden] { display: none; }
@@ -117,6 +119,7 @@
   /* State carried by the badge and, for the only state needing action, by color: an ordinary or resolved
      thread stays neutral. */
   .thread {
+    scroll-margin-top: 6.5rem;
     background: var(--surface); border: 1px solid var(--border-strong);
     border-radius: 0.5rem; overflow: hidden;
   }
@@ -133,7 +136,7 @@
   .thread > summary strong { color: var(--text); }
   .thread > summary a { margin-left: auto; }
   .badge { font-size: 0.72rem; font-weight: 600; padding: 0 0.4em; border-radius: 0.3rem; border: 1px solid currentColor; }
-  .note { padding: 0.6rem 0.8rem; }
+  .note { padding: 0.45rem 0.8rem; }
   .note-meta { margin-bottom: 0.3rem; font-size: 0.78rem; color: var(--muted); }
   .note-meta strong { color: var(--text); }
   /* Selection and scrollbars in the page colors, not the browser's. */
@@ -149,6 +152,7 @@
       <a id="diff-link" target="_blank" data-tab="diff" hidden></a>
       <a id="gitlab-link" target="_blank" rel="noopener" hidden></a>
       <button type="button" id="anonymize" class="anonymize" data-anonymize aria-pressed="false">🕶</button>
+      <div class="shortcuts" id="shortcuts"><button type="button" class="shortcuts-btn" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6.5 10h.01M10 10h.01M13.5 10h.01M17 10h.01M8 14h8"/></svg></button></div>
       <button type="button" id="close-tab" data-close-tab></button>
     </nav>
   </div>
@@ -163,6 +167,7 @@
 <main id="comments"></main>
 <script src="notes.js"></script>
 <script src="tabs.js"></script>
+<script src="shortcuts.js"></script>
 <script src="dates.js"></script>
 <script src="avatars.js"></script>
 <script src="anonymize.js"></script>
@@ -194,6 +199,16 @@
       close: "✕ Fermer",
       closeTitle: "Fermer cet onglet",
       closeRefused: "Le navigateur refuse de fermer un onglet qu'il n'a pas ouvert depuis le dashboard : Ctrl+W",
+      shortcuts: "Raccourcis clavier",
+      browserShortcuts: "Navigateur",
+      closeTabShortcut: "Fermer cet onglet",
+      shortcutRows: [
+        ["<kbd>n</kbd> <kbd>p</kbd>", "Fil non résolu suivant, précédent"],
+        ["<kbd>r</kbd>", "Recharger depuis GitLab"],
+        ["<kbd>Ctrl</kbd> <kbd>Entrée</kbd>", "Publier la réponse en cours"],
+        ["<kbd>Échap</kbd>", "Annuler la réponse, fermer ce panneau"],
+        ["<kbd>?</kbd>", "Cette liste"],
+      ],
       openNote: "GitLab",
       anonymize: "Mode démo, pour des captures d'écran : noms, intitulés et branches remplacés à l'écran par des valeurs fictives, commentaires par du lorem ipsum. Un second clic rend l'affichage d'origine",
     },
@@ -222,6 +237,16 @@
       close: "✕ Close",
       closeTitle: "Close this tab",
       closeRefused: "The browser does not let the page close a tab it did not open from the dashboard: Ctrl+W",
+      shortcuts: "Keyboard shortcuts",
+      browserShortcuts: "Browser",
+      closeTabShortcut: "Close this tab",
+      shortcutRows: [
+        ["<kbd>n</kbd> <kbd>p</kbd>", "Next, previous unresolved thread"],
+        ["<kbd>r</kbd>", "Reload from GitLab"],
+        ["<kbd>Ctrl</kbd> <kbd>Enter</kbd>", "Publish the reply being written"],
+        ["<kbd>Esc</kbd>", "Cancel the reply, close this panel"],
+        ["<kbd>?</kbd>", "This list"],
+      ],
       openNote: "GitLab",
       anonymize: "Demo mode, for screenshots: names, titles and branches replaced on screen by fictitious values, comments by lorem ipsum. A second click restores the original display",
     },
@@ -249,6 +274,25 @@
   closeTab.title = texts.closeTitle;
   closeTab.dataset.closeRefused = texts.closeRefused;
   document.getElementById("anonymize").title = texts.anonymize;
+  MrShortcuts.fill(document.getElementById("shortcuts"), {
+    label: texts.shortcuts,
+    heading: texts.shortcuts,
+    rows: texts.shortcutRows,
+    browser: { heading: texts.browserShortcuts, rows: [[MrShortcuts.closeTabKeys, texts.closeTabShortcut]] },
+    keys: { n: () => stepThread(1), p: () => stepThread(-1), r: () => load() },
+  });
+
+  // Next or previous unresolved thread from where the screen starts, under the header: where scrollIntoView puts a thread.
+  function stepThread(step) {
+    const threads = [...document.querySelectorAll(".thread.unresolved")];
+    if (!threads.length) return false;
+    const top = parseFloat(getComputedStyle(threads[0]).scrollMarginTop);
+    const target = step > 0
+      ? threads.find(thread => thread.getBoundingClientRect().top > top + 2)
+      : threads.findLast(thread => thread.getBoundingClientRect().top < top - 2);
+    if (!target) return false;
+    target.scrollIntoView({ block: "start" });
+  }
   // Displayed MR and comments, read by the anonymization mode; comment bodies are replaced entirely there.
   let shown = null;
   Anonymizer.attach({ data: () => shown, opaque: ".gl-body" });
@@ -426,7 +470,19 @@
     }
     const container = document.getElementById("comments");
     container.innerHTML = general.map(d => threadHtml(d, gitlabWeb)).join("");
+    scrollToAttention(container);
     return container;
+  }
+
+  // Opens on the first unresolved thread, or on the latest comments when none is left. The saved copy
+  // and the fresh data render in turn: the second render only repeats the jump if the reader has not scrolled.
+  let autoScrollY = null;
+  function scrollToAttention(container) {
+    if (autoScrollY !== null && Math.abs(window.scrollY - autoScrollY) > 2) return;
+    const target = container.querySelector(".thread.unresolved");
+    if (target) target.scrollIntoView({ block: "start" });
+    else window.scrollTo(0, document.documentElement.scrollHeight);
+    autoScrollY = window.scrollY;
   }
 
   // Saved copy shown read-only: a reply or resolution would start from a possibly stale state.
@@ -437,6 +493,9 @@
     });
     showLoadedAt(document.getElementById("loaded-at"), lang, entry.at);
   }
+
+  // Reloading (R, Retry) renders into the same container: its listeners are added only once.
+  let threadsHandled = false;
 
   async function load() {
     const cached = readCache()[iid];
@@ -456,7 +515,8 @@
       showBanner(null);
       showLoadedAt(document.getElementById("loaded-at"), lang, entry.at);
       const container = render(entry);
-      if (!container) return;
+      if (!container || threadsHandled) return;
+      threadsHandled = true;
       // After a reply or resolution: only this thread is re-rendered, the others keep their state.
       GitlabNotes.handleThreads(container, {
         iid,

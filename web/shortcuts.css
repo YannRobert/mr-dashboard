@@ -1,0 +1,27 @@
+/* Keyboard shortcuts: icon and its panel, shared by the three pages. */
+.shortcuts { position: relative; display: inline-flex; }
+/* Size, border and background from the page's own buttons: it looks like those next to it. */
+.shortcuts-btn { display: inline-flex; align-items: center; }
+.shortcuts-btn svg {
+  width: 1.2em; height: 1.2em; fill: none; stroke: currentColor; stroke-width: 1.8;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+/* The header's controls never wrap, the panel's text does when the window is narrow. */
+.shortcuts-panel {
+  position: absolute; top: calc(100% + 0.4rem); right: 0; z-index: 30;
+  width: max-content; max-width: calc(100vw - 2rem); white-space: normal;
+  padding: 0.7rem 0.8rem; border: 1px solid var(--border); border-radius: 0.6rem;
+  background: var(--surface); color: var(--text); box-shadow: 0 8px 24px rgb(0 0 0 / 35%);
+  font-size: 0.85rem; font-weight: normal; text-align: left;
+}
+.shortcuts-panel[hidden] { display: none; }
+.shortcuts-panel h4 { margin: 0 0 0.5rem; font-size: 0.85rem; }
+.shortcuts-panel table { border-collapse: collapse; }
+.shortcuts-panel td { padding: 0.25rem 0.4rem; vertical-align: baseline; text-align: left; font-family: inherit; }
+.shortcuts-panel td:first-child { white-space: nowrap; }
+.shortcuts-panel td:last-child { color: var(--muted); }
+.shortcuts-panel kbd {
+  font: inherit; font-size: 0.75rem; padding: 0 0.35rem; border: 1px solid var(--border); border-bottom-width: 2px;
+  border-radius: 3px; background: var(--bg); color: var(--text);
+}
+.shortcuts-panel table + h4 { margin-top: 0.7rem; }
